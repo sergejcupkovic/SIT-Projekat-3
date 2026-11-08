@@ -1,1 +1,45 @@
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: users_mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
 
+  mailpit:
+    image: axllent/mailpit:v1.15
+    container_name: mailpit
+    ports:
+      - "8025:8025" # WEB UI ZA EMAILS
+      - "1025:1025" # SMTP port
+
+  users-service:
+    build: ./users-service
+    container_name: users_service
+    ports:
+      - "${USERS_SERVICE_PORT}:${USERS_SERVICE_PORT}"
+    env_file: .env
+    depends_on:
+      - mongodb
+      - mailpit
+
+  api-gateway:
+    build: ./api-gateway
+    container_name: api_gateway
+    ports:
+      - "${GATEWAY_PORT}:${GATEWAY_PORT}"
+    env_file: .env
+    depends_on:
+      - users-service
+
+  frontend:
+    build: ./frontend
+    container_name: frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - api-gateway
+
+volumes:
+  mongo_data:
