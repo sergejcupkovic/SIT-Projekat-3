@@ -24,7 +24,15 @@ func corsMiddleware(next http.Handler) http.Handler {
 }
 
 func main() {
-	usersTarget, _ := url.Parse(os.Getenv("USERS_SERVICE_URL"))
+	usersServiceURL := os.Getenv("USERS_SERVICE_URL")
+	if usersServiceURL == "" {
+		usersServiceURL = "http://users-service:8081" 
+	}
+
+	usersTarget, err := url.Parse(usersServiceURL)
+	if err != nil {
+		log.Fatalf("Invalid USERS_SERVICE_URL: %v", err)
+	}
 	usersProxy := httputil.NewSingleHostReverseProxy(usersTarget)
 
 	usersProxy.ModifyResponse = func(resp *http.Response) error {

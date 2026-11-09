@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 	"users-service/domain"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -46,4 +47,44 @@ func (r *UserRepository) VerifyToken(ctx context.Context, token string) (*mongo.
 		"$unset": bson.M{"verificationToken": "", "verificationTokenExpires": ""},
 	}
 	return r.collection.UpdateOne(ctx, filter, update)
+}
+func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*domain.User, error) {
+	var user domain.User
+	err := r.collection.FindOne(ctx, bson.M{"email": email}).Decode(&user)
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (r *UserRepository) SaveOTP(ctx context.Context, email string, otp string, expiresAt time.Time) error {
+	filter := bson.M{"email": email}
+	update := bson.M{
+		"$set": bson.M{
+			"otp":         otp,
+			"otpExpires":  expiresAt,
+			"otpAttempts": 0,
+		},
+	}
+	_, err := r.collection.UpdateOne(ctx, filter, update)
+	return err
+}
+
+func (r *UserRepository) IncrementOTPAttempts(ctx context.Context, email string) error {
+	filter := bson.M{"email": email}
+	update := bson.M{
+		"$inc": bson.M{"otpAttempts": 1},
+	}
+	_, err := r.collection.UpdateOne(ctx, filter, update)
+	return err
+}
+
+func (r *UserRepository) ClearOTP(ctx context.Context, email string) error {
+	filter := bson.M{"email": email}
+	update := bson.M{
+		"$unset": bson.M{"otp": "", "otpExpires": ""},
+		"$set":   bson.M{"otpAttempts": 0},
+	}
+	_, err := r.collection.UpdateOne(ctx, filter, update)
+	return err
 }

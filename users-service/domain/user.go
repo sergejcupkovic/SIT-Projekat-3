@@ -27,4 +27,7 @@ type User struct {
 	UsedStorageBytes         int64              `bson:"usedStorageBytes" json:"usedStorageBytes"`
 	PasswordLastChanged      time.Time          `bson:"passwordLastChanged" json:"passwordLastChanged"`
 	CreatedAt                time.Time          `bson:"createdAt" json:"createdAt"`
+	OTP                      string    `bson:"otp,omitempty" json:"-"`
+	OTPExpires               time.Time `bson:"otpExpires,omitempty" json:"-"`
+	OTPAttempts              int       `bson:"otpAttempts" json:"-"`
 }

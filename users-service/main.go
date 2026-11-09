@@ -48,6 +48,11 @@ func main() {
 
 	http.HandleFunc("/api/users/register", userHandler.Register)
 	http.HandleFunc("/api/users/verify", userHandler.Verify)
+	http.HandleFunc("/api/users/login", userHandler.Login)
+	http.HandleFunc("/api/users/verify-otp", userHandler.VerifyOTP)
+	http.HandleFunc("/api/users/resend-otp", userHandler.ResendOTP)
+	http.HandleFunc("/api/users/logout", userHandler.Logout)
+	
 	http.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("pong"))
