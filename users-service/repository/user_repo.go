@@ -88,3 +88,68 @@ func (r *UserRepository) ClearOTP(ctx context.Context, email string) error {
 	_, err := r.collection.UpdateOne(ctx, filter, update)
 	return err
 }
+
+func (r *UserRepository) SavePasswordResetToken(ctx context.Context, email, tokenHash string, expiresAt time.Time) error {
+	filter := bson.M{"email": email}
+	update := bson.M{
+		"$set": bson.M{
+			"passwordResetTokenHash":    tokenHash,
+			"passwordResetTokenExpires": expiresAt,
+		},
+	}
+	_, err := r.collection.UpdateOne(ctx, filter, update)
+	return err
+}
+
+func (r *UserRepository) FindByPasswordResetTokenHash(ctx context.Context, tokenHash string) (*domain.User, error) {
+	var user domain.User
+	err := r.collection.FindOne(ctx, bson.M{"passwordResetTokenHash": tokenHash}).Decode(&user)
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (r *UserRepository) ClearPasswordResetToken(ctx context.Context, email string) error {
+	filter := bson.M{"email": email}
+	update := bson.M{
+		"$unset": bson.M{"passwordResetTokenHash": "", "passwordResetTokenExpires": ""},
+	}
+	_, err := r.collection.UpdateOne(ctx, filter, update)
+	return err
+}
+
+func (r *UserRepository) UpdatePassword(ctx context.Context, email, newHash string, changedAt time.Time) error {
+	filter := bson.M{"email": email}
+	update := bson.M{
+		"$set": bson.M{
+			"passwordHash":        newHash,
+			"passwordLastChanged": changedAt,
+		},
+		"$unset": bson.M{
+			"passwordResetTokenHash":    "",
+			"passwordResetTokenExpires": "",
+		},
+	}
+	_, err := r.collection.UpdateOne(ctx, filter, update)
+	return err
+}
+
+func (r *UserRepository) IncrementResetRequestCount(ctx context.Context, email string, windowStart time.Time, resetWindow bool) error {
+	filter := bson.M{"email": email}
+	var update bson.M
+	if resetWindow {
+		update = bson.M{
+			"$set": bson.M{
+				"passwordResetWindowStart":  windowStart,
+				"passwordResetRequestCount": 1,
+			},
+		}
+	} else {
+		update = bson.M{
+			"$inc": bson.M{"passwordResetRequestCount": 1},
+		}
+	}
+	_, err := r.collection.UpdateOne(ctx, filter, update)
+	return err
+}

@@ -300,3 +300,171 @@ func (h *UserHandler) ResendOTP(w http.ResponseWriter, r *http.Request) {
 		"message": "New OTP code sent to your email.",
 	})
 }
+
+func writeJSON(w http.ResponseWriter, status int, body map[string]interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(body)
+}
+
+func writeResetLinkError(w http.ResponseWriter) {
+	writeJSON(w, http.StatusBadRequest, map[string]interface{}{
+		"message":            "This password reset link is invalid or has expired.",
+		"canRequestNewLink":  true,
+		"forgotPasswordPath": "/api/users/forgot-password",
+	})
+}
+
+func writePasswordTooYoung(w http.ResponseWriter, retryAt time.Time) {
+	retry := retryAt.UTC().Format(time.RFC3339)
+	writeJSON(w, http.StatusForbidden, map[string]interface{}{
+		"message":            "Password can only be changed once every 24 hours. You can retry after " + retry + ".",
+		"retryAt":            retry,
+		"canRequestNewLink":  true,
+		"forgotPasswordPath": "/api/users/forgot-password",
+	})
+}
+
+func isResetTokenUsable(user *domain.User) bool {
+	return user != nil &&
+		user.PasswordResetTokenHash != "" &&
+		time.Now().Before(user.PasswordResetTokenExpires)
+}
+
+const forgotPasswordGenericMessage = "If an account with that email exists, a password reset link has been sent."
+
+// POST /api/users/forgot-password
+func (h *UserHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req service.ForgotPasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON body", http.StatusBadRequest)
+		return
+	}
+
+	genericOK := func() {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"message": forgotPasswordGenericMessage,
+		})
+	}
+
+	user, err := h.repo.FindByEmail(r.Context(), req.Email)
+	if err != nil {
+		genericOK()
+		return
+	}
+
+	now := time.Now()
+	resetWindow := user.PasswordResetWindowStart.IsZero() || now.Sub(user.PasswordResetWindowStart) > service.ResetRateLimitWindow
+	if !resetWindow && user.PasswordResetRequestCount >= service.ResetRateLimitMax {
+		writeJSON(w, http.StatusTooManyRequests, map[string]interface{}{
+			"message": "Too many password reset requests. Try again later.",
+		})
+		return
+	}
+
+	if err := h.repo.IncrementResetRequestCount(r.Context(), user.Email, now, resetWindow); err != nil {
+		http.Error(w, "Error processing request", http.StatusInternalServerError)
+		return
+	}
+
+	rawToken, err := service.GenerateSecureToken()
+	if err != nil {
+		http.Error(w, "Error generating token", http.StatusInternalServerError)
+		return
+	}
+
+	tokenHash := service.HashResetToken(rawToken)
+	expiresAt := now.Add(service.ResetTokenTTL)
+	if err := h.repo.SavePasswordResetToken(r.Context(), user.Email, tokenHash, expiresAt); err != nil {
+		http.Error(w, "Error saving reset token", http.StatusInternalServerError)
+		return
+	}
+
+	go func() {
+		_ = service.SendPasswordResetEmail(h.smtpHost, h.smtpPort, h.smtpFrom, user.Email, rawToken)
+	}()
+
+	genericOK()
+}
+
+// GET/POST /api/users/reset-password
+func (h *UserHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		h.getResetPassword(w, r)
+	case http.MethodPost:
+		h.postResetPassword(w, r)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (h *UserHandler) getResetPassword(w http.ResponseWriter, r *http.Request) {
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		writeResetLinkError(w)
+		return
+	}
+
+	user, err := h.repo.FindByPasswordResetTokenHash(r.Context(), service.HashResetToken(token))
+	if err != nil || !isResetTokenUsable(user) {
+		writeResetLinkError(w)
+		return
+	}
+
+	ok, retryAt := service.PasswordChangeAllowed(user.PasswordLastChanged)
+	if !ok {
+		writePasswordTooYoung(w, retryAt)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"message": "Reset link is valid. Submit a new password.",
+	})
+}
+
+func (h *UserHandler) postResetPassword(w http.ResponseWriter, r *http.Request) {
+	var req service.ResetPasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON body", http.StatusBadRequest)
+		return
+	}
+
+	if err := service.ValidateResetPassword(req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	user, err := h.repo.FindByPasswordResetTokenHash(r.Context(), service.HashResetToken(req.Token))
+	if err != nil || !isResetTokenUsable(user) {
+		writeResetLinkError(w)
+		return
+	}
+
+	ok, retryAt := service.PasswordChangeAllowed(user.PasswordLastChanged)
+	if !ok {
+		_ = h.repo.ClearPasswordResetToken(r.Context(), user.Email)
+		writePasswordTooYoung(w, retryAt)
+		return
+	}
+
+	newHash, err := service.HashPassword(req.Password)
+	if err != nil {
+		http.Error(w, "Error processing password", http.StatusInternalServerError)
+		return
+	}
+
+	if err := h.repo.UpdatePassword(r.Context(), user.Email, newHash, time.Now()); err != nil {
+		http.Error(w, "Error updating password", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"message": "Password updated. You can now log in.",
+	})
+}

@@ -2,6 +2,7 @@ package service
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -15,6 +16,13 @@ import (
 )
 
 var JWTSecret = []byte("super-secret-key-change-in-prod")
+
+const (
+	PasswordMinAge       = 24 * time.Hour
+	ResetTokenTTL        = 30 * time.Minute
+	ResetRateLimitMax    = 3
+	ResetRateLimitWindow = 15 * time.Minute
+)
 
 type RegisterRequest struct {
 	FirstName       string `json:"firstName"`
@@ -34,6 +42,16 @@ type VerifyOTPRequest struct {
 	OTP   string `json:"otp"`
 }
 
+type ForgotPasswordRequest struct {
+	Email string `json:"email"`
+}
+
+type ResetPasswordRequest struct {
+	Token           string `json:"token"`
+	Password        string `json:"password"`
+	ConfirmPassword string `json:"confirmPassword"`
+}
+
 func ValidateRegistration(req RegisterRequest) error {
 	if req.FirstName == "" || req.LastName == "" || req.Email == "" {
 		return errors.New("all fields are required")
@@ -46,14 +64,7 @@ func ValidateRegistration(req RegisterRequest) error {
 		return errors.New("invalid email address format")
 	}
 
-	if len(req.Password) < 8 ||
-		!regexp.MustCompile(`[A-Z]`).MatchString(req.Password) ||
-		!regexp.MustCompile(`[a-z]`).MatchString(req.Password) ||
-		!regexp.MustCompile(`[0-9]`).MatchString(req.Password) ||
-		!regexp.MustCompile(`[!@#~$%^&*()+|_.,<>?/{}\-]`).MatchString(req.Password) {
-		return errors.New("password must have at least 8 characters, an uppercase and lowercase letter, a number, and a special character")
-	}
-	return nil
+	return ValidatePassword(req.Password)
 }
 
 func HashPassword(password string) (string, error) {
@@ -102,5 +113,44 @@ func SendVerificationEmail(smtpHost, smtpPort, from, to, token string) error {
 
 func SendOTPEmail(smtpHost, smtpPort, from, to, otpCode string) error {
 	msg := []byte(fmt.Sprintf("To: %s\r\nSubject: Your One-Time Login Password (OTPS)\r\n\r\nYour single-use login code is: %s\r\nThis code will expire in 5 minutes.\r\n", to, otpCode))
+	return smtp.SendMail(smtpHost+":"+smtpPort, nil, from, []string{to}, msg)
+}
+
+func ValidatePassword(password string) error {
+	if len(password) < 8 ||
+		!regexp.MustCompile(`[A-Z]`).MatchString(password) ||
+		!regexp.MustCompile(`[a-z]`).MatchString(password) ||
+		!regexp.MustCompile(`[0-9]`).MatchString(password) ||
+		!regexp.MustCompile(`[!@#~$%^&*()+|_.,<>?/{}\-]`).MatchString(password) {
+		return errors.New("password must have at least 8 characters, an uppercase and lowercase letter, a number, and a special character")
+	}
+	return nil
+}
+
+func ValidateResetPassword(req ResetPasswordRequest) error {
+	if req.Token == "" {
+		return errors.New("token is required")
+	}
+	if req.Password != req.ConfirmPassword {
+		return errors.New("passwords do not match")
+	}
+	return ValidatePassword(req.Password)
+}
+
+func HashResetToken(raw string) string {
+	sum := sha256.Sum256([]byte(raw))
+	return hex.EncodeToString(sum[:])
+}
+
+func PasswordChangeAllowed(lastChanged time.Time) (ok bool, retryAt time.Time) {
+	if time.Since(lastChanged) < PasswordMinAge {
+		return false, lastChanged.Add(PasswordMinAge)
+	}
+	return true, time.Time{}
+}
+
+func SendPasswordResetEmail(smtpHost, smtpPort, from, to, rawToken string) error {
+	resetLink := fmt.Sprintf("http://localhost:8080/api/users/reset-password?token=%s", rawToken)
+	msg := []byte(fmt.Sprintf("To: %s\r\nSubject: Password Reset Request\r\n\r\nClick the link to reset your password: %s\r\nThis link will expire in 30 minutes and can be used only once.\r\n", to, resetLink))
 	return smtp.SendMail(smtpHost+":"+smtpPort, nil, from, []string{to}, msg)
 }

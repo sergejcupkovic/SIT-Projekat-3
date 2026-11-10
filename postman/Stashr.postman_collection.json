@@ -1,0 +1,360 @@
+{
+  "info": {
+    "_postman_id": "ef97edbb-06e3-4737-9896-bb8da73f1b64",
+    "name": "Stashr",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "54490319",
+    "_collection_link": "https://go.postman.co/collection/54490319-ef97edbb-06e3-4737-9896-bb8da73f1b64?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "Register",
+      "item": [
+        {
+          "name": "Register user",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Petar\",\n  \"lastName\": \"Petrovic\",\n  \"email\": \"{{email}}\",\n  \"password\": \"Aaaaaaaa!0\",\n  \"confirmPassword\": \"Aaaaaaaa!0\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "register"]
+            },
+            "description": "Creates an unverified user. Open http://localhost:8025 (Mailpit), copy the verification token from the email, paste it into the Verify account request, then send that request."
+          },
+          "response": []
+        },
+        {
+          "name": "Verify account",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/verify?token=PASTE_VERIFICATION_TOKEN",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "verify"],
+              "query": [
+                {
+                  "key": "token",
+                  "value": "PASTE_VERIFICATION_TOKEN"
+                }
+              ]
+            },
+            "description": "Replace PASTE_VERIFICATION_TOKEN with the token from the Mailpit verification email (the value after ?token= in the link). Expect 200 when the account is activated."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Login",
+      "item": [
+        {
+          "name": "Login korisnika",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"mail@mail.com\",\n  \"password\": \"Aaaaaaaa!0\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "login"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Potvrda OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"otp\": \"{{otp}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/verify-otp",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "verify-otp"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Resend OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/resend-otp",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "resend-otp"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "logout"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Password reset",
+      "item": [
+        {
+          "name": "Forgot password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/forgot-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "forgot-password"]
+            },
+            "description": "Expect 200 with a generic message even if the email does not exist.\n\nIf the user exists, open Mailpit (http://localhost:8025), copy the token from the reset link, and paste it into the collection variable resetToken.\n\nA new request invalidates any previous unused link.\n\nFresh accounts cannot change password until passwordLastChanged is at least 24h old. Backdate in Mongo before Check reset link / Submit new password:\n\ndocker exec -it users_mongodb mongosh users_db --eval \"db.users.updateOne({ email: 'mail@mail.com' }, { $set: { passwordLastChanged: new Date(Date.now() - 25*60*60*1000) } })\""
+          },
+          "response": []
+        },
+        {
+          "name": "Check reset link",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/reset-password?token={{resetToken}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "reset-password"],
+              "query": [
+                {
+                  "key": "token",
+                  "value": "{{resetToken}}"
+                }
+              ]
+            },
+            "description": "Paste resetToken from Mailpit first.\n\n200 — link is valid and password is older than 24h.\n403 — password is younger than 24h; body includes retryAt.\n400 — invalid, expired, or already used; canRequestNewLink is true."
+          },
+          "response": []
+        },
+        {
+          "name": "Submit new password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{resetToken}}\",\n  \"password\": \"NewStrong1!\",\n  \"confirmPassword\": \"NewStrong1!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/reset-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "reset-password"]
+            },
+            "description": "Expect 200 Password updated. Then log in with NewStrong1! using Login korisnika (update that request body password) and paste OTP from Mailpit into the otp collection variable.\n\nSending the same token again must return 400 generic with canRequestNewLink."
+          },
+          "response": []
+        },
+        {
+          "name": "Forgot unknown email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"nobody@example.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/forgot-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "forgot-password"]
+            },
+            "description": "Expect 200 with the same generic message as a real user. Mailpit should not get a new email."
+          },
+          "response": []
+        },
+        {
+          "name": "Check reset link (no token)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/reset-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "reset-password"]
+            },
+            "description": "Expect 400 generic JSON: invalid or expired, canRequestNewLink true, forgotPasswordPath /api/users/forgot-password."
+          },
+          "response": []
+        },
+        {
+          "name": "Submit weak password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{resetToken}}\",\n  \"password\": \"weak\",\n  \"confirmPassword\": \"weak\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/reset-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "reset-password"]
+            },
+            "description": "Expect 400 plain text password-rules error. This is input validation, not the generic invalid-link JSON."
+          },
+          "response": []
+        },
+        {
+          "name": "Forgot password (rate limit)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/forgot-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "forgot-password"]
+            },
+            "description": "Send this (or Forgot password) four times within 15 minutes for the same existing email. The 4th successful-window request should return 429 Too many password reset requests."
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "email",
+      "value": "mail@mail.com"
+    },
+    {
+      "key": "otp",
+      "value": ""
+    },
+    {
+      "key": "resetToken",
+      "value": ""
+    }
+  ]
+}

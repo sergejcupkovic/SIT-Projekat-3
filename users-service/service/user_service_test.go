@@ -2,6 +2,7 @@ package service
 
 import (
 	"testing"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -76,6 +77,62 @@ func TestGenerateSecureToken(t *testing.T) {
 	}
 	if len(token) != 64 { // 32 bytes hex-encoded = 64 characters
 		t.Errorf("Expected token length 64, got %d", len(token))
+	}
+}
+
+func TestHashResetToken_Deterministic(t *testing.T) {
+	raw := "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899"
+	first := HashResetToken(raw)
+	second := HashResetToken(raw)
+	if first != second {
+		t.Errorf("Expected deterministic hash, got %s and %s", first, second)
+	}
+	if first == raw {
+		t.Errorf("Hash must not equal the raw token")
+	}
+	if len(first) != 64 {
+		t.Errorf("Expected SHA-256 hex length 64, got %d", len(first))
+	}
+}
+
+func TestPasswordChangeAllowed_TooYoung(t *testing.T) {
+	lastChanged := time.Now()
+	ok, retryAt := PasswordChangeAllowed(lastChanged)
+	if ok {
+		t.Errorf("Expected password change to be blocked when younger than 24h")
+	}
+	if retryAt.Sub(lastChanged) < PasswordMinAge-time.Second {
+		t.Errorf("Expected retryAt about 24h after last change, got %v", retryAt)
+	}
+}
+
+func TestPasswordChangeAllowed_OldEnough(t *testing.T) {
+	lastChanged := time.Now().Add(-25 * time.Hour)
+	ok, _ := PasswordChangeAllowed(lastChanged)
+	if !ok {
+		t.Errorf("Expected password change to be allowed after 24h")
+	}
+}
+
+func TestValidateResetPassword_EmptyToken(t *testing.T) {
+	err := ValidateResetPassword(ResetPasswordRequest{
+		Token:           "",
+		Password:        "StrongPass123!",
+		ConfirmPassword: "StrongPass123!",
+	})
+	if err == nil {
+		t.Errorf("Expected error for empty token, got nil")
+	}
+}
+
+func TestValidateResetPassword_Mismatch(t *testing.T) {
+	err := ValidateResetPassword(ResetPasswordRequest{
+		Token:           "token",
+		Password:        "StrongPass123!",
+		ConfirmPassword: "OtherPass123!",
+	})
+	if err == nil {
+		t.Errorf("Expected error for mismatched passwords, got nil")
 	}
 }
 
