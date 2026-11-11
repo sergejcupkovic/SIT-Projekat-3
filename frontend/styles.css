@@ -547,3 +547,113 @@ body {
 .footer-help a:hover {
   color: var(--primary-hover);
 }
+
+.auth-tabs {
+  display: flex;
+  background-color: #f1f5f9;
+  padding: 4px;
+  border-radius: var(--radius-md);
+  margin-bottom: 1.5rem;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 0.55rem;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tab-btn.active {
+  background-color: #ffffff;
+  color: var(--primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.auth-section.hidden, .hidden {
+  display: none !important;
+}
+
+.form-input.otp-input {
+  letter-spacing: 0.3em;
+  font-size: 1.25rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.btn-submit.btn-danger {
+  background-color: var(--danger);
+}
+
+.btn-submit.btn-danger:hover:not(:disabled) {
+  background-color: #dc2626;
+}
+
+.btn-link {
+  background: transparent;
+  border: none;
+  color: var(--primary);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0.2rem 0;
+}
+
+.btn-link:hover { text-decoration: underline; }
+.btn-link.text-subtle { color: var(--text-muted); }
+
+.otp-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.75rem;
+}
+
+.success-badge-icon {
+  width: 48px;
+  height: 48px;
+  background-color: var(--success-bg);
+  color: var(--success);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: bold;
+  margin: 0 auto 0.75rem auto;
+  border: 1px solid var(--success-border);
+}
+
+.session-info {
+  background-color: #f8fafc;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  margin-bottom: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.875rem;
+}
+
+.info-label { color: var(--text-muted); }
+.info-value { font-weight: 600; }
+.text-success { color: var(--success); }
+
+.code-box {
+  font-family: monospace;
+  font-size: 0.75rem;
+  resize: none;
+  background-color: #ffffff;
+}
