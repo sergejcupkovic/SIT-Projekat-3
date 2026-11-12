@@ -160,6 +160,38 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !user.AccountLockedUntil.IsZero() {
+		if time.Now().Before(user.AccountLockedUntil) {
+			// Ban active
+			http.Error(w, "Account is locked until "+user.AccountLockedUntil.Format(time.RFC3339), http.StatusForbidden)
+			return
+		}
+
+		//ban expired so it sends restricted session token
+		token, err := service.GenerateRestrictedJWTToken(user.ID.Hex(), user.Email, string(user.Role))
+		if err != nil {
+			http.Error(w, "Error generating session token", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"message":    "Your ban period has expired. You must change your password.",
+			"token":      token,
+			"restricted": true,
+		})
+		return
+	}
+
+	if time.Since(user.PasswordLastChanged) > service.PasswordMaxAge {
+		until := time.Now().Add(1 * time.Minute) //set how long the account is locked for, juist one min rn
+		_ = h.repo.LockAccount(r.Context(), user.Email, until)
+		http.Error(w, "Password expired. Account locked until "+until.Format(time.RFC3339),
+			http.StatusForbidden)
+		return
+
+	}
+
 	otpCode, err := service.GenerateOTPCode()
 	if err != nil {
 		http.Error(w, "Error generating security code", http.StatusInternalServerError)
@@ -466,5 +498,169 @@ func (h *UserHandler) postResetPassword(w http.ResponseWriter, r *http.Request) 
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "Password updated. You can now log in.",
+	})
+}
+
+// POST /api/users/change-expired-password
+func (h *UserHandler) ChangeExpiredPassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" || len(authHeader) < 7 || authHeader[:7] != "Bearer " {
+		http.Error(w, "Missing or invalid authorization token", http.StatusUnauthorized)
+		return
+	}
+	tokenStr := authHeader[7:]
+
+	email, err := service.VerifyRestrictedToken(tokenStr)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		Password        string `json:"password"`
+		ConfirmPassword string `json:"confirmPassword"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON body", http.StatusBadRequest)
+		return
+	}
+
+	if err := service.ValidateChangeExpiredPassword(req.Password, req.ConfirmPassword); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	newHash, err := service.HashPassword(req.Password)
+	if err != nil {
+		http.Error(w, "Error processing password", http.StatusInternalServerError)
+		return
+	}
+
+	now := time.Now()
+	if err := h.repo.UpdatePassword(r.Context(), email, newHash, now); err != nil {
+		http.Error(w, "Error updating password in database", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"message": "Password successfully updated. You can now sign in with your new password.",
+	})
+}
+
+// POST /api/users/magic-link-request
+func (h *UserHandler) RequestMagicLink(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Email string `json:"email"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON body", http.StatusBadRequest)
+		return
+	}
+
+	const genericMsg = "If an account with that email exists and is verified, a magic link has been sent."
+	genericOK := func() {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"message": genericMsg})
+	}
+
+	user, err := h.repo.FindByEmail(r.Context(), req.Email)
+	if err != nil || !user.IsVerified {
+		genericOK()
+		return
+	}
+
+	rawToken, err := service.GenerateSecureToken()
+	if err != nil {
+		http.Error(w, "Error generating token", http.StatusInternalServerError)
+		return
+	}
+
+	expiresAt := time.Now().Add(service.MagicLinkTokenTTL)
+	if err := h.repo.SaveMagicLinkToken(r.Context(), user.Email, service.HashResetToken(rawToken), expiresAt); err != nil {
+		http.Error(w, "Error saving token", http.StatusInternalServerError)
+		return
+	}
+
+	go func() {
+		_ = service.SendMagicLinkEmail(h.smtpHost, h.smtpPort, h.smtpFrom, user.Email, rawToken)
+	}()
+
+	genericOK()
+}
+
+// POST /api/users/magic-link-login (or GET query fallback)
+func (h *UserHandler) GetMagicLinkLogin(w http.ResponseWriter, r *http.Request) {
+	var token string
+	if r.Method == http.MethodPost {
+		var req struct {
+			Token string `json:"token"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
+			token = req.Token
+		}
+	}
+	if token == "" {
+		token = r.URL.Query().Get("token")
+	}
+
+	if token == "" {
+		http.Error(w, "Missing magic link token", http.StatusBadRequest)
+		return
+	}
+
+	tokenHash := service.HashResetToken(token)
+
+	user, err := h.repo.FindByMagicLinkToken(r.Context(), tokenHash)
+	if err != nil {
+
+		http.Error(w, "Invalid or expired magic link", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.repo.ClearMagicLinkToken(r.Context(), user.Email); err != nil {
+		http.Error(w, "Error consuming magic link", http.StatusInternalServerError)
+		return
+	}
+	//FOrcing a locked account to change pass
+	if !user.AccountLockedUntil.IsZero() {
+		if time.Now().Before(user.AccountLockedUntil) {
+
+			http.Error(w, "Account is locked until "+user.AccountLockedUntil.Format(time.RFC3339), http.StatusForbidden)
+			return
+		}
+
+		restrictedToken, err := service.GenerateRestrictedJWTToken(user.ID.Hex(), user.Email, string(user.Role))
+		if err != nil {
+			http.Error(w, "Error generating session token", http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"message":    "Your ban period has expired. You must change your password.",
+			"token":      restrictedToken,
+			"restricted": true,
+		})
+		return
+	}
+	jwtToken, err := service.GenerateJWTToken(user.ID.Hex(), user.Email, string(user.Role))
+	if err != nil {
+		http.Error(w, "Error generating authentication token", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"token": jwtToken,
+		"user": map[string]interface{}{
+			"id":    user.ID.Hex(),
+			"email": user.Email,
+			"role":  user.Role,
+		},
 	})
 }

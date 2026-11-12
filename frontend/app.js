@@ -6,6 +6,25 @@ const loginSection = document.getElementById("loginSection");
 const otpSection = document.getElementById("otpSection");
 const dashboardSection = document.getElementById("dashboardSection");
 const registerSection = document.getElementById("registerSection");
+const forceChangePasswordSection = document.getElementById(
+  "forceChangePasswordSection",
+);
+
+const forceChangePasswordForm = document.getElementById(
+  "forceChangePasswordForm",
+);
+const forceNewPasswordInput = document.getElementById("forceNewPassword");
+const forceConfirmPasswordInput = document.getElementById(
+  "forceConfirmPassword",
+);
+const forceChangeSubmitBtn = document.getElementById("forceChangeSubmitBtn");
+const forceChangeSpinner = document.getElementById("forceChangeSpinner");
+const forceNewPasswordError = document.getElementById("forceNewPasswordError");
+const forceConfirmPasswordError = document.getElementById(
+  "forceConfirmPasswordError",
+);
+
+let restrictedSessionToken = null;
 
 const loginForm = document.getElementById("loginForm");
 const loginEmailInput = document.getElementById("loginEmail");
@@ -137,6 +156,12 @@ function init() {
   alertCloseBtn.addEventListener("click", hideAlert);
 
   checkVerificationTokenInUrl();
+  checkMagicLinkTokenInUrl();
+
+  const requestMagicLinkBtn = document.getElementById("requestMagicLinkBtn");
+  if (requestMagicLinkBtn) {
+    requestMagicLinkBtn.addEventListener("click", handleMagicLinkRequest);
+  }
   tabLogin.addEventListener("click", () => switchTab("login"));
   tabRegister.addEventListener("click", () => switchTab("register"));
 
@@ -145,6 +170,9 @@ function init() {
     togglePasswordVisibility(loginPasswordInput, toggleLoginPasswordBtn),
   );
   loginForm.addEventListener("submit", handleLoginSubmit);
+  if (forceChangePasswordForm) {
+    forceChangePasswordForm.addEventListener("submit", handleForceChangePasswordSubmit);
+  }
   otpForm.addEventListener("submit", handleOtpSubmit);
   resendOtpBtn.addEventListener("click", handleResendOtp);
   backToLoginBtn.addEventListener("click", () => switchSection(loginSection));
@@ -160,6 +188,9 @@ function init() {
     togglePasswordVisibility(loginPasswordInput, toggleLoginPasswordBtn),
   );
   loginForm.addEventListener("submit", handleLoginSubmit);
+  if (forceChangePasswordForm) {
+    forceChangePasswordForm.addEventListener("submit", handleForceChangePasswordSubmit);
+  }
   otpForm.addEventListener("submit", handleOtpSubmit);
   resendOtpBtn.addEventListener("click", handleResendOtp);
   backToLoginBtn.addEventListener("click", () => switchSection(loginSection));
@@ -526,6 +557,108 @@ async function checkVerificationTokenInUrl() {
   }
 }
 
+async function handleMagicLinkRequest() {
+  hideAlert();
+  const email = loginEmailInput.value.trim();
+  if (!email || !EMAIL_REGEX.test(email)) {
+    loginEmailInput.classList.add("is-invalid");
+    loginEmailError.textContent = "Please enter your email above first";
+    return;
+  }
+  loginEmailInput.classList.remove("is-invalid");
+  loginEmailError.textContent = "";
+
+  showAlert("warning", "Sending...", "Requesting magic login link...");
+
+  try {
+    const { response } = await fetchWithFallback("/api/users/magic-link-request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+
+    const text = await response.text();
+    let data = {};
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { message: text.trim() };
+    }
+
+    if (response.ok) {
+      showAlert(
+        "success",
+        "Magic Link Sent!",
+        data.message || "Check Mailpit (:8025) for your direct login link.",
+      );
+    } else {
+      showAlert("danger", "Request Failed", data.message || "Could not send magic link.");
+    }
+  } catch (err) {
+    showAlert("danger", "Error", "Could not connect to send magic link.");
+  }
+}
+
+async function checkMagicLinkTokenInUrl() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const magicToken = urlParams.get("magicToken");
+  if (!magicToken) return;
+
+  // Clear query string from URL for clean appearance
+  window.history.replaceState({}, document.title, window.location.pathname);
+
+  showAlert(
+    "warning",
+    "Logging in...",
+    "Verifying magic link token and authenticating...",
+  );
+
+  try {
+    const { response } = await fetchWithFallback("/api/users/magic-link-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: magicToken }),
+    });
+
+    const text = await response.text();
+    let data = {};
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { message: text.trim() };
+    }
+
+    if (response.ok && data.token) {
+      if (data.restricted) {
+        restrictedSessionToken = data.token;
+        switchSection(forceChangePasswordSection);
+        showAlert(
+          "warning",
+          "Password Update Required",
+          data.message || "Your ban period has expired. Please choose a new password.",
+        );
+      } else {
+        localStorage.setItem("jwt_token", data.token);
+        localStorage.setItem("user_email", data.user?.email || "user");
+        showDashboard(data.user?.email || "user", data.token);
+        showAlert(
+          "success",
+          "Welcome!",
+          "Logged in successfully via magic link.",
+        );
+      }
+    } else {
+      showAlert(
+        "danger",
+        "Magic Login Failed",
+        data.message || "Invalid, expired, or already used magic link.",
+      );
+    }
+  } catch (err) {
+    showAlert("danger", "Error", "Could not complete magic login.");
+  }
+}
+
 function setSubmitting(isSubmitting) {
   submitBtn.disabled = isSubmitting;
   const btnText = submitBtn.querySelector(".btn-text");
@@ -640,10 +773,16 @@ function switchTab(tab) {
 }
 
 function switchSection(sectionToDisplay) {
-  [loginSection, otpSection, dashboardSection, registerSection].forEach((sec) =>
-    sec.classList.add("hidden"),
-  );
-  sectionToDisplay.classList.remove("hidden");
+  [
+    loginSection,
+    otpSection,
+    dashboardSection,
+    registerSection,
+    forceChangePasswordSection,
+  ].forEach((sec) => {
+    if (sec) sec.classList.add("hidden");
+  });
+  if (sectionToDisplay) sectionToDisplay.classList.remove("hidden");
 }
 
 async function handleLoginSubmit(event) {
@@ -684,6 +823,18 @@ async function handleLoginSubmit(event) {
     }
 
     if (response.ok) {
+      if (data.restricted) {
+        restrictedSessionToken = data.token;
+        switchSection(forceChangePasswordSection);
+        showAlert(
+          "warning",
+          "Password Expired",
+          data.message ||
+            "Your ban period has expired. Please choose a new password.",
+        );
+        return;
+      }
+
       otpEmailTarget.textContent = activeLoginEmail;
       switchSection(otpSection);
       showAlert(
@@ -692,10 +843,20 @@ async function handleLoginSubmit(event) {
         "A 6-digit code has been sent to your email.",
       );
     } else {
+      let displayMessage = data.message || "Invalid credentials or unverified account.";
+
+      // Convert any ISO/RFC3339 timestamp in the message to the user's local timezone
+      const isoRegex = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})/;
+      const match = displayMessage.match(isoRegex);
+      if (match) {
+        const localTimeStr = new Date(match[0]).toLocaleString();
+        displayMessage = displayMessage.replace(match[0], localTimeStr);
+      }
+
       showAlert(
         "danger",
         "Login Failed",
-        data.message || "Invalid credentials or unverified account.",
+        displayMessage,
       );
     }
   } catch (err) {
@@ -800,6 +961,77 @@ async function handleLogout() {
       "Logged Out",
       "You have been successfully logged out.",
     );
+  }
+}
+
+async function handleForceChangePasswordSubmit(event) {
+  event.preventDefault();
+  hideAlert();
+
+  const newPassword = forceNewPasswordInput.value;
+  const confirmPassword = forceConfirmPasswordInput.value;
+
+  if (!newPassword) {
+    forceNewPasswordInput.classList.add("is-invalid");
+    forceNewPasswordError.textContent = "New password is required";
+    return;
+  }
+  forceNewPasswordInput.classList.remove("is-invalid");
+  forceNewPasswordError.textContent = "";
+
+  if (newPassword !== confirmPassword) {
+    forceConfirmPasswordInput.classList.add("is-invalid");
+    forceConfirmPasswordError.textContent = "Passwords do not match";
+    return;
+  }
+  forceConfirmPasswordInput.classList.remove("is-invalid");
+  forceConfirmPasswordError.textContent = "";
+
+  forceChangeSubmitBtn.disabled = true;
+  forceChangeSpinner.classList.remove("hidden");
+
+  try {
+    const { response } = await fetchWithFallback("/api/users/change-expired-password", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${restrictedSessionToken}`,
+      },
+      body: JSON.stringify({
+        password: newPassword,
+        confirmPassword: confirmPassword,
+      }),
+    });
+
+    const text = await response.text();
+    let data = {};
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { message: text.trim() };
+    }
+
+    if (response.ok) {
+      restrictedSessionToken = null;
+      forceChangePasswordForm.reset();
+      switchSection(loginSection);
+      showAlert(
+        "success",
+        "Password Updated",
+        "Your password has been reset and account lock cleared. Please sign in.",
+      );
+    } else {
+      showAlert(
+        "danger",
+        "Update Failed",
+        data.message || "Failed to update password.",
+      );
+    }
+  } catch (err) {
+    showAlert("danger", "Connection Error", "Could not connect to update password.");
+  } finally {
+    forceChangeSubmitBtn.disabled = false;
+    forceChangeSpinner.classList.add("hidden");
   }
 }
 
