@@ -136,6 +136,90 @@ func TestValidateResetPassword_Mismatch(t *testing.T) {
 	}
 }
 
+// Password expiration and restricted account tests
+func TestGenerateAndVerifyRestrictedJWTToken_Success(t *testing.T) {
+	userID := "60d5ec49f1b2c82b8c8e4e01"
+	email := "expired_user@example.com"
+	role := "RK"
+
+	token, err := GenerateRestrictedJWTToken(userID, email, role)
+	if err != nil {
+		t.Fatalf("Failed to generate restricted token: %v", err)
+	}
+
+	extractedEmail, err := VerifyRestrictedToken(token)
+	if err != nil {
+		t.Fatalf("Expected valid restricted token, got error: %v", err)
+	}
+
+	if extractedEmail != email {
+		t.Errorf("Expected extracted email %s, got %s", email, extractedEmail)
+	}
+}
+
+func TestVerifyRestrictedToken_StandardTokenRejected(t *testing.T) {
+
+	userID := "60d5ec49f1b2c82b8c8e4e01"
+	email := "regular_user@example.com"
+	role := "RK"
+
+	standardToken, err := GenerateJWTToken(userID, email, role)
+	if err != nil {
+		t.Fatalf("Failed to generate standard token: %v", err)
+	}
+
+	_, err = VerifyRestrictedToken(standardToken)
+	if err == nil {
+		t.Errorf("Expected VerifyRestrictedToken to reject standard token without restricted claim")
+	}
+}
+
+func TestValidateChangeExpiredPassword(t *testing.T) {
+	// Matching & valid
+	if err := ValidateChangeExpiredPassword("NewValidPass123!", "NewValidPass123!"); err != nil {
+		t.Errorf("Expected no error for valid matching passwords, got %v", err)
+	}
+
+	// Mismatched
+	if err := ValidateChangeExpiredPassword("NewValidPass123!", "MismatchPass123!"); err == nil {
+		t.Errorf("Expected error for password mismatch, got nil")
+	}
+
+	// Weak password
+	if err := ValidateChangeExpiredPassword("weak", "weak"); err == nil {
+		t.Errorf("Expected error for weak password, got nil")
+	}
+}
+
+//Magic link tests
+
+func TestMagicLinkToken_HashingAndDeterminism(t *testing.T) {
+	rawToken, err := GenerateSecureToken()
+	if err != nil {
+		t.Fatalf("Failed to generate token: %v", err)
+	}
+
+	hash1 := HashResetToken(rawToken)
+	hash2 := HashResetToken(rawToken)
+
+	if hash1 != hash2 {
+		t.Errorf("Hashes must match for identical raw tokens")
+	}
+
+	if len(hash1) != 64 {
+		t.Errorf("Expected SHA-256 hash length 64, got %d", len(hash1))
+	}
+}
+
+func TestMagicLinkToken_DifferentTokensProduceDifferentHashes(t *testing.T) {
+	token1, _ := GenerateSecureToken()
+	token2, _ := GenerateSecureToken()
+
+	if HashResetToken(token1) == HashResetToken(token2) {
+		t.Errorf("Different tokens must produce different hashes")
+	}
+}
+
 //POWERSHELL EMAIL VERIFICATION  TEST:
 //run docker compose up --build -d
 // $body = @{

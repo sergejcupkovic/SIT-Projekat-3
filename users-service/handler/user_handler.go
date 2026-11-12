@@ -501,7 +501,7 @@ func (h *UserHandler) postResetPassword(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-// POST /api/users/change-expired-password (Task 3)
+// POST /api/users/change-expired-password
 func (h *UserHandler) ChangeExpiredPassword(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
