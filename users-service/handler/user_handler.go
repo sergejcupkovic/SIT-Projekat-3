@@ -551,3 +551,98 @@ func (h *UserHandler) ChangeExpiredPassword(w http.ResponseWriter, r *http.Reque
 		"message": "Password successfully updated. You can now sign in with your new password.",
 	})
 }
+
+// POST /api/users/magic-link-request
+func (h *UserHandler) RequestMagicLink(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Email string `json:"email"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON body", http.StatusBadRequest)
+		return
+	}
+
+	const genericMsg = "If an account with that email exists and is verified, a magic link has been sent."
+	genericOK := func() {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"message": genericMsg})
+	}
+
+	user, err := h.repo.FindByEmail(r.Context(), req.Email)
+	if err != nil || !user.IsVerified {
+		genericOK()
+		return
+	}
+
+	rawToken, err := service.GenerateSecureToken()
+	if err != nil {
+		http.Error(w, "Error generating token", http.StatusInternalServerError)
+		return
+	}
+
+	expiresAt := time.Now().Add(service.MagicLinkTokenTTL)
+	if err := h.repo.SaveMagicLinkToken(r.Context(), user.Email, service.HashResetToken(rawToken), expiresAt); err != nil {
+		http.Error(w, "Error saving token", http.StatusInternalServerError)
+		return
+	}
+
+	go func() {
+		_ = service.SendMagicLinkEmail(h.smtpHost, h.smtpPort, h.smtpFrom, user.Email, rawToken)
+	}()
+
+	genericOK()
+}
+
+// POST /api/users/magic-link-login (or GET query fallback)
+func (h *UserHandler) GetMagicLinkLogin(w http.ResponseWriter, r *http.Request) {
+	var token string
+	if r.Method == http.MethodPost {
+		var req struct {
+			Token string `json:"token"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
+			token = req.Token
+		}
+	}
+	if token == "" {
+		token = r.URL.Query().Get("token")
+	}
+
+	if token == "" {
+		http.Error(w, "Missing magic link token", http.StatusBadRequest)
+		return
+	}
+
+	tokenHash := service.HashResetToken(token)
+
+	user, err := h.repo.FindByMagicLinkToken(r.Context(), tokenHash)
+	if err != nil {
+
+		http.Error(w, "Invalid or expired magic link", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.repo.ClearMagicLinkToken(r.Context(), user.Email); err != nil {
+		http.Error(w, "Error consuming magic link", http.StatusInternalServerError)
+		return
+	}
+
+	jwtToken, err := service.GenerateJWTToken(user.ID.Hex(), user.Email, string(user.Role))
+	if err != nil {
+		http.Error(w, "Error generating authentication token", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"token": jwtToken,
+		"user": map[string]interface{}{
+			"id":    user.ID.Hex(),
+			"email": user.Email,
+			"role":  user.Role,
+		},
+	})
+}

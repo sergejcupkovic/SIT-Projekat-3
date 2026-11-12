@@ -156,6 +156,12 @@ function init() {
   alertCloseBtn.addEventListener("click", hideAlert);
 
   checkVerificationTokenInUrl();
+  checkMagicLinkTokenInUrl();
+
+  const requestMagicLinkBtn = document.getElementById("requestMagicLinkBtn");
+  if (requestMagicLinkBtn) {
+    requestMagicLinkBtn.addEventListener("click", handleMagicLinkRequest);
+  }
   tabLogin.addEventListener("click", () => switchTab("login"));
   tabRegister.addEventListener("click", () => switchTab("register"));
 
@@ -548,6 +554,98 @@ async function checkVerificationTokenInUrl() {
       "Verification Error",
       "Could not connect to the API Gateway to verify your token.",
     );
+  }
+}
+
+async function handleMagicLinkRequest() {
+  hideAlert();
+  const email = loginEmailInput.value.trim();
+  if (!email || !EMAIL_REGEX.test(email)) {
+    loginEmailInput.classList.add("is-invalid");
+    loginEmailError.textContent = "Please enter your email above first";
+    return;
+  }
+  loginEmailInput.classList.remove("is-invalid");
+  loginEmailError.textContent = "";
+
+  showAlert("warning", "Sending...", "Requesting magic login link...");
+
+  try {
+    const { response } = await fetchWithFallback("/api/users/magic-link-request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+
+    const text = await response.text();
+    let data = {};
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { message: text.trim() };
+    }
+
+    if (response.ok) {
+      showAlert(
+        "success",
+        "Magic Link Sent!",
+        data.message || "Check Mailpit (:8025) for your direct login link.",
+      );
+    } else {
+      showAlert("danger", "Request Failed", data.message || "Could not send magic link.");
+    }
+  } catch (err) {
+    showAlert("danger", "Error", "Could not connect to send magic link.");
+  }
+}
+
+async function checkMagicLinkTokenInUrl() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const magicToken = urlParams.get("magicToken");
+  if (!magicToken) return;
+
+  // Clear query string from URL for clean appearance
+  window.history.replaceState({}, document.title, window.location.pathname);
+
+  showAlert(
+    "warning",
+    "Logging in...",
+    "Verifying magic link token and authenticating...",
+  );
+
+  try {
+    const { response } = await fetchWithFallback("/api/users/magic-link-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: magicToken }),
+    });
+
+    const text = await response.text();
+    let data = {};
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { message: text.trim() };
+    }
+
+    if (response.ok && data.token) {
+      localStorage.setItem("jwt_token", data.token);
+      localStorage.setItem("user_email", data.user?.email || "user");
+      showDashboard(data.user?.email || "user", data.token);
+      showAlert(
+        "success",
+        "Welcome!",
+        "Logged in successfully via magic link.",
+      );
+    } else {
+      showAlert(
+        "danger",
+        "Magic Login Failed",
+        data.message || "Invalid, expired, or already used magic link.",
+      );
+    }
+  } catch (err) {
+    showAlert("danger", "Error", "Could not complete magic login.");
   }
 }
 

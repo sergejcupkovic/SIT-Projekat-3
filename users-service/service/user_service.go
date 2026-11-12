@@ -23,6 +23,7 @@ const (
 	ResetTokenTTL        = 30 * time.Minute
 	ResetRateLimitMax    = 3
 	ResetRateLimitWindow = 15 * time.Minute
+	MagicLinkTokenTTL    = 15 * time.Minute
 )
 
 type RegisterRequest struct {
@@ -205,5 +206,11 @@ func PasswordChangeAllowed(lastChanged time.Time) (ok bool, retryAt time.Time) {
 func SendPasswordResetEmail(smtpHost, smtpPort, from, to, rawToken string) error {
 	resetLink := fmt.Sprintf("http://localhost:8080/api/users/reset-password?token=%s", rawToken)
 	msg := []byte(fmt.Sprintf("To: %s\r\nSubject: Password Reset Request\r\n\r\nClick the link to reset your password: %s\r\nThis link will expire in 30 minutes and can be used only once.\r\n", to, resetLink))
+	return smtp.SendMail(smtpHost+":"+smtpPort, nil, from, []string{to}, msg)
+}
+
+func SendMagicLinkEmail(smtpHost, smtpPort, from, to, rawToken string) error {
+	resetLink := fmt.Sprintf("http://localhost:3000/?magicToken=%s", rawToken)
+	msg := []byte(fmt.Sprintf("To: %s\r\nSubject: Magic Link\r\n\r\nClick the link to login into your account: %s\r\nThis link will expire in 15 minutes and can be used only once.\r\n", to, resetLink))
 	return smtp.SendMail(smtpHost+":"+smtpPort, nil, from, []string{to}, msg)
 }

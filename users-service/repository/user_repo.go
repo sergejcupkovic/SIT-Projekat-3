@@ -176,3 +176,34 @@ func (r *UserRepository) UnlockAccount(ctx context.Context, email string) error 
 	_, err := r.collection.UpdateOne(ctx, filter, update)
 	return err
 }
+
+func (r *UserRepository) SaveMagicLinkToken(ctx context.Context, email, tokenHash string, expiresAt time.Time) error {
+	filter := bson.M{"email": email}
+	update := bson.M{
+		"$set": bson.M{
+			"magicLinkTokenHash":    tokenHash,
+			"magicLinkTokenExpires": expiresAt,
+		},
+	}
+	_, err := r.collection.UpdateOne(ctx, filter, update)
+	return err
+}
+
+func (r *UserRepository) FindByMagicLinkToken(ctx context.Context, tokenHash string) (*domain.User, error) {
+	var user domain.User
+	err := r.collection.FindOne(ctx, bson.M{"magicLinkTokenHash": tokenHash}).Decode(&user)
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (r *UserRepository) ClearMagicLinkToken(ctx context.Context, email string) error {
+	filter := bson.M{"email": email}
+	update := bson.M{
+		"$unset": bson.M{"magicLinkTokenHash": "", "magicLinkTokenExpires": ""},
+	}
+	_, err := r.collection.UpdateOne(ctx, filter, update)
+	return err
+
+}

@@ -35,4 +35,6 @@ type User struct {
 	OTPExpires                time.Time          `bson:"otpExpires,omitempty" json:"-"`
 	OTPAttempts               int                `bson:"otpAttempts" json:"-"`
 	AccountLockedUntil        time.Time          `bson:"accountLockedUntil" json:"-"`
+	MagicLinkTokenHash        string             `bson:"magicLinkTokenHash,omitempty" json:"-"`
+	MagicLinkTokenExpires     time.Time          `bson:"magicLinkTokenExpires,omitempty" json:"-"`
 }
