@@ -629,14 +629,24 @@ async function checkMagicLinkTokenInUrl() {
     }
 
     if (response.ok && data.token) {
-      localStorage.setItem("jwt_token", data.token);
-      localStorage.setItem("user_email", data.user?.email || "user");
-      showDashboard(data.user?.email || "user", data.token);
-      showAlert(
-        "success",
-        "Welcome!",
-        "Logged in successfully via magic link.",
-      );
+      if (data.restricted) {
+        restrictedSessionToken = data.token;
+        switchSection(forceChangePasswordSection);
+        showAlert(
+          "warning",
+          "Password Update Required",
+          data.message || "Your ban period has expired. Please choose a new password.",
+        );
+      } else {
+        localStorage.setItem("jwt_token", data.token);
+        localStorage.setItem("user_email", data.user?.email || "user");
+        showDashboard(data.user?.email || "user", data.token);
+        showAlert(
+          "success",
+          "Welcome!",
+          "Logged in successfully via magic link.",
+        );
+      }
     } else {
       showAlert(
         "danger",

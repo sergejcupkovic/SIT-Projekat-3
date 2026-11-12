@@ -630,13 +630,31 @@ func (h *UserHandler) GetMagicLinkLogin(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "Error consuming magic link", http.StatusInternalServerError)
 		return
 	}
+	//FOrcing a locked account to change pass
+	if !user.AccountLockedUntil.IsZero() {
+		if time.Now().Before(user.AccountLockedUntil) {
 
+			http.Error(w, "Account is locked until "+user.AccountLockedUntil.Format(time.RFC3339), http.StatusForbidden)
+			return
+		}
+
+		restrictedToken, err := service.GenerateRestrictedJWTToken(user.ID.Hex(), user.Email, string(user.Role))
+		if err != nil {
+			http.Error(w, "Error generating session token", http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"message":    "Your ban period has expired. You must change your password.",
+			"token":      restrictedToken,
+			"restricted": true,
+		})
+		return
+	}
 	jwtToken, err := service.GenerateJWTToken(user.ID.Hex(), user.Email, string(user.Role))
 	if err != nil {
 		http.Error(w, "Error generating authentication token", http.StatusInternalServerError)
 		return
 	}
-
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"token": jwtToken,
 		"user": map[string]interface{}{
