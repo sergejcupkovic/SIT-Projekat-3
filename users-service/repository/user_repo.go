@@ -129,6 +129,7 @@ func (r *UserRepository) UpdatePassword(ctx context.Context, email, newHash stri
 		"$unset": bson.M{
 			"passwordResetTokenHash":    "",
 			"passwordResetTokenExpires": "",
+			"accountLockedUntil":        "",
 		},
 	}
 	_, err := r.collection.UpdateOne(ctx, filter, update)
@@ -149,6 +150,28 @@ func (r *UserRepository) IncrementResetRequestCount(ctx context.Context, email s
 		update = bson.M{
 			"$inc": bson.M{"passwordResetRequestCount": 1},
 		}
+	}
+	_, err := r.collection.UpdateOne(ctx, filter, update)
+	return err
+}
+
+func (r *UserRepository) LockAccount(ctx context.Context, email string, until time.Time) error {
+	filter := bson.M{"email": email}
+	update := bson.M{
+		"$set": bson.M{
+			"accountLockedUntil": until,
+		},
+	}
+	_, err := r.collection.UpdateOne(ctx, filter, update)
+	return err
+}
+
+func (r *UserRepository) UnlockAccount(ctx context.Context, email string) error {
+	filter := bson.M{"email": email}
+	update := bson.M{
+		"$unset": bson.M{
+			"accountLockedUntil": "",
+		},
 	}
 	_, err := r.collection.UpdateOne(ctx, filter, update)
 	return err

@@ -34,4 +34,5 @@ type User struct {
 	OTP                       string             `bson:"otp,omitempty" json:"-"`
 	OTPExpires                time.Time          `bson:"otpExpires,omitempty" json:"-"`
 	OTPAttempts               int                `bson:"otpAttempts" json:"-"`
+	AccountLockedUntil        time.Time          `bson:"accountLockedUntil" json:"-"`
 }

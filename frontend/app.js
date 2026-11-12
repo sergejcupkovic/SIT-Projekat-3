@@ -6,6 +6,25 @@ const loginSection = document.getElementById("loginSection");
 const otpSection = document.getElementById("otpSection");
 const dashboardSection = document.getElementById("dashboardSection");
 const registerSection = document.getElementById("registerSection");
+const forceChangePasswordSection = document.getElementById(
+  "forceChangePasswordSection",
+);
+
+const forceChangePasswordForm = document.getElementById(
+  "forceChangePasswordForm",
+);
+const forceNewPasswordInput = document.getElementById("forceNewPassword");
+const forceConfirmPasswordInput = document.getElementById(
+  "forceConfirmPassword",
+);
+const forceChangeSubmitBtn = document.getElementById("forceChangeSubmitBtn");
+const forceChangeSpinner = document.getElementById("forceChangeSpinner");
+const forceNewPasswordError = document.getElementById("forceNewPasswordError");
+const forceConfirmPasswordError = document.getElementById(
+  "forceConfirmPasswordError",
+);
+
+let restrictedSessionToken = null;
 
 const loginForm = document.getElementById("loginForm");
 const loginEmailInput = document.getElementById("loginEmail");
@@ -145,6 +164,9 @@ function init() {
     togglePasswordVisibility(loginPasswordInput, toggleLoginPasswordBtn),
   );
   loginForm.addEventListener("submit", handleLoginSubmit);
+  if (forceChangePasswordForm) {
+    forceChangePasswordForm.addEventListener("submit", handleForceChangePasswordSubmit);
+  }
   otpForm.addEventListener("submit", handleOtpSubmit);
   resendOtpBtn.addEventListener("click", handleResendOtp);
   backToLoginBtn.addEventListener("click", () => switchSection(loginSection));
@@ -160,6 +182,9 @@ function init() {
     togglePasswordVisibility(loginPasswordInput, toggleLoginPasswordBtn),
   );
   loginForm.addEventListener("submit", handleLoginSubmit);
+  if (forceChangePasswordForm) {
+    forceChangePasswordForm.addEventListener("submit", handleForceChangePasswordSubmit);
+  }
   otpForm.addEventListener("submit", handleOtpSubmit);
   resendOtpBtn.addEventListener("click", handleResendOtp);
   backToLoginBtn.addEventListener("click", () => switchSection(loginSection));
@@ -640,10 +665,16 @@ function switchTab(tab) {
 }
 
 function switchSection(sectionToDisplay) {
-  [loginSection, otpSection, dashboardSection, registerSection].forEach((sec) =>
-    sec.classList.add("hidden"),
-  );
-  sectionToDisplay.classList.remove("hidden");
+  [
+    loginSection,
+    otpSection,
+    dashboardSection,
+    registerSection,
+    forceChangePasswordSection,
+  ].forEach((sec) => {
+    if (sec) sec.classList.add("hidden");
+  });
+  if (sectionToDisplay) sectionToDisplay.classList.remove("hidden");
 }
 
 async function handleLoginSubmit(event) {
@@ -684,6 +715,18 @@ async function handleLoginSubmit(event) {
     }
 
     if (response.ok) {
+      if (data.restricted) {
+        restrictedSessionToken = data.token;
+        switchSection(forceChangePasswordSection);
+        showAlert(
+          "warning",
+          "Password Expired",
+          data.message ||
+            "Your ban period has expired. Please choose a new password.",
+        );
+        return;
+      }
+
       otpEmailTarget.textContent = activeLoginEmail;
       switchSection(otpSection);
       showAlert(
@@ -692,10 +735,20 @@ async function handleLoginSubmit(event) {
         "A 6-digit code has been sent to your email.",
       );
     } else {
+      let displayMessage = data.message || "Invalid credentials or unverified account.";
+
+      // Convert any ISO/RFC3339 timestamp in the message to the user's local timezone
+      const isoRegex = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})/;
+      const match = displayMessage.match(isoRegex);
+      if (match) {
+        const localTimeStr = new Date(match[0]).toLocaleString();
+        displayMessage = displayMessage.replace(match[0], localTimeStr);
+      }
+
       showAlert(
         "danger",
         "Login Failed",
-        data.message || "Invalid credentials or unverified account.",
+        displayMessage,
       );
     }
   } catch (err) {
@@ -800,6 +853,77 @@ async function handleLogout() {
       "Logged Out",
       "You have been successfully logged out.",
     );
+  }
+}
+
+async function handleForceChangePasswordSubmit(event) {
+  event.preventDefault();
+  hideAlert();
+
+  const newPassword = forceNewPasswordInput.value;
+  const confirmPassword = forceConfirmPasswordInput.value;
+
+  if (!newPassword) {
+    forceNewPasswordInput.classList.add("is-invalid");
+    forceNewPasswordError.textContent = "New password is required";
+    return;
+  }
+  forceNewPasswordInput.classList.remove("is-invalid");
+  forceNewPasswordError.textContent = "";
+
+  if (newPassword !== confirmPassword) {
+    forceConfirmPasswordInput.classList.add("is-invalid");
+    forceConfirmPasswordError.textContent = "Passwords do not match";
+    return;
+  }
+  forceConfirmPasswordInput.classList.remove("is-invalid");
+  forceConfirmPasswordError.textContent = "";
+
+  forceChangeSubmitBtn.disabled = true;
+  forceChangeSpinner.classList.remove("hidden");
+
+  try {
+    const { response } = await fetchWithFallback("/api/users/change-expired-password", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${restrictedSessionToken}`,
+      },
+      body: JSON.stringify({
+        password: newPassword,
+        confirmPassword: confirmPassword,
+      }),
+    });
+
+    const text = await response.text();
+    let data = {};
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { message: text.trim() };
+    }
+
+    if (response.ok) {
+      restrictedSessionToken = null;
+      forceChangePasswordForm.reset();
+      switchSection(loginSection);
+      showAlert(
+        "success",
+        "Password Updated",
+        "Your password has been reset and account lock cleared. Please sign in.",
+      );
+    } else {
+      showAlert(
+        "danger",
+        "Update Failed",
+        data.message || "Failed to update password.",
+      );
+    }
+  } catch (err) {
+    showAlert("danger", "Connection Error", "Could not connect to update password.");
+  } finally {
+    forceChangeSubmitBtn.disabled = false;
+    forceChangeSpinner.classList.add("hidden");
   }
 }
 

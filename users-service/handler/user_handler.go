@@ -160,6 +160,38 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !user.AccountLockedUntil.IsZero() {
+		if time.Now().Before(user.AccountLockedUntil) {
+			// Ban active
+			http.Error(w, "Account is locked until "+user.AccountLockedUntil.Format(time.RFC3339), http.StatusForbidden)
+			return
+		}
+
+		//ban expired so it sends restricted session token
+		token, err := service.GenerateRestrictedJWTToken(user.ID.Hex(), user.Email, string(user.Role))
+		if err != nil {
+			http.Error(w, "Error generating session token", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"message":    "Your ban period has expired. You must change your password.",
+			"token":      token,
+			"restricted": true,
+		})
+		return
+	}
+
+	if time.Since(user.PasswordLastChanged) > service.PasswordMaxAge {
+		until := time.Now().Add(1 * time.Minute) //set how long the account is locked for, juist one min rn
+		_ = h.repo.LockAccount(r.Context(), user.Email, until)
+		http.Error(w, "Password expired. Account locked until "+until.Format(time.RFC3339),
+			http.StatusForbidden)
+		return
+
+	}
+
 	otpCode, err := service.GenerateOTPCode()
 	if err != nil {
 		http.Error(w, "Error generating security code", http.StatusInternalServerError)
@@ -466,5 +498,56 @@ func (h *UserHandler) postResetPassword(w http.ResponseWriter, r *http.Request) 
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "Password updated. You can now log in.",
+	})
+}
+
+// POST /api/users/change-expired-password (Task 3)
+func (h *UserHandler) ChangeExpiredPassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" || len(authHeader) < 7 || authHeader[:7] != "Bearer " {
+		http.Error(w, "Missing or invalid authorization token", http.StatusUnauthorized)
+		return
+	}
+	tokenStr := authHeader[7:]
+
+	email, err := service.VerifyRestrictedToken(tokenStr)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		Password        string `json:"password"`
+		ConfirmPassword string `json:"confirmPassword"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON body", http.StatusBadRequest)
+		return
+	}
+
+	if err := service.ValidateChangeExpiredPassword(req.Password, req.ConfirmPassword); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	newHash, err := service.HashPassword(req.Password)
+	if err != nil {
+		http.Error(w, "Error processing password", http.StatusInternalServerError)
+		return
+	}
+
+	now := time.Now()
+	if err := h.repo.UpdatePassword(r.Context(), email, newHash, now); err != nil {
+		http.Error(w, "Error updating password in database", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"message": "Password successfully updated. You can now sign in with your new password.",
 	})
 }

@@ -18,7 +18,8 @@ import (
 var JWTSecret = []byte("super-secret-key-change-in-prod")
 
 const (
-	PasswordMinAge       = 24 * time.Hour
+	PasswordMinAge       = 1 * time.Minute
+	PasswordMaxAge       = 2 * time.Minute
 	ResetTokenTTL        = 30 * time.Minute
 	ResetRateLimitMax    = 3
 	ResetRateLimitWindow = 15 * time.Minute
@@ -97,6 +98,19 @@ func GenerateJWTToken(userID string, email string, role string) (string, error) 
 	return token.SignedString(JWTSecret)
 }
 
+func GenerateRestrictedJWTToken(userID, email, role string) (string, error) {
+	claims := jwt.MapClaims{
+		"sub":        userID,
+		"email":      email,
+		"role":       role,
+		"restricted": true,
+		"exp":        time.Now().Add(15 * time.Minute).Unix(), //15min to change the password
+		"iat":        time.Now().Unix(),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(JWTSecret)
+}
+
 func GenerateSecureToken() (string, error) {
 	bytes := make([]byte, 32)
 	if _, err := rand.Read(bytes); err != nil {
@@ -125,6 +139,45 @@ func ValidatePassword(password string) error {
 		return errors.New("password must have at least 8 characters, an uppercase and lowercase letter, a number, and a special character")
 	}
 	return nil
+}
+
+func ValidateChangeExpiredPassword(newPassword, confirmPassword string) error {
+	if newPassword == "" {
+		return errors.New("password is required")
+	}
+	if newPassword != confirmPassword {
+		return errors.New("passwords do not match")
+	}
+	return ValidatePassword(newPassword)
+}
+
+func VerifyRestrictedToken(tokenString string) (string, error) {
+	token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+		}
+		return JWTSecret, nil
+	})
+	if err != nil || !token.Valid {
+		return "", errors.New("invalid or expired token")
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return "", errors.New("invalid token claims")
+	}
+
+	isRestricted, ok := claims["restricted"].(bool)
+	if !ok || !isRestricted {
+		return "", errors.New("token is not authorized for password change")
+	}
+
+	email, ok := claims["email"].(string)
+	if !ok || email == "" {
+		return "", errors.New("email not found in token")
+	}
+
+	return email, nil
 }
 
 func ValidateResetPassword(req ResetPasswordRequest) error {
