@@ -54,6 +54,9 @@ func main() {
 	http.HandleFunc("/api/users/logout", userHandler.Logout)
 	http.HandleFunc("/api/users/forgot-password", userHandler.ForgotPassword)
 	http.HandleFunc("/api/users/reset-password", userHandler.ResetPassword)
+	http.HandleFunc("/api/users/change-expired-password", userHandler.ChangeExpiredPassword)
+	http.HandleFunc("/api/users/magic-link-request", userHandler.RequestMagicLink)
+	http.HandleFunc("/api/users/magic-link-login", userHandler.GetMagicLinkLogin)
 
 	http.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

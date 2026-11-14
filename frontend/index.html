@@ -158,6 +158,61 @@
                 <span class="btn-text">Continue with 2FA</span>
                 <span class="btn-spinner hidden" id="loginSpinner"></span>
               </button>
+
+              <div style="text-align: center; margin-top: 1rem;">
+                <button type="button" id="requestMagicLinkBtn" class="btn-link" style="background:none;border:none;color:#6366f1;cursor:pointer;font-size:0.9rem;text-decoration:underline;">
+                  Email me a Magic Login Link instead
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- FORCED PASSWORD CHANGE (Task 3) -->
+          <div id="forceChangePasswordSection" class="auth-section hidden">
+            <div class="card-header">
+              <h1 class="card-title">Change Expired Password</h1>
+              <p class="card-subtitle">
+                Your ban has expired. Please choose a new password to restore access.
+              </p>
+            </div>
+
+            <form id="forceChangePasswordForm" class="auth-form" novalidate>
+              <div class="form-group">
+                <label for="forceNewPassword" class="form-label"
+                  >New Password <span class="required">*</span></label
+                >
+                <div class="input-wrapper">
+                  <input
+                    type="password"
+                    id="forceNewPassword"
+                    class="form-input"
+                    placeholder="••••••••"
+                    required
+                  />
+                </div>
+                <span class="field-error" id="forceNewPasswordError"></span>
+              </div>
+
+              <div class="form-group">
+                <label for="forceConfirmPassword" class="form-label"
+                  >Confirm New Password <span class="required">*</span></label
+                >
+                <div class="input-wrapper">
+                  <input
+                    type="password"
+                    id="forceConfirmPassword"
+                    class="form-input"
+                    placeholder="••••••••"
+                    required
+                  />
+                </div>
+                <span class="field-error" id="forceConfirmPasswordError"></span>
+              </div>
+
+              <button type="submit" id="forceChangeSubmitBtn" class="btn-submit">
+                <span class="btn-text">Update Password</span>
+                <span class="btn-spinner hidden" id="forceChangeSpinner"></span>
+              </button>
             </form>
           </div>
 
