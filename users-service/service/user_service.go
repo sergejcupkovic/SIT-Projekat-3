@@ -10,21 +10,40 @@ import (
 	"net/smtp"
 	"regexp"
 	"time"
+	"users-service/config"
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
-var JWTSecret = []byte("super-secret-key-change-in-prod")
-
-const (
-	PasswordMinAge       = 1 * time.Minute
-	PasswordMaxAge       = 2 * time.Minute
-	ResetTokenTTL        = 30 * time.Minute
-	ResetRateLimitMax    = 3
-	ResetRateLimitWindow = 15 * time.Minute
-	MagicLinkTokenTTL    = 15 * time.Minute
+var (
+	JWTSecret []byte
+	Cfg       *config.Config
 )
+
+func Init(c *config.Config) {
+	Cfg = c
+	JWTSecret = []byte(c.JWTSecret)
+}
+
+func gatewayURL() string {
+	return fmt.Sprintf("http://%s:%s", Cfg.PublicHost, Cfg.GatewayPort)
+}
+
+func frontendURL() string {
+	return fmt.Sprintf("http://%s:%s", Cfg.PublicHost, Cfg.FrontendPort)
+}
+
+func HumanDur(d time.Duration) string {
+	switch {
+	case d%time.Hour == 0:
+		return fmt.Sprintf("%d hour(s)", int(d/time.Hour))
+	case d%time.Minute == 0:
+		return fmt.Sprintf("%d minute(s)", int(d/time.Minute))
+	default:
+		return d.String()
+	}
+}
 
 type RegisterRequest struct {
 	FirstName       string `json:"firstName"`
@@ -70,7 +89,7 @@ func ValidateRegistration(req RegisterRequest) error {
 }
 
 func HashPassword(password string) (string, error) {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 12)
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), Cfg.BcryptCost)
 	return string(bytes), err
 }
 
@@ -92,7 +111,7 @@ func GenerateJWTToken(userID string, email string, role string) (string, error) 
 		"sub":   userID,
 		"email": email,
 		"role":  role,
-		"exp":   time.Now().Add(24 * time.Hour).Unix(),
+		"exp":   time.Now().Add(Cfg.JWTTTL).Unix(),
 		"iat":   time.Now().Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -105,7 +124,7 @@ func GenerateRestrictedJWTToken(userID, email, role string) (string, error) {
 		"email":      email,
 		"role":       role,
 		"restricted": true,
-		"exp":        time.Now().Add(15 * time.Minute).Unix(), //15min to change the password
+		"exp":        time.Now().Add(Cfg.RestrictedTokenTTL).Unix(),
 		"iat":        time.Now().Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -121,13 +140,13 @@ func GenerateSecureToken() (string, error) {
 }
 
 func SendVerificationEmail(smtpHost, smtpPort, from, to, token string) error {
-	verifyLink := fmt.Sprintf("http://localhost:8080/api/users/verify?token=%s", token)
+	verifyLink := fmt.Sprintf("%s/api/users/verify?token=%s", gatewayURL(), token)
 	msg := []byte(fmt.Sprintf("To: %s\r\nSubject: Registration Confirmation\r\n\r\nClick the link to activate your account: %s\r\n", to, verifyLink))
 	return smtp.SendMail(smtpHost+":"+smtpPort, nil, from, []string{to}, msg)
 }
 
 func SendOTPEmail(smtpHost, smtpPort, from, to, otpCode string) error {
-	msg := []byte(fmt.Sprintf("To: %s\r\nSubject: Your One-Time Login Password (OTPS)\r\n\r\nYour single-use login code is: %s\r\nThis code will expire in 5 minutes.\r\n", to, otpCode))
+	msg := []byte(fmt.Sprintf("To: %s\r\nSubject: Your One-Time Login Password (OTPS)\r\n\r\nYour single-use login code is: %s\r\nThis code will expire in %s.\r\n", to, otpCode, HumanDur(Cfg.OTPTTL)))
 	return smtp.SendMail(smtpHost+":"+smtpPort, nil, from, []string{to}, msg)
 }
 
@@ -197,20 +216,20 @@ func HashResetToken(raw string) string {
 }
 
 func PasswordChangeAllowed(lastChanged time.Time) (ok bool, retryAt time.Time) {
-	if time.Since(lastChanged) < PasswordMinAge {
-		return false, lastChanged.Add(PasswordMinAge)
+	if time.Since(lastChanged) < Cfg.PasswordMinAge {
+		return false, lastChanged.Add(Cfg.PasswordMinAge)
 	}
 	return true, time.Time{}
 }
 
 func SendPasswordResetEmail(smtpHost, smtpPort, from, to, rawToken string) error {
-	resetLink := fmt.Sprintf("http://localhost:8080/api/users/reset-password?token=%s", rawToken)
-	msg := []byte(fmt.Sprintf("To: %s\r\nSubject: Password Reset Request\r\n\r\nClick the link to reset your password: %s\r\nThis link will expire in 30 minutes and can be used only once.\r\n", to, resetLink))
+	resetLink := fmt.Sprintf("%s/api/users/reset-password?token=%s", gatewayURL(), rawToken)
+	msg := []byte(fmt.Sprintf("To: %s\r\nSubject: Password Reset Request\r\n\r\nClick the link to reset your password: %s\r\nThis link will expire in %s and can be used only once.\r\n", to, resetLink, HumanDur(Cfg.ResetTokenTTL)))
 	return smtp.SendMail(smtpHost+":"+smtpPort, nil, from, []string{to}, msg)
 }
 
 func SendMagicLinkEmail(smtpHost, smtpPort, from, to, rawToken string) error {
-	resetLink := fmt.Sprintf("http://localhost:3000/?magicToken=%s", rawToken)
-	msg := []byte(fmt.Sprintf("To: %s\r\nSubject: Magic Link\r\n\r\nClick the link to login into your account: %s\r\nThis link will expire in 15 minutes and can be used only once.\r\n", to, resetLink))
+	resetLink := fmt.Sprintf("%s/?magicToken=%s", frontendURL(), rawToken)
+	msg := []byte(fmt.Sprintf("To: %s\r\nSubject: Magic Link\r\n\r\nClick the link to login into your account: %s\r\nThis link will expire in %s and can be used only once.\r\n", to, resetLink, HumanDur(Cfg.MagicLinkTokenTTL)))
 	return smtp.SendMail(smtpHost+":"+smtpPort, nil, from, []string{to}, msg)
 }

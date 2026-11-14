@@ -71,7 +71,7 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 		Role:                     domain.RoleRegular,
 		IsVerified:               false,
 		VerificationToken:        token,
-		VerificationTokenExpires: now.Add(24 * time.Hour),
+		VerificationTokenExpires: now.Add(service.Cfg.VerificationTokenTTL),
 		StorageQuotaBytes:        h.defaultQuotaBytes,
 		UsedStorageBytes:         0,
 		PasswordLastChanged:      now,
@@ -183,8 +183,8 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if time.Since(user.PasswordLastChanged) > service.PasswordMaxAge {
-		until := time.Now().Add(1 * time.Minute) //set how long the account is locked for, juist one min rn
+	if time.Since(user.PasswordLastChanged) > service.Cfg.PasswordMaxAge {
+		until := time.Now().Add(service.Cfg.AccountLockDuration)
 		_ = h.repo.LockAccount(r.Context(), user.Email, until)
 		http.Error(w, "Password expired. Account locked until "+until.Format(time.RFC3339),
 			http.StatusForbidden)
@@ -198,7 +198,7 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	expiresAt := time.Now().Add(5 * time.Minute)
+	expiresAt := time.Now().Add(service.Cfg.OTPTTL)
 	if err := h.repo.SaveOTP(r.Context(), user.Email, otpCode, expiresAt); err != nil {
 		http.Error(w, "Error saving security code", http.StatusInternalServerError)
 		return
@@ -234,7 +234,7 @@ func (h *UserHandler) VerifyOTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if user.OTPAttempts >= 3 {
+	if user.OTPAttempts >= service.Cfg.OTPMaxAttempts {
 		_ = h.repo.ClearOTP(r.Context(), user.Email)
 		http.Error(w, "Too many failed attempts. Please log in again to receive a new code.", http.StatusTooManyRequests)
 		return
@@ -316,7 +316,7 @@ func (h *UserHandler) ResendOTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	expiresAt := time.Now().Add(5 * time.Minute)
+	expiresAt := time.Now().Add(service.Cfg.OTPTTL)
 	if err := h.repo.SaveOTP(r.Context(), user.Email, otpCode, expiresAt); err != nil {
 		http.Error(w, "Error saving code", http.StatusInternalServerError)
 		return
@@ -350,7 +350,7 @@ func writeResetLinkError(w http.ResponseWriter) {
 func writePasswordTooYoung(w http.ResponseWriter, retryAt time.Time) {
 	retry := retryAt.UTC().Format(time.RFC3339)
 	writeJSON(w, http.StatusForbidden, map[string]interface{}{
-		"message":            "Password can only be changed once every 24 hours. You can retry after " + retry + ".",
+		"message":            "Password can only be changed once every " + service.HumanDur(service.Cfg.PasswordMinAge) + ". You can retry after " + retry + ".",
 		"retryAt":            retry,
 		"canRequestNewLink":  true,
 		"forgotPasswordPath": "/api/users/forgot-password",
@@ -391,8 +391,8 @@ func (h *UserHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now()
-	resetWindow := user.PasswordResetWindowStart.IsZero() || now.Sub(user.PasswordResetWindowStart) > service.ResetRateLimitWindow
-	if !resetWindow && user.PasswordResetRequestCount >= service.ResetRateLimitMax {
+	resetWindow := user.PasswordResetWindowStart.IsZero() || now.Sub(user.PasswordResetWindowStart) > service.Cfg.ResetRateLimitWindow
+	if !resetWindow && user.PasswordResetRequestCount >= service.Cfg.ResetRateLimitMax {
 		writeJSON(w, http.StatusTooManyRequests, map[string]interface{}{
 			"message": "Too many password reset requests. Try again later.",
 		})
@@ -411,7 +411,7 @@ func (h *UserHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tokenHash := service.HashResetToken(rawToken)
-	expiresAt := now.Add(service.ResetTokenTTL)
+	expiresAt := now.Add(service.Cfg.ResetTokenTTL)
 	if err := h.repo.SavePasswordResetToken(r.Context(), user.Email, tokenHash, expiresAt); err != nil {
 		http.Error(w, "Error saving reset token", http.StatusInternalServerError)
 		return
@@ -584,7 +584,7 @@ func (h *UserHandler) RequestMagicLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	expiresAt := time.Now().Add(service.MagicLinkTokenTTL)
+	expiresAt := time.Now().Add(service.Cfg.MagicLinkTokenTTL)
 	if err := h.repo.SaveMagicLinkToken(r.Context(), user.Email, service.HashResetToken(rawToken), expiresAt); err != nil {
 		http.Error(w, "Error saving token", http.StatusInternalServerError)
 		return

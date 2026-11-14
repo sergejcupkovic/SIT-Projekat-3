@@ -9,6 +9,7 @@ import (
 	"users-service/config"
 	"users-service/handler"
 	"users-service/repository"
+	"users-service/service"
 
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -17,6 +18,7 @@ import (
 func main() {
 
 	cfg := config.LoadConfig()
+	service.Init(cfg)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

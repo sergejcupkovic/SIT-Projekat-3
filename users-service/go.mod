@@ -3,12 +3,13 @@ module users-service
 go 1.27.3
 
 require (
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	go.mongodb.org/mongo-driver v1.17.10
 	golang.org/x/crypto v0.26.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
-	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/klauspost/compress v1.16.7 // indirect
 	github.com/montanaflynn/stats v0.7.1 // indirect

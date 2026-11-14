@@ -3,7 +3,7 @@
 ## Docker Initialization
 
 ### Step 1: Environment File Setup
-Create `.env` file and copy content from `.env.example` into it.
+Create `.env` file and copy content from `.env.example` into it and set JWT token.
 
 ### Step 2: Build and Start Containers
 Run Docker compose in detached mode with image build:
@@ -26,6 +26,46 @@ docker compose ps
 - **API Gateway**: http://localhost:8080
 - **Users Service**: http://localhost:8081
 - **Mailpit Web UI**: http://localhost:8025
+
+## Configuration
+
+### `.env` (ports and secrets)
+| Variable | Default | Purpose |
+| :--- | :--- | :--- |
+| `MONGO_PORT` | 27017 | MongoDB |
+| `SMTP_PORT` | 1025 | Mailpit SMTP |
+| `MAILPIT_UI_PORT` | 8025 | Mailpit web UI |
+| `USERS_SERVICE_PORT` | 8081 | Users service |
+| `GATEWAY_PORT` | 8080 | API gateway |
+| `FRONTEND_PORT` | 3000 | Frontend |
+| `JWT_SECRET` | none | Required, at least 32 chars |
+
+### `config.yaml` (tunable behavior)
+| Key | Default | Meaning |
+| :--- | :--- | :--- |
+| `public_host` | localhost | Host used in links inside emails |
+| `mongo_db_name` | users_db | Database name |
+| `smtp_host` / `smtp_from` | mailpit / noreply@cloudstorage.local | Mail settings |
+| `default_quota_bytes` | 104857600 | Storage quota for new users |
+| `password_min_age` | 1m | Minimum time between password changes (reset flow) |
+| `password_max_age` | 2m | Password expires after this; login locks the account |
+| `account_lock_duration` | 1m | Lock length after password expiry |
+| `reset_token_ttl` | 30m | Password reset link lifetime |
+| `reset_rate_limit_max` / `reset_rate_limit_window` | 3 / 15m | Forgot-password limit |
+| `magic_link_token_ttl` | 15m | Magic link lifetime |
+| `verification_token_ttl` | 24h | Email verification link lifetime |
+| `otp_ttl` | 5m | OTP lifetime |
+| `otp_max_attempts` | 3 | OTP rate limit |
+| `jwt_ttl` | 24h | Session token lifetime |
+| `restricted_token_ttl` | 15m | Token for forced password change |
+| `bcrypt_cost` | 12 | Password hashing cost |
+
+Durations use Go syntax (`30m`, `2160h`); there is no `d` unit.
+
+### Applying changes
+- Edited `config.yaml`: `docker compose restart users-service`
+- Edited `.env`: `docker compose up -d`
+- Edited Go code: `docker compose up -d --build`
 
 ---
 
@@ -52,17 +92,16 @@ docker exec -it users_mongodb mongosh users_db --eval "db.users.deleteMany({})"
 | :--- | :--- | :--- |
 | **Role** | `"RK"` (`domain.RoleRegular`) | Regular User (`"A"` is Admin) |
 | **IsVerified** | `false` | Becomes true after token verification |
-| **StorageQuotaBytes** | `104857600` (100 MB) | Read from `DEFAULT_STORAGE_QUOTA_BYTES` in `.env` |
+| **StorageQuotaBytes** | `104857600` (100 MB) | `default_quota_bytes` in `config.yaml` |
 | **UsedStorageBytes** | `0` | Initial space consumed |
 | **VerificationToken** | 64-char hex string | Randomly generated 32-byte secure token |
-| **VerificationTokenExpires** | `CreatedAt + 24 hours` | Token valid for 24 hours |
-| **PasswordHash** | Bcrypt hash (cost: 12) | Hashed with Bcrypt before storing; never saved plain |
+| **VerificationTokenExpires** | `CreatedAt + verification_token_ttl` | Default 24 hours |
+| **PasswordHash** | Bcrypt hash (cost: `bcrypt_cost`) | Default 12; never saved plain |
 | **CreatedAt** | `time.Now()` | Creation timestamp |
-| **PasswordLastChanged** | `time.Now()` | Password change timestamp; must be at least 24h old to reset |
+| **PasswordLastChanged** | `time.Now()` | Must be at least `password_min_age` old to reset |
 | **PasswordResetTokenHash** | unset | SHA-256 hex of one-time reset token |
-| **PasswordResetTokenExpires** | unset | Reset token valid for 30 minutes |
-| **PasswordResetWindowStart** | unset | Start of forgot-password rate-limit window |
-| **PasswordResetRequestCount** | `0` | Forgot-password requests in the current 15-minute window (max 3) |
+| **PasswordResetTokenExpires** | unset | Valid for `reset_token_ttl` (default 30 minutes) |
+| **PasswordResetRequestCount** | `0` | Requests in the current `reset_rate_limit_window` (max `reset_rate_limit_max`) |
 
 ### Database Schema
 **Database:** `users_db`
@@ -120,3 +159,4 @@ docker exec -it users_mongodb mongosh users_db --eval "db.users.updateOne({ emai
 - **Go libraries (`users-service`):**
   * `go.mongodb.org/mongo-driver v1.17.10` – communication with the MongoDB database and index creation
   * `golang.org/x/crypto v0.26.0` – BCrypt password hashing with salt
+  * `gopkg.in/yaml.v3` - YAML parser used for `config.yaml`

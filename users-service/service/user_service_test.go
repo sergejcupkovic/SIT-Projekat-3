@@ -1,11 +1,27 @@
 package service
 
 import (
+	"os"
 	"testing"
 	"time"
 
+	"users-service/config"
+
 	"golang.org/x/crypto/bcrypt"
 )
+
+func TestMain(m *testing.M) {
+	Init(&config.Config{
+		JWTSecret:          "test-secret-test-secret-test-secret-test",
+		BcryptCost:         bcrypt.MinCost,
+		JWTTTL:             24 * time.Hour,
+		RestrictedTokenTTL: 15 * time.Minute,
+		PasswordMinAge:     1 * time.Minute,
+		PasswordMaxAge:     2 * time.Minute,
+		OTPTTL:             5 * time.Minute,
+	})
+	os.Exit(m.Run())
+}
 
 func TestValidateRegistration_Success(t *testing.T) {
 	req := RegisterRequest{
@@ -101,7 +117,7 @@ func TestPasswordChangeAllowed_TooYoung(t *testing.T) {
 	if ok {
 		t.Errorf("Expected password change to be blocked when younger than 24h")
 	}
-	if retryAt.Sub(lastChanged) < PasswordMinAge-time.Second {
+	if retryAt.Sub(lastChanged) < Cfg.PasswordMinAge-time.Second {
 		t.Errorf("Expected retryAt about 24h after last change, got %v", retryAt)
 	}
 }
