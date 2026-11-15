@@ -52,6 +52,7 @@ const logoutBtn = document.getElementById("logoutBtn");
 const logoutSpinner = document.getElementById("logoutSpinner");
 
 let activeLoginEmail = "";
+let activeLoginPassword = "";
 
 const form = document.getElementById("registrationForm");
 const firstNameInput = document.getElementById("firstName");
@@ -804,6 +805,7 @@ async function handleLoginSubmit(event) {
   }
 
   activeLoginEmail = email;
+  activeLoginPassword = password;
   loginSubmitBtn.disabled = true;
   loginSpinner.classList.remove("hidden");
 
@@ -889,7 +891,11 @@ async function handleOtpSubmit(event) {
     const { response } = await fetchWithFallback("/api/users/verify-otp", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: activeLoginEmail, otp }),
+      body: JSON.stringify({
+        email: activeLoginEmail,
+        password: activeLoginPassword,
+        otp,
+      }),
     });
 
     const text = await response.text();
@@ -901,10 +907,21 @@ async function handleOtpSubmit(event) {
     }
 
     if (response.ok && data.token) {
-      localStorage.setItem("jwt_token", data.token);
-      localStorage.setItem("user_email", activeLoginEmail);
-      showDashboard(activeLoginEmail, data.token);
-      showAlert("success", "Authenticated!", "2FA verification successful.");
+      activeLoginPassword = "";
+      if (data.restricted) {
+        restrictedSessionToken = data.token;
+        switchSection(forceChangePasswordSection);
+        showAlert(
+          "warning",
+          "Password Update Required",
+          data.message || "Your ban period has expired. Please choose a new password.",
+        );
+      } else {
+        localStorage.setItem("jwt_token", data.token);
+        localStorage.setItem("user_email", activeLoginEmail);
+        showDashboard(activeLoginEmail, data.token);
+        showAlert("success", "Authenticated!", "2FA verification successful.");
+      }
     } else {
       showAlert(
         "danger",
@@ -926,7 +943,10 @@ async function handleResendOtp() {
     const { response } = await fetchWithFallback("/api/users/resend-otp", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: activeLoginEmail }),
+      body: JSON.stringify({
+        email: activeLoginEmail,
+        password: activeLoginPassword,
+      }),
     });
 
     if (response.ok) {
@@ -953,6 +973,7 @@ async function handleLogout() {
   } finally {
     localStorage.removeItem("jwt_token");
     localStorage.removeItem("user_email");
+    activeLoginPassword = "";
     logoutBtn.disabled = false;
     logoutSpinner.classList.add("hidden");
     switchSection(loginSection);
@@ -1036,6 +1057,7 @@ async function handleForceChangePasswordSubmit(event) {
 }
 
 function showDashboard(email, token) {
+  activeLoginPassword = "";
   userEmailDisplay.textContent = email;
   jwtTokenDisplay.value = token;
   switchSection(dashboardSection);
