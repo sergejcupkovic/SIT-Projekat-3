@@ -179,24 +179,6 @@ function init() {
   logoutBtn.addEventListener("click", handleLogout);
 
   checkExistingSession();
-
-  tabLogin.addEventListener("click", () => switchTab("login"));
-  tabRegister.addEventListener("click", () => switchTab("register"));
-
-  // Login, OTPS & Logout Events
-  toggleLoginPasswordBtn.addEventListener("click", () =>
-    togglePasswordVisibility(loginPasswordInput, toggleLoginPasswordBtn),
-  );
-  loginForm.addEventListener("submit", handleLoginSubmit);
-  if (forceChangePasswordForm) {
-    forceChangePasswordForm.addEventListener("submit", handleForceChangePasswordSubmit);
-  }
-  otpForm.addEventListener("submit", handleOtpSubmit);
-  resendOtpBtn.addEventListener("click", handleResendOtp);
-  backToLoginBtn.addEventListener("click", () => switchSection(loginSection));
-  logoutBtn.addEventListener("click", handleLogout);
-
-  checkExistingSession();
 }
 
 function togglePasswordVisibility(inputEl, btnEl) {
@@ -830,7 +812,7 @@ async function handleLoginSubmit(event) {
           "warning",
           "Password Expired",
           data.message ||
-            "Your ban period has expired. Please choose a new password.",
+          "Your ban period has expired. Please choose a new password.",
         );
         return;
       }
