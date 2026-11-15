@@ -34,6 +34,19 @@ services:
       - mongodb
       - mailpit
 
+  storage-service:
+    build: ./storage-service
+    container_name: storage_service
+    ports:
+      - "${STORAGE_SERVICE_PORT:-8082}:${STORAGE_SERVICE_PORT:-8082}"
+    env_file: .env
+    environment:
+      PORT: ${STORAGE_SERVICE_PORT:-8082}
+      MONGO_URI: mongodb://mongodb:${MONGO_PORT}
+      MONGO_DB_NAME: storage_db
+    depends_on:
+      - mongodb
+
   api-gateway:
     build: ./api-gateway
     container_name: api_gateway

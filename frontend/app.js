@@ -51,6 +51,27 @@ const jwtTokenDisplay = document.getElementById("jwtTokenDisplay");
 const logoutBtn = document.getElementById("logoutBtn");
 const logoutSpinner = document.getElementById("logoutSpinner");
 
+const authCard = document.querySelector(".auth-card");
+const authTabs = document.querySelector(".auth-tabs");
+const toggleTokenDrawerBtn = document.getElementById("toggleTokenDrawerBtn");
+const jwtDrawer = document.getElementById("jwtDrawer");
+const navigateUpBtn = document.getElementById("navigateUpBtn");
+const breadcrumbsContainer = document.getElementById("breadcrumbsContainer");
+const currentFolderTitle = document.getElementById("currentFolderTitle");
+const openCreateFolderBtn = document.getElementById("openCreateFolderBtn");
+const createFolderForm = document.getElementById("createFolderForm");
+const newFolderNameInput = document.getElementById("newFolderNameInput");
+const createFolderSubmitBtn = document.getElementById("createFolderSubmitBtn");
+const createFolderSpinner = document.getElementById("createFolderSpinner");
+const cancelCreateFolderBtn = document.getElementById("cancelCreateFolderBtn");
+const newFolderNameError = document.getElementById("newFolderNameError");
+const folderLoadingState = document.getElementById("folderLoadingState");
+const folderEmptyState = document.getElementById("folderEmptyState");
+const folderItemsList = document.getElementById("folderItemsList");
+
+let currentFolderId = null;
+let currentBreadcrumbs = [];
+
 let activeLoginEmail = "";
 
 const form = document.getElementById("registrationForm");
@@ -171,7 +192,10 @@ function init() {
   );
   loginForm.addEventListener("submit", handleLoginSubmit);
   if (forceChangePasswordForm) {
-    forceChangePasswordForm.addEventListener("submit", handleForceChangePasswordSubmit);
+    forceChangePasswordForm.addEventListener(
+      "submit",
+      handleForceChangePasswordSubmit,
+    );
   }
   otpForm.addEventListener("submit", handleOtpSubmit);
   resendOtpBtn.addEventListener("click", handleResendOtp);
@@ -189,7 +213,10 @@ function init() {
   );
   loginForm.addEventListener("submit", handleLoginSubmit);
   if (forceChangePasswordForm) {
-    forceChangePasswordForm.addEventListener("submit", handleForceChangePasswordSubmit);
+    forceChangePasswordForm.addEventListener(
+      "submit",
+      handleForceChangePasswordSubmit,
+    );
   }
   otpForm.addEventListener("submit", handleOtpSubmit);
   resendOtpBtn.addEventListener("click", handleResendOtp);
@@ -571,11 +598,14 @@ async function handleMagicLinkRequest() {
   showAlert("warning", "Sending...", "Requesting magic login link...");
 
   try {
-    const { response } = await fetchWithFallback("/api/users/magic-link-request", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
-    });
+    const { response } = await fetchWithFallback(
+      "/api/users/magic-link-request",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      },
+    );
 
     const text = await response.text();
     let data = {};
@@ -592,7 +622,11 @@ async function handleMagicLinkRequest() {
         data.message || "Check Mailpit (:8025) for your direct login link.",
       );
     } else {
-      showAlert("danger", "Request Failed", data.message || "Could not send magic link.");
+      showAlert(
+        "danger",
+        "Request Failed",
+        data.message || "Could not send magic link.",
+      );
     }
   } catch (err) {
     showAlert("danger", "Error", "Could not connect to send magic link.");
@@ -614,11 +648,14 @@ async function checkMagicLinkTokenInUrl() {
   );
 
   try {
-    const { response } = await fetchWithFallback("/api/users/magic-link-login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token: magicToken }),
-    });
+    const { response } = await fetchWithFallback(
+      "/api/users/magic-link-login",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: magicToken }),
+      },
+    );
 
     const text = await response.text();
     let data = {};
@@ -635,7 +672,8 @@ async function checkMagicLinkTokenInUrl() {
         showAlert(
           "warning",
           "Password Update Required",
-          data.message || "Your ban period has expired. Please choose a new password.",
+          data.message ||
+            "Your ban period has expired. Please choose a new password.",
         );
       } else {
         localStorage.setItem("jwt_token", data.token);
@@ -783,6 +821,10 @@ function switchSection(sectionToDisplay) {
     if (sec) sec.classList.add("hidden");
   });
   if (sectionToDisplay) sectionToDisplay.classList.remove("hidden");
+
+  const isDashboard = sectionToDisplay === dashboardSection;
+  if (authCard) authCard.classList.toggle("dashboard-wide", isDashboard);
+  if (authTabs) authTabs.classList.toggle("hidden", isDashboard);
 }
 
 async function handleLoginSubmit(event) {
@@ -843,21 +885,19 @@ async function handleLoginSubmit(event) {
         "A 6-digit code has been sent to your email.",
       );
     } else {
-      let displayMessage = data.message || "Invalid credentials or unverified account.";
+      let displayMessage =
+        data.message || "Invalid credentials or unverified account.";
 
       // Convert any ISO/RFC3339 timestamp in the message to the user's local timezone
-      const isoRegex = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})/;
+      const isoRegex =
+        /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})/;
       const match = displayMessage.match(isoRegex);
       if (match) {
         const localTimeStr = new Date(match[0]).toLocaleString();
         displayMessage = displayMessage.replace(match[0], localTimeStr);
       }
 
-      showAlert(
-        "danger",
-        "Login Failed",
-        displayMessage,
-      );
+      showAlert("danger", "Login Failed", displayMessage);
     }
   } catch (err) {
     showAlert(
@@ -953,6 +993,8 @@ async function handleLogout() {
   } finally {
     localStorage.removeItem("jwt_token");
     localStorage.removeItem("user_email");
+    currentFolderId = null;
+    currentBreadcrumbs = [];
     logoutBtn.disabled = false;
     logoutSpinner.classList.add("hidden");
     switchSection(loginSection);
@@ -991,17 +1033,20 @@ async function handleForceChangePasswordSubmit(event) {
   forceChangeSpinner.classList.remove("hidden");
 
   try {
-    const { response } = await fetchWithFallback("/api/users/change-expired-password", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${restrictedSessionToken}`,
+    const { response } = await fetchWithFallback(
+      "/api/users/change-expired-password",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${restrictedSessionToken}`,
+        },
+        body: JSON.stringify({
+          password: newPassword,
+          confirmPassword: confirmPassword,
+        }),
       },
-      body: JSON.stringify({
-        password: newPassword,
-        confirmPassword: confirmPassword,
-      }),
-    });
+    );
 
     const text = await response.text();
     let data = {};
@@ -1028,7 +1073,11 @@ async function handleForceChangePasswordSubmit(event) {
       );
     }
   } catch (err) {
-    showAlert("danger", "Connection Error", "Could not connect to update password.");
+    showAlert(
+      "danger",
+      "Connection Error",
+      "Could not connect to update password.",
+    );
   } finally {
     forceChangeSubmitBtn.disabled = false;
     forceChangeSpinner.classList.add("hidden");
@@ -1039,6 +1088,7 @@ function showDashboard(email, token) {
   userEmailDisplay.textContent = email;
   jwtTokenDisplay.value = token;
   switchSection(dashboardSection);
+  loadFolderContents(null);
 }
 
 function checkExistingSession() {
@@ -1046,5 +1096,251 @@ function checkExistingSession() {
   const email = localStorage.getItem("user_email");
   if (token && email) {
     showDashboard(email, token);
+  }
+}
+
+if (toggleTokenDrawerBtn) {
+  toggleTokenDrawerBtn.addEventListener("click", () => {
+    jwtDrawer.classList.toggle("hidden");
+  });
+}
+if (openCreateFolderBtn) {
+  openCreateFolderBtn.addEventListener("click", () => {
+    createFolderForm.classList.remove("hidden");
+    newFolderNameInput.value = "";
+    newFolderNameInput.classList.remove("is-invalid");
+    newFolderNameError.textContent = "";
+    newFolderNameInput.focus();
+  });
+}
+if (cancelCreateFolderBtn) {
+  cancelCreateFolderBtn.addEventListener("click", () => {
+    createFolderForm.classList.add("hidden");
+  });
+}
+if (createFolderForm) {
+  createFolderForm.addEventListener("submit", handleCreateFolderSubmit);
+}
+if (navigateUpBtn) {
+  navigateUpBtn.addEventListener("click", () => {
+    if (currentBreadcrumbs.length <= 1) {
+      loadFolderContents(null);
+    } else {
+      const parentCrumb = currentBreadcrumbs[currentBreadcrumbs.length - 2];
+      loadFolderContents(parentCrumb.id);
+    }
+  });
+}
+
+async function loadFolderContents(folderId) {
+  const token = localStorage.getItem("jwt_token");
+  if (!token) {
+    switchSection(loginSection);
+    return;
+  }
+
+  currentFolderId = folderId || null;
+  folderLoadingState.classList.remove("hidden");
+  folderEmptyState.classList.add("hidden");
+  folderItemsList.innerHTML = "";
+
+  const endpoint = currentFolderId
+    ? `/api/folders/${encodeURIComponent(currentFolderId)}`
+    : "/api/folders";
+
+  try {
+    const { response } = await fetchWithFallback(endpoint, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+    });
+
+    const text = await response.text();
+    let data = {};
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { message: text.trim() };
+    }
+
+    if (response.status === 401) {
+      localStorage.removeItem("jwt_token");
+      localStorage.removeItem("user_email");
+      switchSection(loginSection);
+      showAlert("warning", "Session Expired", "Please sign in again.");
+      return;
+    }
+
+    if (!response.ok) {
+      showAlert(
+        "danger",
+        "Error",
+        data.message || "Failed to load folder contents.",
+      );
+      return;
+    }
+
+    currentBreadcrumbs = Array.isArray(data.breadcrumbs)
+      ? data.breadcrumbs
+      : [];
+    renderBreadcrumbs(currentBreadcrumbs);
+    renderFolderItems(data.folders || [], data.files || []);
+  } catch (err) {
+    showAlert("danger", "Connection Error", "Could not reach Storage Service.");
+  } finally {
+    folderLoadingState.classList.add("hidden");
+  }
+}
+
+function renderBreadcrumbs(breadcrumbs) {
+  breadcrumbsContainer.innerHTML = "";
+
+  const rootBtn = document.createElement("button");
+  rootBtn.type = "button";
+  rootBtn.className = `breadcrumb-item ${breadcrumbs.length === 0 ? "active" : ""}`;
+  rootBtn.textContent = "My Drive";
+  if (breadcrumbs.length > 0) {
+    rootBtn.addEventListener("click", () => loadFolderContents(null));
+  }
+  breadcrumbsContainer.appendChild(rootBtn);
+
+  breadcrumbs.forEach((crumb, idx) => {
+    const sep = document.createElement("span");
+    sep.className = "breadcrumb-sep";
+    sep.textContent = "/";
+    breadcrumbsContainer.appendChild(sep);
+
+    const isLast = idx === breadcrumbs.length - 1;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `breadcrumb-item ${isLast ? "active" : ""}`;
+    btn.textContent = crumb.name;
+    if (!isLast) {
+      btn.addEventListener("click", () => loadFolderContents(crumb.id));
+    }
+    breadcrumbsContainer.appendChild(btn);
+  });
+
+  if (breadcrumbs.length > 0) {
+    navigateUpBtn.classList.remove("hidden");
+    currentFolderTitle.textContent = breadcrumbs[breadcrumbs.length - 1].name;
+  } else {
+    navigateUpBtn.classList.add("hidden");
+    currentFolderTitle.textContent = "My Drive";
+  }
+}
+
+function renderFolderItems(folders, files) {
+  folderItemsList.innerHTML = "";
+
+  if (folders.length === 0 && files.length === 0) {
+    folderEmptyState.classList.remove("hidden");
+    return;
+  }
+  folderEmptyState.classList.add("hidden");
+
+  folders.forEach((folder) => {
+    const row = document.createElement("div");
+    row.className = "storage-item-row folder-row";
+    row.title = `Open folder "${folder.name}"`;
+
+    const createdDate = folder.createdAt
+      ? new Date(folder.createdAt).toLocaleDateString()
+      : "";
+
+    row.innerHTML = `
+      <div class="item-left">
+        <svg class="item-icon-folder" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
+        </svg>
+        <span class="item-name"></span>
+      </div>
+      <span class="item-meta">Folder • ${createdDate}</span>
+    `;
+    row.querySelector(".item-name").textContent = folder.name;
+    row.addEventListener("click", () => loadFolderContents(folder.id));
+    folderItemsList.appendChild(row);
+  });
+
+  files.forEach((file) => {
+    const row = document.createElement("div");
+    row.className = "storage-item-row";
+    const sizeKB = Math.max(1, Math.round((file.sizeBytes || 0) / 1024));
+
+    row.innerHTML = `
+      <div class="item-left">
+        <svg class="item-icon-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+        </svg>
+        <span class="item-name"></span>
+      </div>
+      <span class="item-meta">${sizeKB} KB</span>
+    `;
+    row.querySelector(".item-name").textContent = file.name;
+    folderItemsList.appendChild(row);
+  });
+}
+
+async function handleCreateFolderSubmit(event) {
+  event.preventDefault();
+  hideAlert();
+
+  const name = newFolderNameInput.value.trim();
+  if (!name) {
+    newFolderNameInput.classList.add("is-invalid");
+    newFolderNameError.textContent = "Folder name is required";
+    return;
+  }
+  newFolderNameInput.classList.remove("is-invalid");
+  newFolderNameError.textContent = "";
+
+  const token = localStorage.getItem("jwt_token");
+  if (!token) {
+    switchSection(loginSection);
+    return;
+  }
+
+  createFolderSubmitBtn.disabled = true;
+  createFolderSpinner.classList.remove("hidden");
+
+  try {
+    const { response } = await fetchWithFallback("/api/folders", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        name,
+        parentId: currentFolderId,
+      }),
+    });
+
+    const text = await response.text();
+    let data = {};
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { message: text.trim() };
+    }
+
+    if (response.status === 201) {
+      createFolderForm.classList.add("hidden");
+      newFolderNameInput.value = "";
+      showAlert("success", "Folder Created", `Folder "${name}" was created.`);
+      await loadFolderContents(currentFolderId);
+    } else {
+      newFolderNameInput.classList.add("is-invalid");
+      newFolderNameError.textContent =
+        data.message || "Could not create folder.";
+    }
+  } catch (err) {
+    showAlert("danger", "Connection Error", "Could not reach Storage Service.");
+  } finally {
+    createFolderSubmitBtn.disabled = false;
+    createFolderSpinner.classList.add("hidden");
   }
 }
