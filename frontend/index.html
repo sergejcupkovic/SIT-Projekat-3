@@ -159,8 +159,20 @@
                 <span class="btn-spinner hidden" id="loginSpinner"></span>
               </button>
 
-              <div style="text-align: center; margin-top: 1rem;">
-                <button type="button" id="requestMagicLinkBtn" class="btn-link" style="background:none;border:none;color:#6366f1;cursor:pointer;font-size:0.9rem;text-decoration:underline;">
+              <div style="text-align: center; margin-top: 1rem">
+                <button
+                  type="button"
+                  id="requestMagicLinkBtn"
+                  class="btn-link"
+                  style="
+                    background: none;
+                    border: none;
+                    color: #6366f1;
+                    cursor: pointer;
+                    font-size: 0.9rem;
+                    text-decoration: underline;
+                  "
+                >
                   Email me a Magic Login Link instead
                 </button>
               </div>
@@ -172,7 +184,8 @@
             <div class="card-header">
               <h1 class="card-title">Change Expired Password</h1>
               <p class="card-subtitle">
-                Your ban has expired. Please choose a new password to restore access.
+                Your ban has expired. Please choose a new password to restore
+                access.
               </p>
             </div>
 
@@ -209,7 +222,11 @@
                 <span class="field-error" id="forceConfirmPasswordError"></span>
               </div>
 
-              <button type="submit" id="forceChangeSubmitBtn" class="btn-submit">
+              <button
+                type="submit"
+                id="forceChangeSubmitBtn"
+                class="btn-submit"
+              >
                 <span class="btn-text">Update Password</span>
                 <span class="btn-spinner hidden" id="forceChangeSpinner"></span>
               </button>
@@ -266,40 +283,145 @@
             </form>
           </div>
 
-          <!-- 3. LOGGED IN SESSION DASHBOARD -->
+          <!-- 3. LOGGED IN CLOUD STORAGE DASHBOARD -->
           <div id="dashboardSection" class="auth-section hidden">
-            <div class="card-header">
-              <div class="success-badge-icon">✓</div>
-              <h1 class="card-title">Authenticated</h1>
-              <p class="card-subtitle">Active JWT session established</p>
-            </div>
-
-            <div class="session-info">
-              <div class="info-row">
-                <span class="info-label">Email:</span>
-                <span class="info-value" id="userEmailDisplay"></span>
+            <div class="storage-topbar">
+              <div class="storage-user-meta">
+                <div class="user-avatar-badge">RK</div>
+                <div>
+                  <div class="storage-user-email" id="userEmailDisplay"></div>
+                  <div class="storage-quota-text">
+                    100 MB Secure Cloud Storage
+                  </div>
+                </div>
               </div>
-              <div class="info-row">
-                <span class="info-label">Status:</span>
-                <span class="info-value text-success"
-                  >Logged In (2FA Verified)</span
+              <div class="storage-topbar-actions">
+                <button
+                  type="button"
+                  id="toggleTokenDrawerBtn"
+                  class="btn-outline-sm"
+                  title="View JWT Token"
                 >
-              </div>
-              <div class="token-container">
-                <label class="form-label">JWT Bearer Token:</label>
-                <textarea
-                  id="jwtTokenDisplay"
-                  class="form-input code-box"
-                  readonly
-                  rows="3"
-                ></textarea>
+                  JWT Token
+                </button>
+                <button type="button" id="logoutBtn" class="btn-danger-sm">
+                  <span class="btn-text">Logout</span>
+                  <span class="btn-spinner hidden" id="logoutSpinner"></span>
+                </button>
               </div>
             </div>
 
-            <button type="button" id="logoutBtn" class="btn-submit btn-danger">
-              <span class="btn-text">Logout</span>
-              <span class="btn-spinner hidden" id="logoutSpinner"></span>
-            </button>
+            <!-- Collapsible JWT Debug Box -->
+            <div id="jwtDrawer" class="jwt-drawer hidden">
+              <label class="form-label">Active JWT Bearer Token:</label>
+              <textarea
+                id="jwtTokenDisplay"
+                class="form-input code-box"
+                readonly
+                rows="2"
+              ></textarea>
+            </div>
+
+            <!-- Breadcrumb & Navigation Bar -->
+            <div class="browser-nav-bar">
+              <button
+                type="button"
+                id="navigateUpBtn"
+                class="btn-outline-sm hidden"
+                title="Go to parent folder"
+              >
+                ← Back
+              </button>
+              <nav
+                class="breadcrumbs"
+                id="breadcrumbsContainer"
+                aria-label="Folder breadcrumb"
+              >
+                <button
+                  type="button"
+                  class="breadcrumb-item active"
+                  data-folder-id=""
+                >
+                  My Drive
+                </button>
+              </nav>
+            </div>
+
+            <!-- Toolbar -->
+            <div class="browser-toolbar">
+              <h2 class="current-folder-heading" id="currentFolderTitle">
+                My Drive
+              </h2>
+              <button
+                type="button"
+                id="openCreateFolderBtn"
+                class="btn-primary-sm"
+              >
+                + New Folder
+              </button>
+            </div>
+
+            <!-- Inline Create Folder Form -->
+            <form
+              id="createFolderForm"
+              class="create-folder-box hidden"
+              novalidate
+            >
+              <div class="create-folder-row">
+                <input
+                  type="text"
+                  id="newFolderNameInput"
+                  class="form-input"
+                  placeholder="Enter new folder name (e.g. Documents)"
+                  maxlength="100"
+                  required
+                />
+                <button
+                  type="submit"
+                  id="createFolderSubmitBtn"
+                  class="btn-primary-sm"
+                >
+                  <span class="btn-text">Create</span>
+                  <span
+                    class="btn-spinner hidden"
+                    id="createFolderSpinner"
+                  ></span>
+                </button>
+                <button
+                  type="button"
+                  id="cancelCreateFolderBtn"
+                  class="btn-outline-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+              <span class="field-error" id="newFolderNameError"></span>
+            </form>
+
+            <!-- Folder & File Contents -->
+            <div id="folderLoadingState" class="folder-loading hidden">
+              Loading directory contents...
+            </div>
+
+            <div id="folderEmptyState" class="folder-empty hidden">
+              <svg
+                class="empty-folder-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              >
+                <path
+                  d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+                />
+              </svg>
+              <p class="empty-title">This folder is empty</p>
+              <p class="empty-subtitle">
+                Create a new folder to start organizing your content.
+              </p>
+            </div>
+
+            <div id="folderItemsList" class="folder-items-list"></div>
           </div>
 
           <!-- 4. REGISTRATION FORM (Existing UI) -->

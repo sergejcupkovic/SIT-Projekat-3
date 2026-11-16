@@ -23,28 +23,44 @@ func corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func main() {
-	usersServiceURL := os.Getenv("USERS_SERVICE_URL")
-	if usersServiceURL == "" {
-		usersServiceURL = "http://users-service:8081" 
-	}
-
-	usersTarget, err := url.Parse(usersServiceURL)
+func newCORSReverseProxy(targetURL string, label string) *httputil.ReverseProxy {
+	target, err := url.Parse(targetURL)
 	if err != nil {
-		log.Fatalf("Invalid USERS_SERVICE_URL: %v", err)
+		log.Fatalf("Invalid %s: %v", label, err)
 	}
-	usersProxy := httputil.NewSingleHostReverseProxy(usersTarget)
-
-	usersProxy.ModifyResponse = func(resp *http.Response) error {
+	proxy := httputil.NewSingleHostReverseProxy(target)
+	proxy.ModifyResponse = func(resp *http.Response) error {
 		resp.Header.Set("Access-Control-Allow-Origin", "*")
 		resp.Header.Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		resp.Header.Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		return nil
 	}
+	return proxy
+}
+
+func main() {
+	usersServiceURL := os.Getenv("USERS_SERVICE_URL")
+	if usersServiceURL == "" {
+		usersServiceURL = "http://users-service:8081"
+	}
+
+	storageServiceURL := os.Getenv("STORAGE_SERVICE_URL")
+	if storageServiceURL == "" {
+		storageServiceURL = "http://storage-service:8082"
+	}
+
+	usersProxy := newCORSReverseProxy(usersServiceURL, "USERS_SERVICE_URL")
+	storageProxy := newCORSReverseProxy(storageServiceURL, "STORAGE_SERVICE_URL")
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/users/", func(w http.ResponseWriter, r *http.Request) {
 		usersProxy.ServeHTTP(w, r)
+	})
+	mux.HandleFunc("/api/folders", func(w http.ResponseWriter, r *http.Request) {
+		storageProxy.ServeHTTP(w, r)
+	})
+	mux.HandleFunc("/api/folders/", func(w http.ResponseWriter, r *http.Request) {
+		storageProxy.ServeHTTP(w, r)
 	})
 
 	port := os.Getenv("GATEWAY_PORT")
