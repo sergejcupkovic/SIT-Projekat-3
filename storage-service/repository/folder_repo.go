@@ -83,3 +83,16 @@ func (r *FolderRepository) FindChildren(ctx context.Context, ownerID string, par
 	}
 	return folders, nil
 }
+
+func (r *FolderRepository) UpdateName(ctx context.Context, id primitive.ObjectID, newName string) (*domain.Folder, error) {
+	filter := bson.M{"_id": id}
+	update := bson.M{"$set": bson.M{"name": newName}}
+	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
+
+	var updated domain.Folder
+	err := r.collection.FindOneAndUpdate(ctx, filter, update, opts).Decode(&updated)
+	if err != nil {
+		return nil, err
+	}
+	return &updated, nil
+}

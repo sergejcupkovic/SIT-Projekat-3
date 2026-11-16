@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 	"users-service/domain"
 	"users-service/repository"
@@ -43,6 +45,12 @@ func (h *UserHandler) Verify(w http.ResponseWriter, r *http.Request) {
 	token := r.URL.Query().Get("token")
 	if token == "" {
 		http.Error(w, "Missing token parameter", http.StatusBadRequest)
+		return
+	}
+
+	// Ako zahtev dolazi direktno iz brauzera (klik na stari API link), preusmeri na frontend UI
+	if strings.Contains(r.Header.Get("Accept"), "text/html") {
+		http.Redirect(w, r, "http://localhost:3000/?token="+url.QueryEscape(token), http.StatusFound)
 		return
 	}
 
