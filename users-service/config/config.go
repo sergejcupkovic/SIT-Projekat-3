@@ -82,7 +82,6 @@ func LoadConfig() *Config {
 	if err := yaml.Unmarshal(b, cfg); err != nil {
 		log.Fatalf("parse config %s: %v", path, err)
 	}
-
 	if len(cfg.JWTSecret) < 32 {
 		log.Fatal("JWT_SECRET must be set and at least 32 chars")
 	}

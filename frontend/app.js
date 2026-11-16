@@ -73,6 +73,7 @@ let currentFolderId = null;
 let currentBreadcrumbs = [];
 
 let activeLoginEmail = "";
+let activeLoginPassword = "";
 
 const form = document.getElementById("registrationForm");
 const firstNameInput = document.getElementById("firstName");
@@ -183,27 +184,6 @@ function init() {
   if (requestMagicLinkBtn) {
     requestMagicLinkBtn.addEventListener("click", handleMagicLinkRequest);
   }
-  tabLogin.addEventListener("click", () => switchTab("login"));
-  tabRegister.addEventListener("click", () => switchTab("register"));
-
-  // Login, OTPS & Logout Events
-  toggleLoginPasswordBtn.addEventListener("click", () =>
-    togglePasswordVisibility(loginPasswordInput, toggleLoginPasswordBtn),
-  );
-  loginForm.addEventListener("submit", handleLoginSubmit);
-  if (forceChangePasswordForm) {
-    forceChangePasswordForm.addEventListener(
-      "submit",
-      handleForceChangePasswordSubmit,
-    );
-  }
-  otpForm.addEventListener("submit", handleOtpSubmit);
-  resendOtpBtn.addEventListener("click", handleResendOtp);
-  backToLoginBtn.addEventListener("click", () => switchSection(loginSection));
-  logoutBtn.addEventListener("click", handleLogout);
-
-  checkExistingSession();
-
   tabLogin.addEventListener("click", () => switchTab("login"));
   tabRegister.addEventListener("click", () => switchTab("register"));
 
@@ -846,6 +826,7 @@ async function handleLoginSubmit(event) {
   }
 
   activeLoginEmail = email;
+  activeLoginPassword = password;
   loginSubmitBtn.disabled = true;
   loginSpinner.classList.remove("hidden");
 
@@ -872,7 +853,7 @@ async function handleLoginSubmit(event) {
           "warning",
           "Password Expired",
           data.message ||
-            "Your ban period has expired. Please choose a new password.",
+          "Your ban period has expired. Please choose a new password.",
         );
         return;
       }
@@ -929,7 +910,11 @@ async function handleOtpSubmit(event) {
     const { response } = await fetchWithFallback("/api/users/verify-otp", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: activeLoginEmail, otp }),
+      body: JSON.stringify({
+        email: activeLoginEmail,
+        password: activeLoginPassword,
+        otp,
+      }),
     });
 
     const text = await response.text();
@@ -941,10 +926,21 @@ async function handleOtpSubmit(event) {
     }
 
     if (response.ok && data.token) {
-      localStorage.setItem("jwt_token", data.token);
-      localStorage.setItem("user_email", activeLoginEmail);
-      showDashboard(activeLoginEmail, data.token);
-      showAlert("success", "Authenticated!", "2FA verification successful.");
+      activeLoginPassword = "";
+      if (data.restricted) {
+        restrictedSessionToken = data.token;
+        switchSection(forceChangePasswordSection);
+        showAlert(
+          "warning",
+          "Password Update Required",
+          data.message || "Your ban period has expired. Please choose a new password.",
+        );
+      } else {
+        localStorage.setItem("jwt_token", data.token);
+        localStorage.setItem("user_email", activeLoginEmail);
+        showDashboard(activeLoginEmail, data.token);
+        showAlert("success", "Authenticated!", "2FA verification successful.");
+      }
     } else {
       showAlert(
         "danger",
@@ -966,7 +962,10 @@ async function handleResendOtp() {
     const { response } = await fetchWithFallback("/api/users/resend-otp", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: activeLoginEmail }),
+      body: JSON.stringify({
+        email: activeLoginEmail,
+        password: activeLoginPassword,
+      }),
     });
 
     if (response.ok) {
@@ -995,6 +994,7 @@ async function handleLogout() {
     localStorage.removeItem("user_email");
     currentFolderId = null;
     currentBreadcrumbs = [];
+    activeLoginPassword = "";
     logoutBtn.disabled = false;
     logoutSpinner.classList.add("hidden");
     switchSection(loginSection);
@@ -1085,6 +1085,7 @@ async function handleForceChangePasswordSubmit(event) {
 }
 
 function showDashboard(email, token) {
+  activeLoginPassword = "";
   userEmailDisplay.textContent = email;
   jwtTokenDisplay.value = token;
   switchSection(dashboardSection);

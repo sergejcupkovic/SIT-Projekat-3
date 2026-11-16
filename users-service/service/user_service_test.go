@@ -31,7 +31,7 @@ func TestValidateRegistration_Success(t *testing.T) {
 		Password:        "StrongPass123!",
 		ConfirmPassword: "StrongPass123!",
 	}
-	if err := ValidateRegistration(req); err != nil {
+	if err := ValidateRegistration(&req); err != nil {
 		t.Errorf("Expected no error for valid input, got: %v", err)
 	}
 }
@@ -44,7 +44,7 @@ func TestValidateRegistration_WeakPassword(t *testing.T) {
 		Password:        "slabalozinka",
 		ConfirmPassword: "slabalozinka",
 	}
-	if err := ValidateRegistration(req); err == nil {
+	if err := ValidateRegistration(&req); err == nil {
 		t.Errorf("Expected error for weak password, got nil")
 	}
 }
@@ -57,8 +57,27 @@ func TestValidateRegistration_PasswordMismatch(t *testing.T) {
 		Password:        "StrongPass123!",
 		ConfirmPassword: "DifferentPass123!",
 	}
-	if err := ValidateRegistration(req); err == nil {
+	if err := ValidateRegistration(&req); err == nil {
 		t.Errorf("Expected error for mismatched passwords, got nil")
+	}
+}
+
+func TestValidateRegistration_NormalizesEmail(t *testing.T) {
+	req := RegisterRequest{
+		FirstName:       "  Ana  ",
+		LastName:        "  Anic ",
+		Email:           "  Ana.Anic@Example.COM ",
+		Password:        "StrongPass123!",
+		ConfirmPassword: "StrongPass123!",
+	}
+	if err := ValidateRegistration(&req); err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+	if req.Email != "ana.anic@example.com" {
+		t.Errorf("Expected lowercase trimmed email, got %q", req.Email)
+	}
+	if req.FirstName != "Ana" || req.LastName != "Anic" {
+		t.Errorf("Expected trimmed names, got %q %q", req.FirstName, req.LastName)
 	}
 }
 
@@ -70,7 +89,7 @@ func TestValidateRegistration_InvalidEmail(t *testing.T) {
 		Password:        "StrongPass123!",
 		ConfirmPassword: "StrongPass123!",
 	}
-	if err := ValidateRegistration(req); err == nil {
+	if err := ValidateRegistration(&req); err == nil {
 		t.Errorf("Expected error for invalid email, got nil")
 	}
 }
