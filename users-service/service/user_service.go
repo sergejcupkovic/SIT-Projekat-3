@@ -328,10 +328,10 @@ func SendMagicLinkEmail(host, port, from, to, rawToken string) error {
 	return sendMail(host, port, from, to, "Magic Link", body)
 }
 
-func SendVerificationEmail(host, port, from, to, token string) error {
-	link := fmt.Sprintf("%s/api/users/verify?token=%s", gatewayURL(), token)
-	body := fmt.Sprintf("Click the link to activate your account: %s", link)
-	return sendMail(host, port, from, to, "Registration Confirmation", body)
+func SendVerificationEmail(smtpHost, smtpPort, from, to, token string) error {
+	verifyLink := fmt.Sprintf("%s/?token=%s", frontendURL(), token)
+	msg := []byte(fmt.Sprintf("To: %s\r\nSubject: Registration Confirmation\r\n\r\nClick the link to activate your account: %s\r\n", to, verifyLink))
+	return smtp.SendMail(smtpHost+":"+smtpPort, nil, from, []string{to}, msg)
 }
 
 func SendOTPEmail(host, port, from, to, otpCode string) error {

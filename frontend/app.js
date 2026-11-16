@@ -72,6 +72,16 @@ const folderItemsList = document.getElementById("folderItemsList");
 let currentFolderId = null;
 let currentBreadcrumbs = [];
 
+const renameFolderForm = document.getElementById("renameFolderForm");
+const renameFolderLabel = document.getElementById("renameFolderLabel");
+const renameFolderNameInput = document.getElementById("renameFolderNameInput");
+const renameFolderSubmitBtn = document.getElementById("renameFolderSubmitBtn");
+const renameFolderSpinner = document.getElementById("renameFolderSpinner");
+const cancelRenameFolderBtn = document.getElementById("cancelRenameFolderBtn");
+const renameFolderNameError = document.getElementById("renameFolderNameError");
+
+let renameFolderTarget = null; // { id: string, currentName: string }
+
 let activeLoginEmail = "";
 let activeLoginPassword = "";
 
@@ -202,6 +212,13 @@ function init() {
   resendOtpBtn.addEventListener("click", handleResendOtp);
   backToLoginBtn.addEventListener("click", () => switchSection(loginSection));
   logoutBtn.addEventListener("click", handleLogout);
+
+  if (cancelRenameFolderBtn) {
+    cancelRenameFolderBtn.addEventListener("click", closeRenameForm);
+  }
+  if (renameFolderForm) {
+    renameFolderForm.addEventListener("submit", handleRenameFolderSubmit);
+  }
 
   checkExistingSession();
 }
@@ -520,6 +537,10 @@ async function checkVerificationTokenInUrl() {
   const token = urlParams.get("token");
   if (!token) return;
 
+  // Ukloni token iz URL-a nakon čitanja
+  window.history.replaceState({}, document.title, window.location.pathname);
+  switchTab("login");
+
   showAlert(
     "warning",
     "Verifying Token...",
@@ -531,6 +552,9 @@ async function checkVerificationTokenInUrl() {
       `/api/users/verify?token=${encodeURIComponent(token)}`,
       {
         method: "GET",
+        headers: {
+          Accept: "application/json",
+        },
       },
     );
 
@@ -853,7 +877,7 @@ async function handleLoginSubmit(event) {
           "warning",
           "Password Expired",
           data.message ||
-          "Your ban period has expired. Please choose a new password.",
+            "Your ban period has expired. Please choose a new password.",
         );
         return;
       }
@@ -933,7 +957,8 @@ async function handleOtpSubmit(event) {
         showAlert(
           "warning",
           "Password Update Required",
-          data.message || "Your ban period has expired. Please choose a new password.",
+          data.message ||
+            "Your ban period has expired. Please choose a new password.",
         );
       } else {
         localStorage.setItem("jwt_token", data.token);
@@ -1233,6 +1258,30 @@ function renderBreadcrumbs(breadcrumbs) {
   }
 }
 
+function openRenameForm(folderId, currentName) {
+  hideAlert();
+  if (createFolderForm) createFolderForm.classList.add("hidden");
+
+  renameFolderTarget = { id: folderId, currentName };
+  renameFolderLabel.textContent = `Rename folder "${currentName}"`;
+  renameFolderNameInput.value = currentName;
+  renameFolderNameInput.classList.remove("is-invalid");
+  renameFolderNameError.textContent = "";
+  renameFolderForm.classList.remove("hidden");
+  renameFolderNameInput.focus();
+  renameFolderNameInput.select();
+}
+
+function closeRenameForm() {
+  renameFolderTarget = null;
+  if (renameFolderForm) renameFolderForm.classList.add("hidden");
+  if (renameFolderNameInput) {
+    renameFolderNameInput.value = "";
+    renameFolderNameInput.classList.remove("is-invalid");
+  }
+  if (renameFolderNameError) renameFolderNameError.textContent = "";
+}
+
 function renderFolderItems(folders, files) {
   folderItemsList.innerHTML = "";
 
@@ -1258,10 +1307,23 @@ function renderFolderItems(folders, files) {
         </svg>
         <span class="item-name"></span>
       </div>
-      <span class="item-meta">Folder • ${createdDate}</span>
+      <div class="item-right">
+        <span class="item-meta">Folder • ${createdDate}</span>
+        <button type="button" class="btn-rename-sm" title="Rename folder">Rename</button>
+      </div>
     `;
     row.querySelector(".item-name").textContent = folder.name;
-    row.addEventListener("click", () => loadFolderContents(folder.id));
+
+    const renameBtn = row.querySelector(".btn-rename-sm");
+    renameBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openRenameForm(folder.id, folder.name);
+    });
+
+    row.addEventListener("click", () => {
+      closeRenameForm();
+      loadFolderContents(folder.id);
+    });
     folderItemsList.appendChild(row);
   });
 
@@ -1283,6 +1345,68 @@ function renderFolderItems(folders, files) {
     row.querySelector(".item-name").textContent = file.name;
     folderItemsList.appendChild(row);
   });
+}
+
+async function handleRenameFolderSubmit(event) {
+  event.preventDefault();
+  hideAlert();
+
+  if (!renameFolderTarget) return;
+
+  const newName = renameFolderNameInput.value.trim();
+  if (!newName) {
+    renameFolderNameInput.classList.add("is-invalid");
+    renameFolderNameError.textContent = "Folder name is required";
+    return;
+  }
+  renameFolderNameInput.classList.remove("is-invalid");
+  renameFolderNameError.textContent = "";
+
+  const token = localStorage.getItem("jwt_token");
+  if (!token) {
+    switchSection(loginSection);
+    return;
+  }
+
+  renameFolderSubmitBtn.disabled = true;
+  renameFolderSpinner.classList.remove("hidden");
+
+  try {
+    const { response } = await fetchWithFallback(
+      `/api/folders/${encodeURIComponent(renameFolderTarget.id)}`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ name: newName }),
+      },
+    );
+
+    const text = await response.text();
+    let data = {};
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { message: text.trim() };
+    }
+
+    if (response.ok) {
+      closeRenameForm();
+      showAlert("success", "Folder Renamed", `Folder renamed to "${newName}".`);
+      await loadFolderContents(currentFolderId);
+    } else {
+      renameFolderNameInput.classList.add("is-invalid");
+      renameFolderNameError.textContent =
+        data.message || "Could not rename folder.";
+    }
+  } catch (err) {
+    showAlert("danger", "Connection Error", "Could not reach Storage Service.");
+  } finally {
+    renameFolderSubmitBtn.disabled = false;
+    renameFolderSpinner.classList.add("hidden");
+  }
 }
 
 async function handleCreateFolderSubmit(event) {
