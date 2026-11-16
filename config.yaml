@@ -5,7 +5,7 @@ smtp_from: noreply@cloudstorage.local
 default_quota_bytes: 104857600
 
 password_min_age: 1m
-password_max_age: 10s
+password_max_age: 1h
 reset_token_ttl: 30m
 reset_rate_limit_max: 3
 reset_rate_limit_window: 15m
