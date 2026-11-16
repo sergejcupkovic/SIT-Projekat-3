@@ -556,6 +556,16 @@ func (h *UserHandler) ChangeExpiredPassword(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	user, err := h.repo.FindByEmail(r.Context(), email)
+	if err != nil {
+		http.Error(w, "User not found", http.StatusUnauthorized)
+		return
+	}
+	if service.CheckPasswordHash(req.Password, user.PasswordHash) {
+		http.Error(w, "New password must be different from your current password", http.StatusBadRequest)
+		return
+	}
+
 	newHash, err := service.HashPassword(req.Password)
 	if err != nil {
 		http.Error(w, "Error processing password", http.StatusInternalServerError)
