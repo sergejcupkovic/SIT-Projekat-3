@@ -109,6 +109,7 @@ verification link and read the login code (OTP), then log in and create folders.
 | `$'\r': command not found` when running a `.sh` script | The script has Windows line endings (`.gitattributes` prevents this on fresh clones). Re-checkout it: `rm certs/generate-certs.sh proto/generate.sh && git checkout -- certs/generate-certs.sh proto/generate.sh` |
 | `http://localhost:3000` gives "400 The plain HTTP request was sent to HTTPS port" | Use `https://localhost:3000`. Current nginx config redirects automatically; if you still see this, rebuild: `docker compose up -d --build frontend` |
 | `http://localhost:8443` gives "Client sent an HTTP request to an HTTPS server" | Expected: the gateway is HTTPS-only, use `https://` |
+| Mailpit (`http://localhost:8025`) is suddenly forced to `https://` and fails | Your browser cached an HSTS policy for `localhost` from an older build. Chrome/Edge: open `chrome://net-internals/#hsts` (or `edge://net-internals/#hsts`), under *Delete domain security policies* enter `localhost` → Delete |
 | `port is already allocated` | Another process uses that port; change it in `.env` |
 | Postman "SSL Error: Unable to verify the first certificate" | Postman → Settings → Certificates → CA Certificates → select `certs/ca.crt` |
 | Logs | `docker compose logs -f api-gateway` (or `users-service`, `storage-service`, `frontend`) |

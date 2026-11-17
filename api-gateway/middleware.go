@@ -25,11 +25,14 @@ func corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// securityHeaders adds HTTPS hardening headers to every response.
-// HSTS tells browsers to only ever use https:// for this host.
+// securityHeaders adds hardening headers to every response.
+//
+// Strict-Transport-Security (HSTS) is intentionally NOT set: browsers apply it
+// to the whole host name on every port, so on "localhost" it would force other
+// local dev tools (e.g. Mailpit on http://localhost:8025) onto https. Add it
+// only when the gateway is served under a real domain.
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Strict-Transport-Security", "max-age=31536000")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		next.ServeHTTP(w, r)
 	})
