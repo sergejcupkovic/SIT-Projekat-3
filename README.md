@@ -107,6 +107,7 @@ verification link and read the login code (OTP), then log in and create folders.
 | `api_gateway` or `frontend` keeps restarting / exits | Certificates missing: run `bash certs/generate-certs.sh`, then `docker compose up -d` |
 | Browser shows "Your connection is not private" | Trust `certs/ca.crt` (Step 3) and restart the browser |
 | `$'\r': command not found` when running a `.sh` script | The script has Windows line endings (`.gitattributes` prevents this on fresh clones). Re-checkout it: `rm certs/generate-certs.sh proto/generate.sh && git checkout -- certs/generate-certs.sh proto/generate.sh` |
+| `http://localhost:3000` gives "400 The plain HTTP request was sent to HTTPS port" | Use `https://localhost:3000`. Current nginx config redirects automatically; if you still see this, rebuild: `docker compose up -d --build frontend` |
 | `http://localhost:8443` gives "Client sent an HTTP request to an HTTPS server" | Expected: the gateway is HTTPS-only, use `https://` |
 | `port is already allocated` | Another process uses that port; change it in `.env` |
 | Postman "SSL Error: Unable to verify the first certificate" | Postman → Settings → Certificates → CA Certificates → select `certs/ca.crt` |
