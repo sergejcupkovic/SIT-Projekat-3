@@ -1,28 +1,54 @@
+// Package handler is the transport layer of users-service.
+//
+// UserHandler implements userspb.UsersServiceServer, the interface generated
+// from proto/users/users_service.proto by protoc-gen-go-grpc. Each method
+// receives an already-decoded protobuf request (the api-gateway turned the
+// REST/JSON call into gRPC) and returns either a protobuf reply or a gRPC
+// status error. The gateway maps status codes back to HTTP:
+//
+//	codes.InvalidArgument   -> 400
+//	codes.Unauthenticated   -> 401
+//	codes.PermissionDenied  -> 403
+//	codes.NotFound          -> 404
+//	codes.AlreadyExists     -> 409
+//	codes.ResourceExhausted -> 429
+//	codes.Internal          -> 500
 package handler
 
 import (
-	"encoding/json"
+	"context"
 	"log"
-	"net/http"
-	"net/url"
+	"strconv"
 	"strings"
 	"time"
+
 	"users-service/domain"
 	"users-service/repository"
 	"users-service/service"
 
+	userspb "stashr/proto/users"
+
 	"go.mongodb.org/mongo-driver/mongo"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
-const maxBodyBytes = 64 << 10
-
 type UserHandler struct {
+	// Embedding the generated Unimplemented server keeps this type compiling
+	// (returning codes.Unimplemented) if new rpcs are added to the .proto.
+	userspb.UnimplementedUsersServiceServer
+
 	repo              *repository.UserRepository
 	smtpHost          string
 	smtpPort          string
 	smtpFrom          string
 	defaultQuotaBytes int64
 }
+
+// Compile-time check that UserHandler satisfies the generated interface.
+var _ userspb.UsersServiceServer = (*UserHandler)(nil)
 
 func NewUserHandler(repo *repository.UserRepository, smtpHost, smtpPort, smtpFrom string, quotaBytes int64) *UserHandler {
 	return &UserHandler{
@@ -35,110 +61,76 @@ func NewUserHandler(repo *repository.UserRepository, smtpHost, smtpPort, smtpFro
 }
 
 // #region GET
-// GET /api/users/verify?token=xyz
-func (h *UserHandler) Verify(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
 
-	token := r.URL.Query().Get("token")
+// VerifyEmail  <-  GET /api/users/verify?token=xyz
+// (The old "Accept: text/html -> redirect to frontend" behaviour is an HTTP
+// concern and now lives in the api-gateway.)
+func (h *UserHandler) VerifyEmail(ctx context.Context, req *userspb.VerifyEmailRequest) (*userspb.MessageResponse, error) {
+	token := req.GetToken()
 	if token == "" {
-		http.Error(w, "Missing token parameter", http.StatusBadRequest)
-		return
+		return nil, status.Error(codes.InvalidArgument, "Missing token parameter")
 	}
 
-	// Ako zahtev dolazi direktno iz brauzera (klik na stari API link), preusmeri na frontend UI
-	if strings.Contains(r.Header.Get("Accept"), "text/html") {
-		http.Redirect(w, r, "http://localhost:3000/?token="+url.QueryEscape(token), http.StatusFound)
-		return
-	}
-
-	res, err := h.repo.VerifyToken(r.Context(), token)
+	res, err := h.repo.VerifyToken(ctx, token)
 	if err != nil {
-		http.Error(w, "Server error", http.StatusInternalServerError)
-		return
+		return nil, status.Error(codes.Internal, "Server error")
 	}
 
 	if res.ModifiedCount == 0 {
-		http.Error(w, "Invalid or already used verification token", http.StatusBadRequest)
-		return
+		return nil, status.Error(codes.InvalidArgument, "Invalid or already used verification token")
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(map[string]string{
-		"message": "Account successfully activated. You can now log in.",
-	})
+	return &userspb.MessageResponse{
+		Message: "Account successfully activated. You can now log in.",
+	}, nil
 }
 
-// GET /api/users/reset-password?token=xyz
-func (h *UserHandler) getResetPassword(w http.ResponseWriter, r *http.Request) {
-	token := r.URL.Query().Get("token")
+// ValidateResetToken  <-  GET /api/users/reset-password?token=xyz
+func (h *UserHandler) ValidateResetToken(ctx context.Context, req *userspb.ValidateResetTokenRequest) (*userspb.MessageResponse, error) {
+	token := req.GetToken()
 	if token == "" {
-		writeResetLinkError(w)
-		return
+		return nil, resetLinkError()
 	}
 
-	user, err := h.repo.FindByPasswordResetTokenHash(r.Context(), service.HashResetToken(token))
+	user, err := h.repo.FindByPasswordResetTokenHash(ctx, service.HashResetToken(token))
 	if err != nil || !isResetTokenUsable(user) {
-		writeResetLinkError(w)
-		return
+		return nil, resetLinkError()
 	}
 
 	ok, retryAt := service.PasswordChangeAllowed(user.PasswordLastChanged)
 	if !ok {
-		writePasswordTooYoung(w, retryAt)
-		return
+		return nil, passwordTooYoungError(retryAt)
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"message": "Reset link is valid. Submit a new password.",
-	})
+	return &userspb.MessageResponse{Message: "Reset link is valid. Submit a new password."}, nil
 }
 
 // #endregion
 
-// GET/POST /api/users/reset-password
-func (h *UserHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		h.getResetPassword(w, r)
-	case http.MethodPost:
-		h.postResetPassword(w, r)
-	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-	}
-}
-
 // #region POST
-// POST /api/users/register
-func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
 
-	var req service.RegisterRequest
-	if !decodeJSON(w, r, &req) {
-		return
+// Register  <-  POST /api/users/register  (HTTP 201)
+func (h *UserHandler) Register(ctx context.Context, in *userspb.RegisterRequest) (*userspb.MessageResponse, error) {
+	req := service.RegisterRequest{
+		FirstName:       in.GetFirstName(),
+		LastName:        in.GetLastName(),
+		Email:           in.GetEmail(),
+		Password:        in.GetPassword(),
+		ConfirmPassword: in.GetConfirmPassword(),
 	}
 
 	if err := service.ValidateRegistration(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
 	passwordHash, err := service.HashPassword(req.Password)
 	if err != nil {
-		http.Error(w, "Error processing password", http.StatusInternalServerError)
-		return
+		return nil, status.Error(codes.Internal, "Error processing password")
 	}
 
 	token, err := service.GenerateSecureToken()
 	if err != nil {
-		http.Error(w, "Error generating token", http.StatusInternalServerError)
-		return
+		return nil, status.Error(codes.Internal, "Error generating token")
 	}
 
 	now := time.Now()
@@ -157,573 +149,440 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:                now,
 	}
 
-	err = h.repo.Create(r.Context(), newUser)
-	if err != nil {
+	if err := h.repo.Create(ctx, newUser); err != nil {
 		if mongo.IsDuplicateKeyError(err) {
-			writeRegisterSuccess(w)
-			return
+			// Same reply as success so the endpoint can't be used to enumerate emails.
+			return registerSuccess(ctx), nil
 		}
-		http.Error(w, "Error creating account in database", http.StatusInternalServerError)
-		return
+		return nil, status.Error(codes.Internal, "Error creating account in database")
 	}
 
 	h.sendMailAsync("verification", req.Email, func() error {
 		return service.SendVerificationEmail(h.smtpHost, h.smtpPort, h.smtpFrom, req.Email, token)
 	})
 
-	writeRegisterSuccess(w)
+	return registerSuccess(ctx), nil
 }
 
-// POST /api/users/login (T-1.2.1 & T-1.2.2 & T-1.2.3)
-func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
+// Login  <-  POST /api/users/login (T-1.2.1 & T-1.2.2 & T-1.2.3)
+func (h *UserHandler) Login(ctx context.Context, in *userspb.LoginRequest) (*userspb.AuthResponse, error) {
+	email := service.NormalizeEmail(in.GetEmail())
+	password := in.GetPassword()
 
-	var req service.LoginRequest
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-	req.Email = service.NormalizeEmail(req.Email)
-
-	user, err := h.repo.FindByEmail(r.Context(), req.Email)
+	user, err := h.repo.FindByEmail(ctx, email)
 	if err != nil {
-		service.DummyPasswordCheck(req.Password)
-		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
-		return
+		service.DummyPasswordCheck(password)
+		return nil, status.Error(codes.Unauthenticated, "Invalid email or password")
 	}
 
-	if !service.CheckPasswordHash(req.Password, user.PasswordHash) {
-		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
-		return
+	if !service.CheckPasswordHash(password, user.PasswordHash) {
+		return nil, status.Error(codes.Unauthenticated, "Invalid email or password")
 	}
 
 	if !user.IsVerified {
-		http.Error(w, "Account is not verified. Check your email.", http.StatusForbidden)
-		return
+		return nil, status.Error(codes.PermissionDenied, "Account is not verified. Check your email.")
 	}
 
 	if !user.AccountLockedUntil.IsZero() {
 		if time.Now().Before(user.AccountLockedUntil) {
-			http.Error(w, "Account is locked until "+user.AccountLockedUntil.Format(time.RFC3339), http.StatusForbidden)
-			return
+			return nil, accountLockedError(user.AccountLockedUntil)
 		}
-
-		token, err := service.GenerateRestrictedJWTToken(user.ID.Hex(), user.Email, string(user.Role))
-		if err != nil {
-			http.Error(w, "Error generating session token", http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"message":    "Your ban period has expired. You must change your password.",
-			"token":      token,
-			"restricted": true,
-		})
-		return
+		return h.restrictedLogin(user)
 	}
 
 	if time.Since(user.PasswordLastChanged) > service.Cfg.PasswordMaxAge {
-		until := time.Now().Add(service.Cfg.AccountLockDuration)
-		_ = h.repo.LockAccount(r.Context(), user.Email, until)
-		http.Error(w, "Password expired. Account locked until "+until.Format(time.RFC3339),
-			http.StatusForbidden)
-		return
+		return nil, h.lockForExpiredPassword(ctx, user.Email)
 	}
 
 	otpCode, err := service.GenerateOTPCode()
 	if err != nil {
-		http.Error(w, "Error generating security code", http.StatusInternalServerError)
-		return
+		return nil, status.Error(codes.Internal, "Error generating security code")
 	}
 
 	expiresAt := time.Now().Add(service.Cfg.OTPTTL)
-	if err := h.repo.SaveOTP(r.Context(), user.Email, otpCode, expiresAt, true); err != nil {
-		http.Error(w, "Error saving security code", http.StatusInternalServerError)
-		return
+	if err := h.repo.SaveOTP(ctx, user.Email, otpCode, expiresAt, true); err != nil {
+		return nil, status.Error(codes.Internal, "Error saving security code")
 	}
 
 	h.sendMailAsync("otp", user.Email, func() error {
 		return service.SendOTPEmail(h.smtpHost, h.smtpPort, h.smtpFrom, user.Email, otpCode)
 	})
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(map[string]string{
-		"message": "First step authentication successful. One-Time Password sent to your email.",
-	})
+	return &userspb.AuthResponse{
+		Message: "First step authentication successful. One-Time Password sent to your email.",
+	}, nil
 }
 
-// POST /api/users/verify-otp (T-1.2.4 & T-1.2.5 & T-1.2.8)
-func (h *UserHandler) VerifyOTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
+// VerifyOTP  <-  POST /api/users/verify-otp (T-1.2.4 & T-1.2.5 & T-1.2.8)
+func (h *UserHandler) VerifyOTP(ctx context.Context, in *userspb.VerifyOTPRequest) (*userspb.AuthResponse, error) {
+	email := service.NormalizeEmail(in.GetEmail())
+	password := in.GetPassword()
 
-	var req service.VerifyOTPRequest
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-	req.Email = service.NormalizeEmail(req.Email)
-
-	user, err := h.repo.FindByEmail(r.Context(), req.Email)
+	user, err := h.repo.FindByEmail(ctx, email)
 	if err != nil {
-		service.DummyPasswordCheck(req.Password)
-		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
-		return
+		service.DummyPasswordCheck(password)
+		return nil, status.Error(codes.Unauthenticated, "Invalid email or password")
 	}
 
-	if !service.CheckPasswordHash(req.Password, user.PasswordHash) {
-		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
-		return
+	if !service.CheckPasswordHash(password, user.PasswordHash) {
+		return nil, status.Error(codes.Unauthenticated, "Invalid email or password")
 	}
 
 	if !user.AccountLockedUntil.IsZero() && time.Now().Before(user.AccountLockedUntil) {
-		http.Error(w, "Account is locked until "+user.AccountLockedUntil.Format(time.RFC3339), http.StatusForbidden)
-		return
+		return nil, accountLockedError(user.AccountLockedUntil)
 	}
 
 	if user.OTPAttempts >= service.Cfg.OTPMaxAttempts {
-		_ = h.repo.ClearOTP(r.Context(), user.Email)
-		http.Error(w, "Too many failed attempts. Please log in again to receive a new code.", http.StatusTooManyRequests)
-		return
+		_ = h.repo.ClearOTP(ctx, user.Email)
+		return nil, status.Error(codes.ResourceExhausted, "Too many failed attempts. Please log in again to receive a new code.")
 	}
 
 	if time.Now().After(user.OTPExpires) || user.OTP == "" {
-		_ = h.repo.ClearOTP(r.Context(), user.Email)
-		http.Error(w, "OTP code has expired or is invalid", http.StatusBadRequest)
-		return
+		_ = h.repo.ClearOTP(ctx, user.Email)
+		return nil, status.Error(codes.InvalidArgument, "OTP code has expired or is invalid")
 	}
 
-	if user.OTP != req.OTP {
-		_ = h.repo.IncrementOTPAttempts(r.Context(), user.Email)
-		http.Error(w, "Invalid OTP code", http.StatusUnauthorized)
-		return
+	if user.OTP != in.GetOtp() {
+		_ = h.repo.IncrementOTPAttempts(ctx, user.Email)
+		return nil, status.Error(codes.Unauthenticated, "Invalid OTP code")
 	}
 
-	_ = h.repo.ClearOTP(r.Context(), user.Email)
+	_ = h.repo.ClearOTP(ctx, user.Email)
 
 	if !user.AccountLockedUntil.IsZero() {
-		token, err := service.GenerateRestrictedJWTToken(user.ID.Hex(), user.Email, string(user.Role))
-		if err != nil {
-			http.Error(w, "Error generating session token", http.StatusInternalServerError)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{
-			"message":    "Your ban period has expired. You must change your password.",
-			"token":      token,
-			"restricted": true,
-		})
-		return
+		return h.restrictedLogin(user)
 	}
 
 	if time.Since(user.PasswordLastChanged) > service.Cfg.PasswordMaxAge {
-		until := time.Now().Add(service.Cfg.AccountLockDuration)
-		_ = h.repo.LockAccount(r.Context(), user.Email, until)
-		http.Error(w, "Password expired. Account locked until "+until.Format(time.RFC3339), http.StatusForbidden)
-		return
+		return nil, h.lockForExpiredPassword(ctx, user.Email)
 	}
 
 	token, err := service.GenerateJWTToken(user.ID.Hex(), user.Email, string(user.Role))
 	if err != nil {
-		http.Error(w, "Error generating session token", http.StatusInternalServerError)
-		return
+		return nil, status.Error(codes.Internal, "Error generating session token")
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"message": "Login successful",
-		"token":   token,
-		"user": map[string]string{
-			"id":        user.ID.Hex(),
-			"email":     user.Email,
-			"firstName": user.FirstName,
-			"lastName":  user.LastName,
-			"role":      string(user.Role),
+	return &userspb.AuthResponse{
+		Message: "Login successful",
+		Token:   token,
+		User: &userspb.UserInfo{
+			Id:        user.ID.Hex(),
+			Email:     user.Email,
+			FirstName: user.FirstName,
+			LastName:  user.LastName,
+			Role:      string(user.Role),
 		},
-	})
+	}, nil
 }
 
-// POST /api/users/logout (T-1.2.7)
-func (h *UserHandler) Logout(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(map[string]string{
-		"message": "Logout successful",
-	})
+// Logout  <-  POST /api/users/logout (T-1.2.7)
+// JWTs are stateless; the client discards its token.
+func (h *UserHandler) Logout(ctx context.Context, _ *userspb.LogoutRequest) (*userspb.MessageResponse, error) {
+	return &userspb.MessageResponse{Message: "Logout successful"}, nil
 }
 
-// POST /api/users/resend-otp (T-1.2.8)
-func (h *UserHandler) ResendOTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
+// ResendOTP  <-  POST /api/users/resend-otp (T-1.2.8)
+func (h *UserHandler) ResendOTP(ctx context.Context, in *userspb.ResendOTPRequest) (*userspb.MessageResponse, error) {
+	email := service.NormalizeEmail(in.GetEmail())
+	password := in.GetPassword()
+
+	genericOK := &userspb.MessageResponse{
+		Message: "If an account with that email exists, a new code has been sent.",
 	}
 
-	var req service.ResendOTPRequest
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-	req.Email = service.NormalizeEmail(req.Email)
-
-	const genericMsg = "If an account with that email exists, a new code has been sent."
-	genericOK := func() {
-		writeJSON(w, http.StatusOK, map[string]any{"message": genericMsg})
-	}
-
-	user, err := h.repo.FindByEmail(r.Context(), req.Email)
+	user, err := h.repo.FindByEmail(ctx, email)
 	if err != nil {
-		service.DummyPasswordCheck(req.Password)
-		genericOK()
-		return
+		service.DummyPasswordCheck(password)
+		return genericOK, nil
 	}
 
-	if !service.CheckPasswordHash(req.Password, user.PasswordHash) {
-		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
-		return
+	if !service.CheckPasswordHash(password, user.PasswordHash) {
+		return nil, status.Error(codes.Unauthenticated, "Invalid email or password")
 	}
 
 	if !user.IsVerified {
-		genericOK()
-		return
+		return genericOK, nil
 	}
 
 	if !user.AccountLockedUntil.IsZero() && time.Now().Before(user.AccountLockedUntil) {
-		http.Error(w, "Account is locked until "+user.AccountLockedUntil.Format(time.RFC3339), http.StatusForbidden)
-		return
+		return nil, accountLockedError(user.AccountLockedUntil)
 	}
 
 	now := time.Now()
 	resetWindow := user.OTPResendWindowStart.IsZero() || now.Sub(user.OTPResendWindowStart) > service.Cfg.ResetRateLimitWindow
 	if !resetWindow && user.OTPResendRequestCount >= service.Cfg.ResetRateLimitMax {
-		genericOK()
-		return
+		return genericOK, nil
 	}
 
-	if err := h.repo.IncrementWindowedCount(r.Context(), user.Email, "otpResendRequestCount", "otpResendWindowStart", now, resetWindow); err != nil {
-		http.Error(w, "Error processing request", http.StatusInternalServerError)
-		return
+	if err := h.repo.IncrementWindowedCount(ctx, user.Email, "otpResendRequestCount", "otpResendWindowStart", now, resetWindow); err != nil {
+		return nil, status.Error(codes.Internal, "Error processing request")
 	}
 
 	otpCode, err := service.GenerateOTPCode()
 	if err != nil {
-		http.Error(w, "Error generating code", http.StatusInternalServerError)
-		return
+		return nil, status.Error(codes.Internal, "Error generating code")
 	}
 
 	expiresAt := now.Add(service.Cfg.OTPTTL)
-	if err := h.repo.SaveOTP(r.Context(), user.Email, otpCode, expiresAt, false); err != nil {
-		http.Error(w, "Error saving code", http.StatusInternalServerError)
-		return
+	if err := h.repo.SaveOTP(ctx, user.Email, otpCode, expiresAt, false); err != nil {
+		return nil, status.Error(codes.Internal, "Error saving code")
 	}
 
 	h.sendMailAsync("otp", user.Email, func() error {
 		return service.SendOTPEmail(h.smtpHost, h.smtpPort, h.smtpFrom, user.Email, otpCode)
 	})
 
-	genericOK()
+	return genericOK, nil
 }
 
-// POST /api/users/forgot-password
-func (h *UserHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
+// ForgotPassword  <-  POST /api/users/forgot-password
+func (h *UserHandler) ForgotPassword(ctx context.Context, in *userspb.ForgotPasswordRequest) (*userspb.MessageResponse, error) {
+	email := service.NormalizeEmail(in.GetEmail())
+
+	genericOK := &userspb.MessageResponse{
+		Message: "If an account with that email exists, a password reset link has been sent.",
 	}
 
-	var req service.ForgotPasswordRequest
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-	req.Email = service.NormalizeEmail(req.Email)
-
-	genericOK := func() {
-		writeJSON(w, http.StatusOK, map[string]any{
-			"message": "If an account with that email exists, a password reset link has been sent.",
-		})
-	}
-
-	user, err := h.repo.FindByEmail(r.Context(), req.Email)
+	user, err := h.repo.FindByEmail(ctx, email)
 	if err != nil {
-		genericOK()
-		return
+		return genericOK, nil
 	}
 
 	now := time.Now()
 	resetWindow := user.PasswordResetWindowStart.IsZero() || now.Sub(user.PasswordResetWindowStart) > service.Cfg.ResetRateLimitWindow
 	if !resetWindow && user.PasswordResetRequestCount >= service.Cfg.ResetRateLimitMax {
-		genericOK()
-		return
+		return genericOK, nil
 	}
 
-	if err := h.repo.IncrementResetRequestCount(r.Context(), user.Email, now, resetWindow); err != nil {
-		http.Error(w, "Error processing request", http.StatusInternalServerError)
-		return
+	if err := h.repo.IncrementResetRequestCount(ctx, user.Email, now, resetWindow); err != nil {
+		return nil, status.Error(codes.Internal, "Error processing request")
 	}
 
 	rawToken, err := service.GenerateSecureToken()
 	if err != nil {
-		http.Error(w, "Error generating token", http.StatusInternalServerError)
-		return
+		return nil, status.Error(codes.Internal, "Error generating token")
 	}
 
 	tokenHash := service.HashResetToken(rawToken)
 	expiresAt := now.Add(service.Cfg.ResetTokenTTL)
-	if err := h.repo.SavePasswordResetToken(r.Context(), user.Email, tokenHash, expiresAt); err != nil {
-		http.Error(w, "Error saving reset token", http.StatusInternalServerError)
-		return
+	if err := h.repo.SavePasswordResetToken(ctx, user.Email, tokenHash, expiresAt); err != nil {
+		return nil, status.Error(codes.Internal, "Error saving reset token")
 	}
 
 	h.sendMailAsync("password-reset", user.Email, func() error {
 		return service.SendPasswordResetEmail(h.smtpHost, h.smtpPort, h.smtpFrom, user.Email, rawToken)
 	})
 
-	genericOK()
+	return genericOK, nil
 }
 
-// POST /api/users/reset-password
-func (h *UserHandler) postResetPassword(w http.ResponseWriter, r *http.Request) {
-	var req service.ResetPasswordRequest
-	if !decodeJSON(w, r, &req) {
-		return
+// ResetPassword  <-  POST /api/users/reset-password
+func (h *UserHandler) ResetPassword(ctx context.Context, in *userspb.ResetPasswordRequest) (*userspb.MessageResponse, error) {
+	req := service.ResetPasswordRequest{
+		Token:           in.GetToken(),
+		Password:        in.GetPassword(),
+		ConfirmPassword: in.GetConfirmPassword(),
 	}
 
 	if err := service.ValidateResetPassword(req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	user, err := h.repo.FindByPasswordResetTokenHash(r.Context(), service.HashResetToken(req.Token))
+	user, err := h.repo.FindByPasswordResetTokenHash(ctx, service.HashResetToken(req.Token))
 	if err != nil || !isResetTokenUsable(user) {
-		writeResetLinkError(w)
-		return
+		return nil, resetLinkError()
 	}
 
 	ok, retryAt := service.PasswordChangeAllowed(user.PasswordLastChanged)
 	if !ok {
-		_ = h.repo.ClearPasswordResetToken(r.Context(), user.Email)
-		writePasswordTooYoung(w, retryAt)
-		return
+		_ = h.repo.ClearPasswordResetToken(ctx, user.Email)
+		return nil, passwordTooYoungError(retryAt)
 	}
 
 	newHash, err := service.HashPassword(req.Password)
 	if err != nil {
-		http.Error(w, "Error processing password", http.StatusInternalServerError)
-		return
+		return nil, status.Error(codes.Internal, "Error processing password")
 	}
 
-	if err := h.repo.UpdatePassword(r.Context(), user.Email, newHash, time.Now()); err != nil {
-		http.Error(w, "Error updating password", http.StatusInternalServerError)
-		return
+	if err := h.repo.UpdatePassword(ctx, user.Email, newHash, time.Now()); err != nil {
+		return nil, status.Error(codes.Internal, "Error updating password")
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"message": "Password updated. You can now log in.",
-	})
+	return &userspb.MessageResponse{Message: "Password updated. You can now log in."}, nil
 }
 
-// POST /api/users/change-expired-password
-func (h *UserHandler) ChangeExpiredPassword(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
+// ChangeExpiredPassword  <-  POST /api/users/change-expired-password
+// Requires the restricted JWT in the "authorization" metadata
+// (forwarded by grpc-gateway from the HTTP Authorization header).
+func (h *UserHandler) ChangeExpiredPassword(ctx context.Context, in *userspb.ChangeExpiredPasswordRequest) (*userspb.MessageResponse, error) {
+	tokenStr, ok := bearerFromMetadata(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "Missing or invalid authorization token")
 	}
-
-	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" || len(authHeader) < 7 || authHeader[:7] != "Bearer " {
-		http.Error(w, "Missing or invalid authorization token", http.StatusUnauthorized)
-		return
-	}
-	tokenStr := authHeader[7:]
 
 	email, err := service.VerifyRestrictedToken(tokenStr)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
-		return
+		return nil, status.Error(codes.Unauthenticated, err.Error())
 	}
 
-	var req struct {
-		Password        string `json:"password"`
-		ConfirmPassword string `json:"confirmPassword"`
-	}
-	if !decodeJSON(w, r, &req) {
-		return
+	password, confirm := in.GetPassword(), in.GetConfirmPassword()
+	if err := service.ValidateChangeExpiredPassword(password, confirm); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	if err := service.ValidateChangeExpiredPassword(req.Password, req.ConfirmPassword); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	user, err := h.repo.FindByEmail(r.Context(), email)
+	user, err := h.repo.FindByEmail(ctx, email)
 	if err != nil {
-		http.Error(w, "User not found", http.StatusUnauthorized)
-		return
+		return nil, status.Error(codes.Unauthenticated, "User not found")
 	}
-	if service.CheckPasswordHash(req.Password, user.PasswordHash) {
-		http.Error(w, "New password must be different from your current password", http.StatusBadRequest)
-		return
+	if service.CheckPasswordHash(password, user.PasswordHash) {
+		return nil, status.Error(codes.InvalidArgument, "New password must be different from your current password")
 	}
 
-	newHash, err := service.HashPassword(req.Password)
+	newHash, err := service.HashPassword(password)
 	if err != nil {
-		http.Error(w, "Error processing password", http.StatusInternalServerError)
-		return
+		return nil, status.Error(codes.Internal, "Error processing password")
 	}
 
-	now := time.Now()
-	if err := h.repo.UpdatePassword(r.Context(), email, newHash, now); err != nil {
-		http.Error(w, "Error updating password in database", http.StatusInternalServerError)
-		return
+	if err := h.repo.UpdatePassword(ctx, email, newHash, time.Now()); err != nil {
+		return nil, status.Error(codes.Internal, "Error updating password in database")
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"message": "Password successfully updated. You can now sign in with your new password.",
-	})
+	return &userspb.MessageResponse{
+		Message: "Password successfully updated. You can now sign in with your new password.",
+	}, nil
 }
 
-// POST /api/users/magic-link-request
-func (h *UserHandler) RequestMagicLink(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
+// RequestMagicLink  <-  POST /api/users/magic-link-request
+func (h *UserHandler) RequestMagicLink(ctx context.Context, in *userspb.MagicLinkRequest) (*userspb.MessageResponse, error) {
+	email := service.NormalizeEmail(in.GetEmail())
+
+	genericOK := &userspb.MessageResponse{
+		Message: "If an account with that email exists and is verified, a magic link has been sent.",
 	}
 
-	var req struct {
-		Email string `json:"email"`
-	}
-
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-	req.Email = service.NormalizeEmail(req.Email)
-
-	const genericMsg = "If an account with that email exists and is verified, a magic link has been sent."
-	genericOK := func() {
-		writeJSON(w, http.StatusOK, map[string]any{"message": genericMsg})
-	}
-
-	user, err := h.repo.FindByEmail(r.Context(), req.Email)
+	user, err := h.repo.FindByEmail(ctx, email)
 	if err != nil || !user.IsVerified {
-		genericOK()
-		return
+		return genericOK, nil
 	}
 
 	now := time.Now()
 	resetWindow := user.MagicLinkWindowStart.IsZero() || now.Sub(user.MagicLinkWindowStart) > service.Cfg.ResetRateLimitWindow
 	if !resetWindow && user.MagicLinkRequestCount >= service.Cfg.ResetRateLimitMax {
-		genericOK()
-		return
+		return genericOK, nil
 	}
 
-	if err := h.repo.IncrementWindowedCount(r.Context(), user.Email, "magicLinkRequestCount", "magicLinkWindowStart", now, resetWindow); err != nil {
-		http.Error(w, "Error processing request", http.StatusInternalServerError)
-		return
+	if err := h.repo.IncrementWindowedCount(ctx, user.Email, "magicLinkRequestCount", "magicLinkWindowStart", now, resetWindow); err != nil {
+		return nil, status.Error(codes.Internal, "Error processing request")
 	}
 
 	rawToken, err := service.GenerateSecureToken()
 	if err != nil {
-		http.Error(w, "Error generating token", http.StatusInternalServerError)
-		return
+		return nil, status.Error(codes.Internal, "Error generating token")
 	}
 
 	expiresAt := now.Add(service.Cfg.MagicLinkTokenTTL)
-	if err := h.repo.SaveMagicLinkToken(r.Context(), user.Email, service.HashResetToken(rawToken), expiresAt); err != nil {
-		http.Error(w, "Error saving token", http.StatusInternalServerError)
-		return
+	if err := h.repo.SaveMagicLinkToken(ctx, user.Email, service.HashResetToken(rawToken), expiresAt); err != nil {
+		return nil, status.Error(codes.Internal, "Error saving token")
 	}
 
 	h.sendMailAsync("magic-link", user.Email, func() error {
 		return service.SendMagicLinkEmail(h.smtpHost, h.smtpPort, h.smtpFrom, user.Email, rawToken)
 	})
 
-	genericOK()
+	return genericOK, nil
 }
 
-// POST /api/users/magic-link-login
-func (h *UserHandler) GetMagicLinkLogin(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
+// MagicLinkLogin  <-  POST /api/users/magic-link-login
+func (h *UserHandler) MagicLinkLogin(ctx context.Context, in *userspb.MagicLinkLoginRequest) (*userspb.AuthResponse, error) {
+	if in.GetToken() == "" {
+		return nil, status.Error(codes.InvalidArgument, "Missing magic link token")
 	}
 
-	var req struct {
-		Token string `json:"token"`
-	}
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-	if req.Token == "" {
-		http.Error(w, "Missing magic link token", http.StatusBadRequest)
-		return
-	}
-
-	user, err := h.repo.ConsumeMagicLinkToken(r.Context(), service.HashResetToken(req.Token))
+	user, err := h.repo.ConsumeMagicLinkToken(ctx, service.HashResetToken(in.GetToken()))
 	if err != nil {
-		http.Error(w, "Invalid or expired magic link", http.StatusBadRequest)
-		return
+		return nil, status.Error(codes.InvalidArgument, "Invalid or expired magic link")
 	}
 
 	if !user.AccountLockedUntil.IsZero() {
 		if time.Now().Before(user.AccountLockedUntil) {
-			http.Error(w, "Account is locked until "+user.AccountLockedUntil.Format(time.RFC3339), http.StatusForbidden)
-			return
+			return nil, accountLockedError(user.AccountLockedUntil)
 		}
-
-		restrictedToken, err := service.GenerateRestrictedJWTToken(user.ID.Hex(), user.Email, string(user.Role))
-		if err != nil {
-			http.Error(w, "Error generating session token", http.StatusInternalServerError)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{
-			"message":    "Your ban period has expired. You must change your password.",
-			"token":      restrictedToken,
-			"restricted": true,
-		})
-		return
+		return h.restrictedLogin(user)
 	}
+
 	jwtToken, err := service.GenerateJWTToken(user.ID.Hex(), user.Email, string(user.Role))
 	if err != nil {
-		http.Error(w, "Error generating authentication token", http.StatusInternalServerError)
-		return
+		return nil, status.Error(codes.Internal, "Error generating authentication token")
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"token": jwtToken,
-		"user": map[string]any{
-			"id":    user.ID.Hex(),
-			"email": user.Email,
-			"role":  user.Role,
+
+	return &userspb.AuthResponse{
+		Token: jwtToken,
+		User: &userspb.UserInfo{
+			Id:    user.ID.Hex(),
+			Email: user.Email,
+			Role:  string(user.Role),
 		},
-	})
+	}, nil
 }
 
 // #endregion
 
 // #region helperi
-func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
-	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
-	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
-		http.Error(w, "Invalid JSON body", http.StatusBadRequest)
-		return false
+
+// setHTTPStatus attaches gRPC response-header metadata "x-http-code".
+// A pure gRPC client ignores it; the api-gateway reads it (see
+// api-gateway/response.go) and uses it as the HTTP status code, which is how
+// a gRPC call can still produce "201 Created" on the REST side.
+func setHTTPStatus(ctx context.Context, code int) {
+	if err := grpc.SetHeader(ctx, metadata.Pairs("x-http-code", strconv.Itoa(code))); err != nil {
+		log.Printf("failed to set x-http-code header: %v", err)
 	}
-	return true
 }
 
-func writeRegisterSuccess(w http.ResponseWriter) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(map[string]string{
-		"message": "Registration successful. Check your email to verify your account.",
-	})
+// bearerFromMetadata extracts the JWT from the "authorization" metadata,
+// which grpc-gateway fills from the HTTP "Authorization: Bearer ..." header.
+func bearerFromMetadata(ctx context.Context) (string, bool) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return "", false
+	}
+	for _, v := range md.Get("authorization") {
+		if strings.HasPrefix(v, "Bearer ") && len(v) > len("Bearer ") {
+			return strings.TrimPrefix(v, "Bearer "), true
+		}
+	}
+	return "", false
+}
+
+func registerSuccess(ctx context.Context) *userspb.MessageResponse {
+	setHTTPStatus(ctx, 201)
+	return &userspb.MessageResponse{
+		Message: "Registration successful. Check your email to verify your account.",
+	}
+}
+
+// restrictedLogin issues a short-lived token that only allows changing the
+// expired password (ban period over, password must be changed).
+func (h *UserHandler) restrictedLogin(user *domain.User) (*userspb.AuthResponse, error) {
+	token, err := service.GenerateRestrictedJWTToken(user.ID.Hex(), user.Email, string(user.Role))
+	if err != nil {
+		return nil, status.Error(codes.Internal, "Error generating session token")
+	}
+	return &userspb.AuthResponse{
+		Message:    "Your ban period has expired. You must change your password.",
+		Token:      token,
+		Restricted: true,
+	}, nil
+}
+
+func (h *UserHandler) lockForExpiredPassword(ctx context.Context, email string) error {
+	until := time.Now().Add(service.Cfg.AccountLockDuration)
+	_ = h.repo.LockAccount(ctx, email, until)
+	return status.Error(codes.PermissionDenied, "Password expired. Account locked until "+until.Format(time.RFC3339))
+}
+
+func accountLockedError(until time.Time) error {
+	return status.Error(codes.PermissionDenied, "Account is locked until "+until.Format(time.RFC3339))
 }
 
 func (h *UserHandler) sendMailAsync(kind, to string, send func() error) {
@@ -734,28 +593,15 @@ func (h *UserHandler) sendMailAsync(kind, to string, send func() error) {
 	}()
 }
 
-func writeJSON(w http.ResponseWriter, status int, body map[string]any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(body)
+func resetLinkError() error {
+	return status.Error(codes.InvalidArgument,
+		"This password reset link is invalid or has expired. You can request a new one via forgot password.")
 }
 
-func writeResetLinkError(w http.ResponseWriter) {
-	writeJSON(w, http.StatusBadRequest, map[string]any{
-		"message":            "This password reset link is invalid or has expired.",
-		"canRequestNewLink":  true,
-		"forgotPasswordPath": "/api/users/forgot-password",
-	})
-}
-
-func writePasswordTooYoung(w http.ResponseWriter, retryAt time.Time) {
+func passwordTooYoungError(retryAt time.Time) error {
 	retry := retryAt.UTC().Format(time.RFC3339)
-	writeJSON(w, http.StatusForbidden, map[string]any{
-		"message":            "Password can only be changed once every " + service.HumanDur(service.Cfg.PasswordMinAge) + ". You can retry after " + retry + ".",
-		"retryAt":            retry,
-		"canRequestNewLink":  true,
-		"forgotPasswordPath": "/api/users/forgot-password",
-	})
+	return status.Error(codes.PermissionDenied,
+		"Password can only be changed once every "+service.HumanDur(service.Cfg.PasswordMinAge)+". You can retry after "+retry+".")
 }
 
 func isResetTokenUsable(user *domain.User) bool {

@@ -135,12 +135,13 @@ function getCandidateEndpoints(path) {
   }
 
   const hostname = window.location.hostname || "localhost";
+  // Fallback: call the API gateway directly over HTTPS.
   if (hostname === "127.0.0.1") {
-    endpoints.push(`http://127.0.0.1:8080${path}`);
-    endpoints.push(`http://localhost:8080${path}`);
+    endpoints.push(`https://127.0.0.1:8443${path}`);
+    endpoints.push(`https://localhost:8443${path}`);
   } else {
-    endpoints.push(`http://localhost:8080${path}`);
-    endpoints.push(`http://127.0.0.1:8080${path}`);
+    endpoints.push(`https://localhost:8443${path}`);
+    endpoints.push(`https://127.0.0.1:8443${path}`);
   }
 
   return [...new Set(endpoints)];

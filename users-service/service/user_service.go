@@ -44,12 +44,13 @@ func Init(c *config.Config) {
 }
 
 // #region url-ovi
+// Links in emails point at the public HTTPS endpoints (gateway / frontend).
 func gatewayURL() string {
-	return fmt.Sprintf("http://%s:%s", Cfg.PublicHost, Cfg.GatewayPort)
+	return fmt.Sprintf("https://%s:%s", Cfg.PublicHost, Cfg.GatewayPort)
 }
 
 func frontendURL() string {
-	return fmt.Sprintf("http://%s:%s", Cfg.PublicHost, Cfg.FrontendPort)
+	return fmt.Sprintf("https://%s:%s", Cfg.PublicHost, Cfg.FrontendPort)
 }
 
 // #endregion

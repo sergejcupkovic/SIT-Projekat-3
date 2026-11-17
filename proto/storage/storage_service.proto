@@ -1,0 +1,114 @@
+// IDL contract for the Storage service (folders).
+//
+// Every rpc is bound to a URI + HTTP method via google.api.http so the
+// api-gateway can expose it as REST/JSON over HTTPS.
+//
+// All rpcs require a valid session JWT. The client sends it as
+// "Authorization: Bearer <jwt>"; grpc-gateway forwards it as gRPC metadata
+// "authorization", and storage-service checks it in a unary interceptor.
+//
+// After editing this file run `bash proto/generate.sh`.
+// NEVER edit the generated *.pb.go / *_grpc.pb.go / *.pb.gw.go files.
+syntax = "proto3";
+
+package storage;
+
+option go_package = "stashr/proto/storage;storagepb";
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+service StorageService {
+  // POST /api/folders  -> 201 Created (signalled via x-http-code metadata)
+  rpc CreateFolder(CreateFolderRequest) returns (FolderResponse) {
+    option (google.api.http) = {
+      post: "/api/folders"
+      body: "*"
+    };
+  }
+
+  // GET /api/folders/{folder_id}  - contents of one folder
+  // GET /api/folders              - root ("My Drive"), or legacy ?parentId=<id>
+  rpc BrowseFolder(BrowseFolderRequest) returns (FolderContentResponse) {
+    option (google.api.http) = {
+      get: "/api/folders/{folder_id}"
+      additional_bindings {
+        get: "/api/folders"
+      }
+    };
+  }
+
+  // PATCH or PUT /api/folders/{folder_id}  body: {"name": "..."}
+  rpc RenameFolder(RenameFolderRequest) returns (FolderResponse) {
+    option (google.api.http) = {
+      patch: "/api/folders/{folder_id}"
+      body: "*"
+      additional_bindings {
+        put: "/api/folders/{folder_id}"
+        body: "*"
+      }
+    };
+  }
+}
+
+// ---------- Domain messages ----------
+
+message Folder {
+  string id = 1;
+  string name = 2;
+  // Unset for top-level folders (JSON: key omitted).
+  optional string parent_id = 3;
+  string owner_id = 4;
+  // JSON: RFC 3339 string, e.g. "2026-11-17T18:00:00Z".
+  google.protobuf.Timestamp created_at = 5;
+}
+
+message BreadcrumbItem {
+  string id = 1;
+  string name = 2;
+}
+
+message FileItem {
+  string id = 1;
+  string name = 2;
+  // Note: protojson encodes int64 as a JSON string ("123").
+  int64 size_bytes = 3;
+  string mime_type = 4;
+  google.protobuf.Timestamp created_at = 5;
+}
+
+// ---------- Requests ----------
+
+message CreateFolderRequest {
+  string name = 1;
+  // Unset / JSON null = create at root.
+  optional string parent_id = 2;
+}
+
+message BrowseFolderRequest {
+  // Bound from the URL path segment /api/folders/{folder_id}.
+  string folder_id = 1;
+  // Legacy query parameter: GET /api/folders?parentId=<id>.
+  string parent_id = 2;
+}
+
+message RenameFolderRequest {
+  // Bound from the URL path; `name` comes from the JSON body.
+  string folder_id = 1;
+  string name = 2;
+}
+
+// ---------- Responses ----------
+
+message FolderResponse {
+  string message = 1;
+  Folder folder = 2;
+}
+
+message FolderContentResponse {
+  // null when browsing the root.
+  Folder current_folder = 1;
+  repeated BreadcrumbItem breadcrumbs = 2;
+  repeated Folder folders = 3;
+  repeated FileItem files = 4;
+}

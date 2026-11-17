@@ -47,9 +47,9 @@ func env(key, def string) string {
 
 func LoadConfig() *Config {
 	cfg := &Config{
-		Port:         env("USERS_SERVICE_PORT", "8081"),
+		Port:         env("USERS_GRPC_PORT", "50051"),
 		SMTPPort:     env("SMTP_PORT", "1025"),
-		GatewayPort:  env("GATEWAY_PORT", "8080"),
+		GatewayPort:  env("GATEWAY_PORT", "8443"),
 		FrontendPort: env("FRONTEND_PORT", "3000"),
 		MongoURI:     env("MONGO_URI", "mongodb://mongodb:27017"),
 		JWTSecret:    os.Getenv("JWT_SECRET"),

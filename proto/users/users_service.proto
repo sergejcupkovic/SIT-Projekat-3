@@ -1,0 +1,203 @@
+// IDL contract for the Users service.
+//
+// This file is the single source of truth for:
+//   * the gRPC API that users-service implements (server stubs),
+//   * the gRPC client the api-gateway uses to call it (client stubs),
+//   * the REST <-> gRPC mapping the api-gateway exposes over HTTPS
+//     (every rpc carries a google.api.http option = URI + HTTP method).
+//
+// After editing this file run `bash proto/generate.sh`.
+// NEVER edit the generated *.pb.go / *_grpc.pb.go / *.pb.gw.go files.
+//
+// JSON naming: protojson converts snake_case field names to lowerCamelCase,
+// e.g. `first_name` <-> "firstName", which is what the frontend sends/reads.
+syntax = "proto3";
+
+package users;
+
+option go_package = "stashr/proto/users;userspb";
+
+import "google/api/annotations.proto";
+
+service UsersService {
+  // POST /api/users/register -> 201 Created (signalled via x-http-code metadata)
+  rpc Register(RegisterRequest) returns (MessageResponse) {
+    option (google.api.http) = {
+      post: "/api/users/register"
+      body: "*"
+    };
+  }
+
+  // GET /api/users/verify?token=...  (token is bound from the query string)
+  rpc VerifyEmail(VerifyEmailRequest) returns (MessageResponse) {
+    option (google.api.http) = {
+      get: "/api/users/verify"
+    };
+  }
+
+  // POST /api/users/login - first factor (password); sends an OTP by email.
+  rpc Login(LoginRequest) returns (AuthResponse) {
+    option (google.api.http) = {
+      post: "/api/users/login"
+      body: "*"
+    };
+  }
+
+  // POST /api/users/verify-otp - second factor; returns the session JWT.
+  rpc VerifyOTP(VerifyOTPRequest) returns (AuthResponse) {
+    option (google.api.http) = {
+      post: "/api/users/verify-otp"
+      body: "*"
+    };
+  }
+
+  // POST /api/users/resend-otp
+  rpc ResendOTP(ResendOTPRequest) returns (MessageResponse) {
+    option (google.api.http) = {
+      post: "/api/users/resend-otp"
+      body: "*"
+    };
+  }
+
+  // POST /api/users/logout
+  rpc Logout(LogoutRequest) returns (MessageResponse) {
+    option (google.api.http) = {
+      post: "/api/users/logout"
+      body: "*"
+    };
+  }
+
+  // POST /api/users/forgot-password
+  rpc ForgotPassword(ForgotPasswordRequest) returns (MessageResponse) {
+    option (google.api.http) = {
+      post: "/api/users/forgot-password"
+      body: "*"
+    };
+  }
+
+  // GET /api/users/reset-password?token=...  (checks that a reset link is still usable)
+  rpc ValidateResetToken(ValidateResetTokenRequest) returns (MessageResponse) {
+    option (google.api.http) = {
+      get: "/api/users/reset-password"
+    };
+  }
+
+  // POST /api/users/reset-password
+  rpc ResetPassword(ResetPasswordRequest) returns (MessageResponse) {
+    option (google.api.http) = {
+      post: "/api/users/reset-password"
+      body: "*"
+    };
+  }
+
+  // POST /api/users/change-expired-password
+  // The restricted JWT travels in the HTTP "Authorization: Bearer ..." header,
+  // which grpc-gateway forwards as gRPC metadata key "authorization".
+  rpc ChangeExpiredPassword(ChangeExpiredPasswordRequest) returns (MessageResponse) {
+    option (google.api.http) = {
+      post: "/api/users/change-expired-password"
+      body: "*"
+    };
+  }
+
+  // POST /api/users/magic-link-request
+  rpc RequestMagicLink(MagicLinkRequest) returns (MessageResponse) {
+    option (google.api.http) = {
+      post: "/api/users/magic-link-request"
+      body: "*"
+    };
+  }
+
+  // POST /api/users/magic-link-login
+  rpc MagicLinkLogin(MagicLinkLoginRequest) returns (AuthResponse) {
+    option (google.api.http) = {
+      post: "/api/users/magic-link-login"
+      body: "*"
+    };
+  }
+}
+
+// ---------- Requests ----------
+
+message RegisterRequest {
+  string first_name = 1;
+  string last_name = 2;
+  string email = 3;
+  string password = 4;
+  string confirm_password = 5;
+}
+
+message VerifyEmailRequest {
+  string token = 1;
+}
+
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message VerifyOTPRequest {
+  string email = 1;
+  string password = 2;
+  string otp = 3;
+}
+
+message ResendOTPRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message LogoutRequest {}
+
+message ForgotPasswordRequest {
+  string email = 1;
+}
+
+message ValidateResetTokenRequest {
+  string token = 1;
+}
+
+message ResetPasswordRequest {
+  string token = 1;
+  string password = 2;
+  string confirm_password = 3;
+}
+
+message ChangeExpiredPasswordRequest {
+  string password = 1;
+  string confirm_password = 2;
+}
+
+message MagicLinkRequest {
+  string email = 1;
+}
+
+message MagicLinkLoginRequest {
+  string token = 1;
+}
+
+// ---------- Responses ----------
+
+// Generic reply carrying only a human-readable message.
+message MessageResponse {
+  string message = 1;
+}
+
+message UserInfo {
+  string id = 1;
+  string email = 2;
+  string first_name = 3;
+  string last_name = 4;
+  string role = 5;
+}
+
+// Reply of every login-like rpc (Login, VerifyOTP, MagicLinkLogin).
+//   * Login step 1:        message only.
+//   * Successful login:    message + token + user.
+//   * Expired-ban login:   message + restricted token + restricted=true.
+message AuthResponse {
+  string message = 1;
+  string token = 2;
+  bool restricted = 3;
+  UserInfo user = 4;
+}
