@@ -95,7 +95,9 @@ func main() {
 		log.Fatalf("Failed to register StorageService routes: %v", err)
 	}
 
-	handler := securityHeaders(corsMiddleware(verifyRedirect(gw, frontendURL)))
+	startCleanup()
+
+	handler := securityHeaders(corsMiddleware(rateLimitMiddleware(verifyRedirect(gw, frontendURL))))
 
 	// ---- HTTPS server (client -> gateway) ----
 	srv := &http.Server{

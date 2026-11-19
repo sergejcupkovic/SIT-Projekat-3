@@ -154,6 +154,10 @@ async function fetchWithFallback(path, options) {
   for (const url of endpoints) {
     try {
       const response = await fetch(url, options);
+      if (response.status === 429) {
+        showAlert("warning", "Too Many Requests", "You are sending requests too fast. Please slow down and try again.");
+        return { response, url };
+      }
       if (response.status === 404 && url === path && endpoints.length > 1) {
         continue;
       }
@@ -678,7 +682,7 @@ async function checkMagicLinkTokenInUrl() {
           "warning",
           "Password Update Required",
           data.message ||
-            "Your ban period has expired. Please choose a new password.",
+          "Your ban period has expired. Please choose a new password.",
         );
       } else {
         localStorage.setItem("jwt_token", data.token);
@@ -878,7 +882,7 @@ async function handleLoginSubmit(event) {
           "warning",
           "Password Expired",
           data.message ||
-            "Your ban period has expired. Please choose a new password.",
+          "Your ban period has expired. Please choose a new password.",
         );
         return;
       }
@@ -959,7 +963,7 @@ async function handleOtpSubmit(event) {
           "warning",
           "Password Update Required",
           data.message ||
-            "Your ban period has expired. Please choose a new password.",
+          "Your ban period has expired. Please choose a new password.",
         );
       } else {
         localStorage.setItem("jwt_token", data.token);
@@ -1118,10 +1122,25 @@ function showDashboard(email, token) {
   loadFolderContents(null);
 }
 
-function checkExistingSession() {
+async function checkExistingSession() {
   const token = localStorage.getItem("jwt_token");
   const email = localStorage.getItem("user_email");
-  if (token && email) {
+  if (!token || !email) return;
+
+  try {
+    const { response } = await fetchWithFallback("/api/folders", {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+    });
+
+    if (response.status === 401 || response.status === 403) {
+      localStorage.removeItem("jwt_token");
+      localStorage.removeItem("user_email");
+      return; //stay on login if the token is expired
+    }
+
+    showDashboard(email, token);
+  } catch {
     showDashboard(email, token);
   }
 }
@@ -1197,6 +1216,11 @@ async function loadFolderContents(folderId) {
       localStorage.removeItem("user_email");
       switchSection(loginSection);
       showAlert("warning", "Session Expired", "Please sign in again.");
+      return;
+    }
+
+    if (response.status === 403) {
+      showAlert("danger", "Access Denied", "You do not have permission to access this resource.");
       return;
     }
 
@@ -1397,6 +1421,13 @@ async function handleRenameFolderSubmit(event) {
       closeRenameForm();
       showAlert("success", "Folder Renamed", `Folder renamed to "${newName}".`);
       await loadFolderContents(currentFolderId);
+    } else if (response.status === 401) {
+      localStorage.removeItem("jwt_token");
+      localStorage.removeItem("user_email");
+      switchSection(loginSection);
+      showAlert("warning", "Session Expired", "Please sign in again.");
+    } else if (response.status === 403) {
+      showAlert("danger", "Access Denied", "You do not have permission to rename this folder.");
     } else {
       renameFolderNameInput.classList.add("is-invalid");
       renameFolderNameError.textContent =
@@ -1458,6 +1489,13 @@ async function handleCreateFolderSubmit(event) {
       newFolderNameInput.value = "";
       showAlert("success", "Folder Created", `Folder "${name}" was created.`);
       await loadFolderContents(currentFolderId);
+    } else if (response.status === 401) {
+      localStorage.removeItem("jwt_token");
+      localStorage.removeItem("user_email");
+      switchSection(loginSection);
+      showAlert("warning", "Session Expired", "Please sign in again.");
+    } else if (response.status === 403) {
+      showAlert("danger", "Access Denied", "You do not have permission to create folders here.");
     } else {
       newFolderNameInput.classList.add("is-invalid");
       newFolderNameError.textContent =
