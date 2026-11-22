@@ -1,203 +1,144 @@
+// Package handler is the transport layer of storage-service.
+//
+// FolderHandler implements storagepb.StorageServiceServer, generated from
+// proto/storage/storage_service.proto. Authentication has already been done
+// by middleware.AuthUnaryInterceptor, which put the caller's user ID in ctx.
+// Errors are gRPC status codes; the api-gateway maps them back to HTTP
+// (InvalidArgument 400, NotFound 404, PermissionDenied 403, AlreadyExists 409,
+// Internal 500).
 package handler
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"net/http"
+	"log"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+	"unicode/utf8"
+
 	"storage-service/domain"
 	"storage-service/middleware"
 	"storage-service/repository"
-	"strings"
-	"time"
+
+	storagepb "stashr/proto/storage"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type FolderHandler struct {
+	storagepb.UnimplementedStorageServiceServer
+
 	repo *repository.FolderRepository
 }
+
+var _ storagepb.StorageServiceServer = (*FolderHandler)(nil)
 
 func NewFolderHandler(repo *repository.FolderRepository) *FolderHandler {
 	return &FolderHandler{repo: repo}
 }
 
-type CreateFolderRequest struct {
-	Name     string  `json:"name"`
-	ParentID *string `json:"parentId"`
-}
+const duplicateNameMsg = "A folder with this name already exists in the current directory"
 
-type RenameFolderRequest struct {
-	Name string `json:"name"`
-}
+// RenameFolder  <-  PATCH|PUT /api/folders/{folder_id}  body {"name": "..."}
+func (h *FolderHandler) RenameFolder(ctx context.Context, req *storagepb.RenameFolderRequest) (*storagepb.FolderResponse, error) {
+	userID := userIDFrom(ctx)
 
-func writeJSON(w http.ResponseWriter, status int, payload interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(payload)
-}
-
-func validateFolderName(name string) error {
-	if name == "" {
-		return errors.New("folder name is required")
-	}
-	if len(name) > 100 {
-		return errors.New("folder name must not exceed 100 characters")
-	}
-	if name == "." || name == ".." || strings.ContainsAny(name, `/\:*?"<>|`) {
-		return errors.New("folder name contains invalid characters")
-	}
-	return nil
-}
-
-// HandleFolders rukuje sa POST /api/folders i GET /api/folders?parentId=...
-func (h *FolderHandler) HandleFolders(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodPost:
-		h.CreateFolder(w, r)
-	case http.MethodGet:
-		parentID := r.URL.Query().Get("parentId")
-		h.BrowseFolder(w, r, parentID)
-	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-	}
-}
-
-// HandleFolderByID rukuje sa GET, PATCH i PUT /api/folders/{id}
-func (h *FolderHandler) HandleFolderByID(w http.ResponseWriter, r *http.Request) {
-	folderID := strings.TrimPrefix(r.URL.Path, "/api/folders/")
-	folderID = strings.TrimSuffix(folderID, "/")
-
-	switch r.Method {
-	case http.MethodGet:
-		h.BrowseFolder(w, r, folderID)
-	case http.MethodPatch, http.MethodPut:
-		h.RenameFolder(w, r, folderID)
-	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-	}
-}
-
-func (h *FolderHandler) RenameFolder(w http.ResponseWriter, r *http.Request, folderID string) {
-	userID, _ := r.Context().Value(middleware.UserIDKey).(string)
-
-	oid, err := primitive.ObjectIDFromHex(folderID)
+	oid, err := primitive.ObjectIDFromHex(strings.TrimSpace(req.GetFolderId()))
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "Invalid folder ID"})
-		return
+		return nil, status.Error(codes.InvalidArgument, "Invalid folder ID")
 	}
 
-	var req RenameFolderRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "Invalid JSON request body"})
-		return
-	}
-
-	cleanName := strings.TrimSpace(req.Name)
+	cleanName := strings.TrimSpace(req.GetName())
 	if err := validateFolderName(cleanName); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"message": err.Error()})
-		return
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	folder, err := h.repo.FindByID(r.Context(), oid)
+	folder, err := h.repo.FindByID(ctx, oid)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
-			writeJSON(w, http.StatusNotFound, map[string]string{"message": "Folder not found"})
-			return
+			return nil, status.Error(codes.NotFound, "Folder not found")
 		}
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "Error loading folder"})
-		return
+		return nil, status.Error(codes.Internal, "Error loading folder")
 	}
 
 	if folder.OwnerID != userID {
-		writeJSON(w, http.StatusForbidden, map[string]string{"message": "You do not have permission to rename this folder"})
-		return
+		return nil, status.Error(codes.PermissionDenied, "You do not have permission to rename this folder")
 	}
 
 	if folder.Name == cleanName {
-		writeJSON(w, http.StatusOK, map[string]interface{}{
-			"message": "Folder renamed successfully",
-			"folder":  folder,
-		})
-		return
+		return &storagepb.FolderResponse{
+			Message: "Folder renamed successfully",
+			Folder:  toProtoFolder(folder),
+		}, nil
 	}
 
-	exists, err := h.repo.ExistsByNameInParent(r.Context(), userID, folder.ParentID, cleanName)
+	exists, err := h.repo.ExistsByNameInParent(ctx, userID, folder.ParentID, cleanName)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "Error checking folder uniqueness"})
-		return
+		return nil, status.Error(codes.Internal, "Error checking folder uniqueness")
 	}
 	if exists {
-		writeJSON(w, http.StatusConflict, map[string]string{"message": "A folder with this name already exists in the current directory"})
-		return
+		return nil, status.Error(codes.AlreadyExists, duplicateNameMsg)
 	}
 
-	updatedFolder, err := h.repo.UpdateName(r.Context(), oid, cleanName)
+	updatedFolder, err := h.repo.UpdateName(ctx, oid, cleanName)
 	if err != nil {
 		if mongo.IsDuplicateKeyError(err) {
-			writeJSON(w, http.StatusConflict, map[string]string{"message": "A folder with this name already exists in the current directory"})
-			return
+			return nil, status.Error(codes.AlreadyExists, duplicateNameMsg)
 		}
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "Failed to rename folder"})
-		return
+		return nil, status.Error(codes.Internal, "Failed to rename folder")
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"message": "Folder renamed successfully",
-		"folder":  updatedFolder,
-	})
+	return &storagepb.FolderResponse{
+		Message: "Folder renamed successfully",
+		Folder:  toProtoFolder(updatedFolder),
+	}, nil
 }
 
-func (h *FolderHandler) CreateFolder(w http.ResponseWriter, r *http.Request) {
-	userID, _ := r.Context().Value(middleware.UserIDKey).(string)
+// CreateFolder  <-  POST /api/folders  body {"name": "...", "parentId": "..."|null}  (HTTP 201)
+func (h *FolderHandler) CreateFolder(ctx context.Context, req *storagepb.CreateFolderRequest) (*storagepb.FolderResponse, error) {
+	userID := userIDFrom(ctx)
 
-	var req CreateFolderRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "Invalid JSON request body"})
-		return
-	}
-
-	cleanName := strings.TrimSpace(req.Name)
+	cleanName := strings.TrimSpace(req.GetName())
 	if err := validateFolderName(cleanName); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"message": err.Error()})
-		return
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
 	var parentObjID *primitive.ObjectID
-	if req.ParentID != nil && strings.TrimSpace(*req.ParentID) != "" {
-		oid, err := primitive.ObjectIDFromHex(strings.TrimSpace(*req.ParentID))
+	if req.ParentId != nil && strings.TrimSpace(req.GetParentId()) != "" {
+		oid, err := primitive.ObjectIDFromHex(strings.TrimSpace(req.GetParentId()))
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"message": "Invalid parent folder ID"})
-			return
+			return nil, status.Error(codes.InvalidArgument, "Invalid parent folder ID")
 		}
 
-		parentFolder, err := h.repo.FindByID(r.Context(), oid)
+		parentFolder, err := h.repo.FindByID(ctx, oid)
 		if err != nil {
 			if errors.Is(err, mongo.ErrNoDocuments) {
-				writeJSON(w, http.StatusNotFound, map[string]string{"message": "Parent folder not found"})
-				return
+				return nil, status.Error(codes.NotFound, "Parent folder not found")
 			}
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "Error verifying parent folder"})
-			return
+			return nil, status.Error(codes.Internal, "Error verifying parent folder")
 		}
 
 		if parentFolder.OwnerID != userID {
-			writeJSON(w, http.StatusForbidden, map[string]string{"message": "You do not have permission to access this parent folder"})
-			return
+			return nil, status.Error(codes.PermissionDenied, "You do not have permission to access this parent folder")
 		}
 
 		parentObjID = &oid
 	}
 
-	exists, err := h.repo.ExistsByNameInParent(r.Context(), userID, parentObjID, cleanName)
+	exists, err := h.repo.ExistsByNameInParent(ctx, userID, parentObjID, cleanName)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "Error checking folder uniqueness"})
-		return
+		return nil, status.Error(codes.Internal, "Error checking folder uniqueness")
 	}
 	if exists {
-		writeJSON(w, http.StatusConflict, map[string]string{"message": "A folder with this name already exists in the current directory"})
-		return
+		return nil, status.Error(codes.AlreadyExists, duplicateNameMsg)
 	}
 
 	folder := &domain.Folder{
@@ -207,23 +148,28 @@ func (h *FolderHandler) CreateFolder(w http.ResponseWriter, r *http.Request) {
 		CreatedAt: time.Now(),
 	}
 
-	if err := h.repo.Create(r.Context(), folder); err != nil {
+	if err := h.repo.Create(ctx, folder); err != nil {
 		if mongo.IsDuplicateKeyError(err) {
-			writeJSON(w, http.StatusConflict, map[string]string{"message": "A folder with this name already exists in the current directory"})
-			return
+			return nil, status.Error(codes.AlreadyExists, duplicateNameMsg)
 		}
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "Failed to create folder"})
-		return
+		return nil, status.Error(codes.Internal, "Failed to create folder")
 	}
 
-	writeJSON(w, http.StatusCreated, map[string]interface{}{
-		"message": "Folder created successfully",
-		"folder":  folder,
-	})
+	setHTTPStatus(ctx, 201)
+	return &storagepb.FolderResponse{
+		Message: "Folder created successfully",
+		Folder:  toProtoFolder(folder),
+	}, nil
 }
 
-func (h *FolderHandler) BrowseFolder(w http.ResponseWriter, r *http.Request, folderID string) {
-	userID, _ := r.Context().Value(middleware.UserIDKey).(string)
+// BrowseFolder  <-  GET /api/folders/{folder_id}  or  GET /api/folders[?parentId=...]
+func (h *FolderHandler) BrowseFolder(ctx context.Context, req *storagepb.BrowseFolderRequest) (*storagepb.FolderContentResponse, error) {
+	userID := userIDFrom(ctx)
+
+	folderID := strings.TrimSpace(req.GetFolderId())
+	if folderID == "" {
+		folderID = strings.TrimSpace(req.GetParentId())
+	}
 
 	var currentFolder *domain.Folder
 	var parentObjID *primitive.ObjectID
@@ -232,50 +178,52 @@ func (h *FolderHandler) BrowseFolder(w http.ResponseWriter, r *http.Request, fol
 	if folderID != "" {
 		oid, err := primitive.ObjectIDFromHex(folderID)
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"message": "Invalid folder ID"})
-			return
+			return nil, status.Error(codes.InvalidArgument, "Invalid folder ID")
 		}
 
-		folder, err := h.repo.FindByID(r.Context(), oid)
+		folder, err := h.repo.FindByID(ctx, oid)
 		if err != nil {
 			if errors.Is(err, mongo.ErrNoDocuments) {
-				writeJSON(w, http.StatusNotFound, map[string]string{"message": "Folder not found"})
-				return
+				return nil, status.Error(codes.NotFound, "Folder not found")
 			}
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "Error loading folder"})
-			return
+			return nil, status.Error(codes.Internal, "Error loading folder")
 		}
 
 		if folder.OwnerID != userID {
-			writeJSON(w, http.StatusForbidden, map[string]string{"message": "Access denied to this folder"})
-			return
+			return nil, status.Error(codes.PermissionDenied, "Access denied to this folder")
 		}
 
 		currentFolder = folder
 		parentObjID = &oid
 
-		crumbs, err := h.buildBreadcrumbs(r.Context(), folder, userID)
+		crumbs, err := h.buildBreadcrumbs(ctx, folder, userID)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "Error building folder hierarchy path"})
-			return
+			return nil, status.Error(codes.Internal, "Error building folder hierarchy path")
 		}
 		breadcrumbs = crumbs
 	}
 
-	subfolders, err := h.repo.FindChildren(r.Context(), userID, parentObjID)
+	subfolders, err := h.repo.FindChildren(ctx, userID, parentObjID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "Error retrieving folder contents"})
-		return
+		return nil, status.Error(codes.Internal, "Error retrieving folder contents")
 	}
 
-	resp := domain.FolderContentResponse{
-		CurrentFolder: currentFolder,
-		Breadcrumbs:   breadcrumbs,
-		Folders:       subfolders,
-		Files:         make([]domain.FileItem, 0),
+	resp := &storagepb.FolderContentResponse{
+		Breadcrumbs: make([]*storagepb.BreadcrumbItem, 0, len(breadcrumbs)),
+		Folders:     make([]*storagepb.Folder, 0, len(subfolders)),
+		Files:       make([]*storagepb.FileItem, 0),
+	}
+	if currentFolder != nil {
+		resp.CurrentFolder = toProtoFolder(currentFolder)
+	}
+	for _, c := range breadcrumbs {
+		resp.Breadcrumbs = append(resp.Breadcrumbs, &storagepb.BreadcrumbItem{Id: c.ID, Name: c.Name})
+	}
+	for i := range subfolders {
+		resp.Folders = append(resp.Folders, toProtoFolder(&subfolders[i]))
 	}
 
-	writeJSON(w, http.StatusOK, resp)
+	return resp, nil
 }
 
 func (h *FolderHandler) buildBreadcrumbs(ctx context.Context, current *domain.Folder, ownerID string) ([]domain.BreadcrumbItem, error) {
@@ -319,3 +267,53 @@ func (h *FolderHandler) buildBreadcrumbs(ctx context.Context, current *domain.Fo
 	}
 	return breadcrumbs, nil
 }
+
+// #region helperi
+
+const maxFolderNameLen = 100
+
+// letters, digits, space and . _ - ( ); everything else is rejected
+var folderNameRegex = regexp.MustCompile(`^[\p{L}\p{N} ._()\-]+$`)
+
+func validateFolderName(name string) error {
+	if name == "" {
+		return errors.New("folder name is required")
+	}
+	if utf8.RuneCountInString(name) > maxFolderNameLen {
+		return errors.New("folder name must not exceed 100 characters")
+	}
+	if !folderNameRegex.MatchString(name) || strings.Trim(name, ". ") == "" {
+		return errors.New("folder name contains invalid characters")
+	}
+	return nil
+}
+
+// toProtoFolder maps the MongoDB model to the protobuf message.
+func toProtoFolder(f *domain.Folder) *storagepb.Folder {
+	pf := &storagepb.Folder{
+		Id:        f.ID.Hex(),
+		Name:      f.Name,
+		OwnerId:   f.OwnerID,
+		CreatedAt: timestamppb.New(f.CreatedAt),
+	}
+	if f.ParentID != nil {
+		parent := f.ParentID.Hex()
+		pf.ParentId = &parent
+	}
+	return pf
+}
+
+func userIDFrom(ctx context.Context) string {
+	userID, _ := ctx.Value(middleware.UserIDKey).(string)
+	return userID
+}
+
+// setHTTPStatus sends response-header metadata "x-http-code" that the
+// api-gateway turns into the HTTP status code (e.g. 201 Created).
+func setHTTPStatus(ctx context.Context, code int) {
+	if err := grpc.SetHeader(ctx, metadata.Pairs("x-http-code", strconv.Itoa(code))); err != nil {
+		log.Printf("failed to set x-http-code header: %v", err)
+	}
+}
+
+// #endregion

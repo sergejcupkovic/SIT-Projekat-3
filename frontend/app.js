@@ -135,12 +135,13 @@ function getCandidateEndpoints(path) {
   }
 
   const hostname = window.location.hostname || "localhost";
+  // Fallback: call the API gateway directly over HTTPS.
   if (hostname === "127.0.0.1") {
-    endpoints.push(`http://127.0.0.1:8080${path}`);
-    endpoints.push(`http://localhost:8080${path}`);
+    endpoints.push(`https://127.0.0.1:8443${path}`);
+    endpoints.push(`https://localhost:8443${path}`);
   } else {
-    endpoints.push(`http://localhost:8080${path}`);
-    endpoints.push(`http://127.0.0.1:8080${path}`);
+    endpoints.push(`https://localhost:8443${path}`);
+    endpoints.push(`https://127.0.0.1:8443${path}`);
   }
 
   return [...new Set(endpoints)];
@@ -153,6 +154,10 @@ async function fetchWithFallback(path, options) {
   for (const url of endpoints) {
     try {
       const response = await fetch(url, options);
+      if (response.status === 429) {
+        showAlert("warning", "Too Many Requests", "You are sending requests too fast. Please slow down and try again.");
+        return { response, url };
+      }
       if (response.status === 404 && url === path && endpoints.length > 1) {
         continue;
       }
@@ -165,12 +170,14 @@ async function fetchWithFallback(path, options) {
   throw lastError;
 }
 
-function init() {
+async function init() {
+  await session.load();
+
   firstNameInput.addEventListener("input", () =>
-    validateField(firstNameInput, firstNameError, "First name is required"),
+    validateNameField(firstNameInput, firstNameError, "First name"),
   );
   lastNameInput.addEventListener("input", () =>
-    validateField(lastNameInput, lastNameError, "Last name is required"),
+    validateNameField(lastNameInput, lastNameError, "Last name"),
   );
   emailInput.addEventListener("input", handleEmailInput);
   passwordInput.addEventListener("input", handlePasswordInput);
@@ -208,6 +215,9 @@ function init() {
       handleForceChangePasswordSubmit,
     );
   }
+  otpCodeInput.addEventListener("input", () => {
+    otpCodeInput.value = otpCodeInput.value.replace(/\D/g, "");
+  });
   otpForm.addEventListener("submit", handleOtpSubmit);
   resendOtpBtn.addEventListener("click", handleResendOtp);
   backToLoginBtn.addEventListener("click", () => switchSection(loginSection));
@@ -246,20 +256,21 @@ function validateField(inputEl, errorEl, message) {
   return true;
 }
 
+function validateNameField(inputEl, errorEl, label) {
+  const problem = Validation.name(inputEl.value.trim(), label);
+  inputEl.classList.toggle("is-invalid", Boolean(problem));
+  inputEl.classList.toggle("is-valid", !problem);
+  errorEl.textContent = problem;
+  return !problem;
+}
+
 function handleEmailInput() {
   const email = emailInput.value.trim();
-  if (!email) {
+  const problem = Validation.email(email, EMAIL_REGEX);
+  if (problem) {
     emailInput.classList.add("is-invalid");
     emailInput.classList.remove("is-valid");
-    emailError.textContent = "Email address is required";
-    return false;
-  }
-
-  if (!EMAIL_REGEX.test(email)) {
-    emailInput.classList.add("is-invalid");
-    emailInput.classList.remove("is-valid");
-    emailError.textContent =
-      "Please enter a valid email address (e.g., user@example.com)";
+    emailError.textContent = problem;
     return false;
   }
 
@@ -394,14 +405,12 @@ function validateFullForm() {
   let isValid = true;
   let firstInvalidEl = null;
 
-  if (
-    !validateField(firstNameInput, firstNameError, "First name is required")
-  ) {
+  if (!validateNameField(firstNameInput, firstNameError, "First name")) {
     isValid = false;
     if (!firstInvalidEl) firstInvalidEl = firstNameInput;
   }
 
-  if (!validateField(lastNameInput, lastNameError, "Last name is required")) {
+  if (!validateNameField(lastNameInput, lastNameError, "Last name")) {
     isValid = false;
     if (!firstInvalidEl) firstInvalidEl = lastNameInput;
   }
@@ -415,9 +424,9 @@ function validateFullForm() {
   const rules = checkPasswordRules(password);
   const isPasswordValid = Object.values(rules).every(Boolean);
 
-  if (!password) {
+  if (Validation.password(password)) {
     passwordInput.classList.add("is-invalid");
-    passwordError.textContent = "Password is required";
+    passwordError.textContent = Validation.password(password);
     isValid = false;
     if (!firstInvalidEl) firstInvalidEl = passwordInput;
   } else if (!isPasswordValid) {
@@ -591,7 +600,7 @@ async function checkVerificationTokenInUrl() {
 async function handleMagicLinkRequest() {
   hideAlert();
   const email = loginEmailInput.value.trim();
-  if (!email || !EMAIL_REGEX.test(email)) {
+  if (Validation.email(email, EMAIL_REGEX)) {
     loginEmailInput.classList.add("is-invalid");
     loginEmailError.textContent = "Please enter your email above first";
     return;
@@ -677,11 +686,14 @@ async function checkMagicLinkTokenInUrl() {
           "warning",
           "Password Update Required",
           data.message ||
-            "Your ban period has expired. Please choose a new password.",
+          "Your ban period has expired. Please choose a new password.",
         );
       } else {
-        localStorage.setItem("jwt_token", data.token);
-        localStorage.setItem("user_email", data.user?.email || "user");
+        await session.start({
+          token: data.token,
+          email: data.user?.email || "user",
+          role: data.user?.role,
+        });
         showDashboard(data.user?.email || "user", data.token);
         showAlert(
           "success",
@@ -802,7 +814,7 @@ function switchTab(tab) {
   if (tab === "login") {
     tabLogin.classList.add("active");
     tabRegister.classList.remove("active");
-    if (localStorage.getItem("jwt_token")) {
+    if (session.token) {
       switchSection(dashboardSection);
     } else {
       switchSection(loginSection);
@@ -814,7 +826,14 @@ function switchTab(tab) {
   }
 }
 
+function canOpenDashboard() {
+  return Boolean(session.token) && session.role === "RK";
+}
+
 function switchSection(sectionToDisplay) {
+  if (sectionToDisplay === dashboardSection && !canOpenDashboard()) {
+    sectionToDisplay = loginSection;
+  }
   [
     loginSection,
     otpSection,
@@ -838,14 +857,16 @@ async function handleLoginSubmit(event) {
   const email = loginEmailInput.value.trim();
   const password = loginPasswordInput.value;
 
-  if (!email || !EMAIL_REGEX.test(email)) {
+  const emailProblem = Validation.email(email, EMAIL_REGEX);
+  if (emailProblem) {
     loginEmailInput.classList.add("is-invalid");
-    loginEmailError.textContent = "Please enter a valid email address";
+    loginEmailError.textContent = emailProblem;
     return;
   }
-  if (!password) {
+  const passwordProblem = Validation.password(password);
+  if (passwordProblem) {
     loginPasswordInput.classList.add("is-invalid");
-    loginPasswordError.textContent = "Password is required";
+    loginPasswordError.textContent = passwordProblem;
     return;
   }
 
@@ -877,7 +898,7 @@ async function handleLoginSubmit(event) {
           "warning",
           "Password Expired",
           data.message ||
-            "Your ban period has expired. Please choose a new password.",
+          "Your ban period has expired. Please choose a new password.",
         );
         return;
       }
@@ -921,9 +942,10 @@ async function handleOtpSubmit(event) {
   hideAlert();
 
   const otp = otpCodeInput.value.trim();
-  if (!otp || otp.length !== 6) {
+  const otpProblem = Validation.otp(otp);
+  if (otpProblem) {
     otpCodeInput.classList.add("is-invalid");
-    otpCodeError.textContent = "Please enter a 6-digit code";
+    otpCodeError.textContent = otpProblem;
     return;
   }
 
@@ -958,11 +980,14 @@ async function handleOtpSubmit(event) {
           "warning",
           "Password Update Required",
           data.message ||
-            "Your ban period has expired. Please choose a new password.",
+          "Your ban period has expired. Please choose a new password.",
         );
       } else {
-        localStorage.setItem("jwt_token", data.token);
-        localStorage.setItem("user_email", activeLoginEmail);
+        await session.start({
+          token: data.token,
+          email: activeLoginEmail,
+          role: data.user?.role,
+        });
         showDashboard(activeLoginEmail, data.token);
         showAlert("success", "Authenticated!", "2FA verification successful.");
       }
@@ -1015,8 +1040,7 @@ async function handleLogout() {
   } catch (err) {
     console.warn("Logout API warning:", err);
   } finally {
-    localStorage.removeItem("jwt_token");
-    localStorage.removeItem("user_email");
+    session.end();
     currentFolderId = null;
     currentBreadcrumbs = [];
     activeLoginPassword = "";
@@ -1038,9 +1062,10 @@ async function handleForceChangePasswordSubmit(event) {
   const newPassword = forceNewPasswordInput.value;
   const confirmPassword = forceConfirmPasswordInput.value;
 
-  if (!newPassword) {
+  const newPasswordProblem = Validation.password(newPassword);
+  if (newPasswordProblem) {
     forceNewPasswordInput.classList.add("is-invalid");
-    forceNewPasswordError.textContent = "New password is required";
+    forceNewPasswordError.textContent = newPasswordProblem;
     return;
   }
   forceNewPasswordInput.classList.remove("is-invalid");
@@ -1111,16 +1136,40 @@ async function handleForceChangePasswordSubmit(event) {
 
 function showDashboard(email, token) {
   activeLoginPassword = "";
+  if (!canOpenDashboard()) {
+    session.end();
+    switchSection(loginSection);
+    showAlert(
+      "danger",
+      "Access Denied",
+      "This account does not have access to file storage.",
+    );
+    return;
+  }
   userEmailDisplay.textContent = email;
   jwtTokenDisplay.value = token;
   switchSection(dashboardSection);
   loadFolderContents(null);
 }
 
-function checkExistingSession() {
-  const token = localStorage.getItem("jwt_token");
-  const email = localStorage.getItem("user_email");
-  if (token && email) {
+async function checkExistingSession() {
+  const token = session.token;
+  const email = session.email;
+  if (!token || !email) return;
+
+  try {
+    const { response } = await fetchWithFallback("/api/folders", {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+    });
+
+    if (response.status === 401 || response.status === 403) {
+      session.end();
+      return; //stay on login if the token is expired
+    }
+
+    showDashboard(email, token);
+  } catch {
     showDashboard(email, token);
   }
 }
@@ -1159,7 +1208,7 @@ if (navigateUpBtn) {
 }
 
 async function loadFolderContents(folderId) {
-  const token = localStorage.getItem("jwt_token");
+  const token = session.token;
   if (!token) {
     switchSection(loginSection);
     return;
@@ -1192,10 +1241,14 @@ async function loadFolderContents(folderId) {
     }
 
     if (response.status === 401) {
-      localStorage.removeItem("jwt_token");
-      localStorage.removeItem("user_email");
+      session.end();
       switchSection(loginSection);
       showAlert("warning", "Session Expired", "Please sign in again.");
+      return;
+    }
+
+    if (response.status === 403) {
+      showAlert("danger", "Access Denied", "You do not have permission to access this resource.");
       return;
     }
 
@@ -1308,7 +1361,7 @@ function renderFolderItems(folders, files) {
         <span class="item-name"></span>
       </div>
       <div class="item-right">
-        <span class="item-meta">Folder • ${createdDate}</span>
+        <span class="item-meta">Folder • ${Validation.escapeHtml(createdDate)}</span>
         <button type="button" class="btn-rename-sm" title="Rename folder">Rename</button>
       </div>
     `;
@@ -1340,7 +1393,7 @@ function renderFolderItems(folders, files) {
         </svg>
         <span class="item-name"></span>
       </div>
-      <span class="item-meta">${sizeKB} KB</span>
+      <span class="item-meta">${Validation.escapeHtml(sizeKB)} KB</span>
     `;
     row.querySelector(".item-name").textContent = file.name;
     folderItemsList.appendChild(row);
@@ -1354,15 +1407,16 @@ async function handleRenameFolderSubmit(event) {
   if (!renameFolderTarget) return;
 
   const newName = renameFolderNameInput.value.trim();
-  if (!newName) {
+  const renameProblem = Validation.folderName(newName);
+  if (renameProblem) {
     renameFolderNameInput.classList.add("is-invalid");
-    renameFolderNameError.textContent = "Folder name is required";
+    renameFolderNameError.textContent = renameProblem;
     return;
   }
   renameFolderNameInput.classList.remove("is-invalid");
   renameFolderNameError.textContent = "";
 
-  const token = localStorage.getItem("jwt_token");
+  const token = session.token;
   if (!token) {
     switchSection(loginSection);
     return;
@@ -1396,6 +1450,12 @@ async function handleRenameFolderSubmit(event) {
       closeRenameForm();
       showAlert("success", "Folder Renamed", `Folder renamed to "${newName}".`);
       await loadFolderContents(currentFolderId);
+    } else if (response.status === 401) {
+      session.end();
+      switchSection(loginSection);
+      showAlert("warning", "Session Expired", "Please sign in again.");
+    } else if (response.status === 403) {
+      showAlert("danger", "Access Denied", "You do not have permission to rename this folder.");
     } else {
       renameFolderNameInput.classList.add("is-invalid");
       renameFolderNameError.textContent =
@@ -1414,15 +1474,16 @@ async function handleCreateFolderSubmit(event) {
   hideAlert();
 
   const name = newFolderNameInput.value.trim();
-  if (!name) {
+  const nameProblem = Validation.folderName(name);
+  if (nameProblem) {
     newFolderNameInput.classList.add("is-invalid");
-    newFolderNameError.textContent = "Folder name is required";
+    newFolderNameError.textContent = nameProblem;
     return;
   }
   newFolderNameInput.classList.remove("is-invalid");
   newFolderNameError.textContent = "";
 
-  const token = localStorage.getItem("jwt_token");
+  const token = session.token;
   if (!token) {
     switchSection(loginSection);
     return;
@@ -1457,6 +1518,12 @@ async function handleCreateFolderSubmit(event) {
       newFolderNameInput.value = "";
       showAlert("success", "Folder Created", `Folder "${name}" was created.`);
       await loadFolderContents(currentFolderId);
+    } else if (response.status === 401) {
+      session.end();
+      switchSection(loginSection);
+      showAlert("warning", "Session Expired", "Please sign in again.");
+    } else if (response.status === 403) {
+      showAlert("danger", "Access Denied", "You do not have permission to create folders here.");
     } else {
       newFolderNameInput.classList.add("is-invalid");
       newFolderNameError.textContent =
