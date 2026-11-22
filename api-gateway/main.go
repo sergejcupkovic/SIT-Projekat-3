@@ -62,6 +62,9 @@ func main() {
 	mux.HandleFunc("/api/folders/", func(w http.ResponseWriter, r *http.Request) {
 		storageProxy.ServeHTTP(w, r)
 	})
+	mux.HandleFunc("/api/files/", func(w http.ResponseWriter, r *http.Request) {
+		storageProxy.ServeHTTP(w, r)
+	})
 
 	port := os.Getenv("GATEWAY_PORT")
 	if port == "" {

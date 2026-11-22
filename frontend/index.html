@@ -290,8 +290,8 @@
                 <div class="user-avatar-badge">RK</div>
                 <div>
                   <div class="storage-user-email" id="userEmailDisplay"></div>
-                  <div class="storage-quota-text">
-                    100 MB Secure Cloud Storage
+                  <div class="storage-quota-text" id="quotaUsageText">
+                    0 MB / 100 MB used
                   </div>
                 </div>
               </div>
@@ -352,13 +352,23 @@
               <h2 class="current-folder-heading" id="currentFolderTitle">
                 My Drive
               </h2>
-              <button
-                type="button"
-                id="openCreateFolderBtn"
-                class="btn-primary-sm"
-              >
-                + New Folder
-              </button>
+              <div class="toolbar-actions">
+                <input type="file" id="fileUploadInput" class="hidden" />
+                <button type="button" id="uploadFileBtn" class="btn-outline-sm">
+                  <span class="btn-text">↑ Upload File</span>
+                  <span
+                    class="btn-spinner hidden"
+                    id="uploadFileSpinner"
+                  ></span>
+                </button>
+                <button
+                  type="button"
+                  id="openCreateFolderBtn"
+                  class="btn-primary-sm"
+                >
+                  + New Folder
+                </button>
+              </div>
             </div>
 
             <!-- Inline Create Folder Form -->

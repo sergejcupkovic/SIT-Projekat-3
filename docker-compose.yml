@@ -19,6 +19,23 @@ services:
       - "${MAILPIT_UI_PORT}:${MAILPIT_UI_PORT}"
       - "${SMTP_PORT}:${SMTP_PORT}"
 
+  minio:
+    image: chrislusf/seaweedfs:latest
+    container_name: stashr_minio
+    command:
+      [
+        "server",
+        "-dir=/data",
+        "-s3",
+        "-s3.port=9000",
+        "-s3.config=/etc/seaweedfs/s3.json",
+      ]
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:8888"
+    volumes:
+      - minio_data:/data
+      - ./s3.json:/etc/seaweedfs/s3.json:ro
   users-service:
     build: ./users-service
     container_name: users_service
@@ -37,6 +54,7 @@ services:
   storage-service:
     build: ./storage-service
     container_name: storage_service
+    restart: on-failure
     ports:
       - "${STORAGE_SERVICE_PORT:-8082}:${STORAGE_SERVICE_PORT:-8082}"
     env_file: .env
@@ -44,8 +62,16 @@ services:
       PORT: ${STORAGE_SERVICE_PORT:-8082}
       MONGO_URI: mongodb://mongodb:${MONGO_PORT}
       MONGO_DB_NAME: storage_db
+      USERS_SERVICE_URL: http://users-service:${USERS_SERVICE_PORT}
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+      MINIO_BUCKET: ${MINIO_BUCKET:-stashr-files}
+      MINIO_USE_SSL: "false"
     depends_on:
       - mongodb
+      - minio
+      - users-service
 
   api-gateway:
     build: ./api-gateway
@@ -55,8 +81,10 @@ services:
     env_file: .env
     environment:
       USERS_SERVICE_URL: http://users-service:${USERS_SERVICE_PORT}
+      STORAGE_SERVICE_URL: http://storage-service:${STORAGE_SERVICE_PORT:-8082}
     depends_on:
       - users-service
+      - storage-service
 
   frontend:
     build: ./frontend
@@ -68,3 +96,4 @@ services:
 
 volumes:
   mongo_data:
+  minio_data:

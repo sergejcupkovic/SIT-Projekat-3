@@ -8,6 +8,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // za interaction sa mongodb
@@ -246,6 +247,56 @@ func (r *UserRepository) ClearMagicLinkToken(ctx context.Context, email string) 
 	filter := bson.M{"email": email}
 	update := bson.M{
 		"$unset": bson.M{"magicLinkTokenHash": "", "magicLinkTokenExpires": ""},
+	}
+	_, err := r.collection.UpdateOne(ctx, filter, update)
+	return err
+}
+
+
+
+// #endregion
+// #region Storage Quota
+func (r *UserRepository) FindByID(ctx context.Context, id primitive.ObjectID) (*domain.User, error) {
+	var user domain.User
+	err := r.collection.FindOne(ctx, bson.M{"_id": id}).Decode(&user)
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+// ReserveStorageQuota atomski proverava da li korisnik ima dovoljno slobodnog prostora i rezerviše ga.
+func (r *UserRepository) ReserveStorageQuota(ctx context.Context, userID primitive.ObjectID, sizeBytes int64) (*domain.User, bool, error) {
+	filter := bson.M{
+		"_id": userID,
+		"$expr": bson.M{
+			"$lte": bson.A{
+				bson.M{"$add": bson.A{"$usedStorageBytes", sizeBytes}},
+				"$storageQuotaBytes",
+			},
+		},
+	}
+	update := bson.M{
+		"$inc": bson.M{"usedStorageBytes": sizeBytes},
+	}
+	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
+
+	var updated domain.User
+	err := r.collection.FindOneAndUpdate(ctx, filter, update, opts).Decode(&updated)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	return &updated, true, nil
+}
+
+// ReleaseStorageQuota vraća rezervisani prostor u slučaju neuspelog upisa fajla.
+func (r *UserRepository) ReleaseStorageQuota(ctx context.Context, userID primitive.ObjectID, sizeBytes int64) error {
+	filter := bson.M{"_id": userID}
+	update := bson.M{
+		"$inc": bson.M{"usedStorageBytes": -sizeBytes},
 	}
 	_, err := r.collection.UpdateOne(ctx, filter, update)
 	return err

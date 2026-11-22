@@ -8,6 +8,7 @@ import (
 	"storage-service/handler"
 	"storage-service/middleware"
 	"storage-service/repository"
+	"storage-service/service"
 	"time"
 
 	"go.mongodb.org/mongo-driver/mongo"
@@ -30,6 +31,29 @@ func main() {
 		log.Fatal("JWT_SECRET environment variable is required")
 	}
 
+	usersServiceURL := os.Getenv("USERS_SERVICE_URL")
+	if usersServiceURL == "" {
+		usersServiceURL = "http://users-service:8081"
+	}
+
+	minioEndpoint := os.Getenv("MINIO_ENDPOINT")
+	if minioEndpoint == "" {
+		minioEndpoint = "minio:9000"
+	}
+	minioAccessKey := os.Getenv("MINIO_ACCESS_KEY")
+	if minioAccessKey == "" {
+		minioAccessKey = "minioadmin"
+	}
+	minioSecretKey := os.Getenv("MINIO_SECRET_KEY")
+	if minioSecretKey == "" {
+		minioSecretKey = "minioadmin123"
+	}
+	minioBucket := os.Getenv("MINIO_BUCKET")
+	if minioBucket == "" {
+		minioBucket = "stashr-files"
+	}
+	minioUseSSL := os.Getenv("MINIO_USE_SSL") == "true"
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -46,14 +70,26 @@ func main() {
 	}
 	log.Println("Storage service connected to MongoDB")
 
+	objectStore, err := service.NewObjectStore(minioEndpoint, minioAccessKey, minioSecretKey, minioBucket, minioUseSSL)
+	if err != nil {
+		log.Fatalf("Failed to initialize Object Store (MinIO): %v", err)
+	}
+	log.Printf("Storage service connected to MinIO bucket: %s", minioBucket)
+
 	db := client.Database(dbName)
 	folderRepo := repository.NewFolderRepository(db)
-	folderHandler := handler.NewFolderHandler(folderRepo)
+	fileRepo := repository.NewFileRepository(db)
+	quotaClient := service.NewQuotaClient(usersServiceURL)
+
+	folderHandler := handler.NewFolderHandler(folderRepo, fileRepo)
+	fileHandler := handler.NewFileHandler(fileRepo, folderRepo, objectStore, quotaClient)
 
 	secretBytes := []byte(jwtSecret)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/folders", middleware.AuthMiddleware(secretBytes, folderHandler.HandleFolders))
 	mux.HandleFunc("/api/folders/", middleware.AuthMiddleware(secretBytes, folderHandler.HandleFolderByID))
+	mux.HandleFunc("/api/files/upload", middleware.AuthMiddleware(secretBytes, fileHandler.UploadFile))
+	mux.HandleFunc("/api/files/quota", middleware.AuthMiddleware(secretBytes, fileHandler.GetMyQuota))
 
 	port := os.Getenv("PORT")
 	if port == "" {

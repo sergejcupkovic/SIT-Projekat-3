@@ -12,6 +12,7 @@ import (
 	"users-service/service"
 
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 const maxBodyBytes = 64 << 10
@@ -94,6 +95,39 @@ func (h *UserHandler) getResetPassword(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"message": "Reset link is valid. Submit a new password.",
+	})
+}
+
+// GET /api/users/quota?userId=...
+func (h *UserHandler) GetQuota(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userIDStr := strings.TrimSpace(r.URL.Query().Get("userId"))
+	oid, err := primitive.ObjectIDFromHex(userIDStr)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"message": "Invalid userId"})
+		return
+	}
+
+	user, err := h.repo.FindByID(r.Context(), oid)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]any{"message": "User not found"})
+		return
+	}
+
+	remaining := user.StorageQuotaBytes - user.UsedStorageBytes
+	if remaining < 0 {
+		remaining = 0
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"userId":            user.ID.Hex(),
+		"storageQuotaBytes": user.StorageQuotaBytes,
+		"usedStorageBytes":  user.UsedStorageBytes,
+		"remainingBytes":    remaining,
 	})
 }
 
@@ -704,6 +738,96 @@ func (h *UserHandler) GetMagicLinkLogin(w http.ResponseWriter, r *http.Request) 
 			"role":  user.Role,
 		},
 	})
+}
+
+// POST /api/users/quota/reserve
+func (h *UserHandler) ReserveQuota(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		UserID    string `json:"userId"`
+		SizeBytes int64  `json:"sizeBytes"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+
+	if req.SizeBytes < 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"message": "Invalid file size"})
+		return
+	}
+
+	oid, err := primitive.ObjectIDFromHex(strings.TrimSpace(req.UserID))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"message": "Invalid userId"})
+		return
+	}
+
+	user, err := h.repo.FindByID(r.Context(), oid)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]any{"message": "User not found"})
+		return
+	}
+
+	updated, allowed, err := h.repo.ReserveStorageQuota(r.Context(), oid, req.SizeBytes)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"message": "Error checking storage quota"})
+		return
+	}
+
+	if !allowed {
+		remaining := user.StorageQuotaBytes - user.UsedStorageBytes
+		if remaining < 0 {
+			remaining = 0
+		}
+		writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{
+			"allowed":           false,
+			"message":           "Storage quota exceeded. Not enough free space for this file.",
+			"storageQuotaBytes": user.StorageQuotaBytes,
+			"usedStorageBytes":  user.UsedStorageBytes,
+			"remainingBytes":    remaining,
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"allowed":           true,
+		"message":           "Quota space reserved",
+		"storageQuotaBytes": updated.StorageQuotaBytes,
+		"usedStorageBytes":  updated.UsedStorageBytes,
+		"remainingBytes":    updated.StorageQuotaBytes - updated.UsedStorageBytes,
+	})
+}
+
+// POST /api/users/quota/release
+func (h *UserHandler) ReleaseQuota(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		UserID    string `json:"userId"`
+		SizeBytes int64  `json:"sizeBytes"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+
+	oid, err := primitive.ObjectIDFromHex(strings.TrimSpace(req.UserID))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"message": "Invalid userId"})
+		return
+	}
+
+	if req.SizeBytes > 0 {
+		_ = h.repo.ReleaseStorageQuota(r.Context(), oid, req.SizeBytes)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"message": "Quota released"})
 }
 
 // #endregion

@@ -68,6 +68,10 @@ const newFolderNameError = document.getElementById("newFolderNameError");
 const folderLoadingState = document.getElementById("folderLoadingState");
 const folderEmptyState = document.getElementById("folderEmptyState");
 const folderItemsList = document.getElementById("folderItemsList");
+const quotaUsageText = document.getElementById("quotaUsageText");
+const fileUploadInput = document.getElementById("fileUploadInput");
+const uploadFileBtn = document.getElementById("uploadFileBtn");
+const uploadFileSpinner = document.getElementById("uploadFileSpinner");
 
 let currentFolderId = null;
 let currentBreadcrumbs = [];
@@ -1114,6 +1118,7 @@ function showDashboard(email, token) {
   userEmailDisplay.textContent = email;
   jwtTokenDisplay.value = token;
   switchSection(dashboardSection);
+  loadUserQuota();
   loadFolderContents(null);
 }
 
@@ -1156,6 +1161,15 @@ if (navigateUpBtn) {
       loadFolderContents(parentCrumb.id);
     }
   });
+}
+
+if (uploadFileBtn && fileUploadInput) {
+  uploadFileBtn.addEventListener("click", () => {
+    hideAlert();
+    fileUploadInput.value = "";
+    fileUploadInput.click();
+  });
+  fileUploadInput.addEventListener("change", handleFileUploadChange);
 }
 
 async function loadFolderContents(folderId) {
@@ -1467,5 +1481,113 @@ async function handleCreateFolderSubmit(event) {
   } finally {
     createFolderSubmitBtn.disabled = false;
     createFolderSpinner.classList.add("hidden");
+  }
+}
+function formatBytes(bytes) {
+  if (!bytes || bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const idx = Math.min(
+    Math.floor(Math.log(bytes) / Math.log(1024)),
+    units.length - 1,
+  );
+  const value = bytes / Math.pow(1024, idx);
+  return `${idx === 0 ? value : value.toFixed(2)} ${units[idx]}`;
+}
+
+function updateQuotaDisplay(usedBytes, totalBytes) {
+  if (!quotaUsageText) return;
+  const total = totalBytes || 104857600;
+  const used = usedBytes || 0;
+  quotaUsageText.textContent = `${formatBytes(used)} / ${formatBytes(total)} used`;
+}
+
+async function loadUserQuota() {
+  const token = localStorage.getItem("jwt_token");
+  if (!token) return;
+
+  try {
+    const { response } = await fetchWithFallback("/api/files/quota", {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+    });
+    if (response.ok) {
+      const data = await response.json();
+      updateQuotaDisplay(data.usedStorageBytes, data.storageQuotaBytes);
+    }
+  } catch (err) {
+    console.warn("Could not load quota:", err);
+  }
+}
+
+async function handleFileUploadChange(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+
+  const token = localStorage.getItem("jwt_token");
+  if (!token) {
+    switchSection(loginSection);
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("file", file);
+  if (currentFolderId) {
+    formData.append("folderId", currentFolderId);
+  }
+
+  uploadFileBtn.disabled = true;
+  uploadFileSpinner.classList.remove("hidden");
+
+  try {
+    const { response } = await fetchWithFallback("/api/files/upload", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    const text = await response.text();
+    let data = {};
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { message: text.trim() };
+    }
+
+    if (response.status === 201) {
+      updateQuotaDisplay(data.usedStorageBytes, data.storageQuotaBytes);
+      showAlert(
+        "success",
+        "File Uploaded",
+        `"${file.name}" (${formatBytes(file.size)}) uploaded successfully.`,
+      );
+      await loadFolderContents(currentFolderId);
+    } else if (response.status === 413) {
+      if (data.storageQuotaBytes !== undefined) {
+        updateQuotaDisplay(data.usedStorageBytes, data.storageQuotaBytes);
+      }
+      showAlert(
+        "danger",
+        "Storage Quota Exceeded",
+        data.message ||
+          "Upload aborted: you do not have enough free storage space.",
+      );
+    } else {
+      showAlert(
+        "danger",
+        "Upload Failed",
+        data.message || "Could not upload file.",
+      );
+    }
+  } catch (err) {
+    showAlert("danger", "Connection Error", "Could not reach Storage Service.");
+  } finally {
+    uploadFileBtn.disabled = false;
+    uploadFileSpinner.classList.add("hidden");
+    fileUploadInput.value = "";
   }
 }

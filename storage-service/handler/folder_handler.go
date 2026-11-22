@@ -17,10 +17,11 @@ import (
 
 type FolderHandler struct {
 	repo *repository.FolderRepository
+	fileRepo *repository.FileRepository
 }
 
-func NewFolderHandler(repo *repository.FolderRepository) *FolderHandler {
-	return &FolderHandler{repo: repo}
+func NewFolderHandler(repo *repository.FolderRepository, fileRepo *repository.FileRepository) *FolderHandler {
+	return &FolderHandler{repo: repo, fileRepo: fileRepo}
 }
 
 type CreateFolderRequest struct {
@@ -268,11 +269,17 @@ func (h *FolderHandler) BrowseFolder(w http.ResponseWriter, r *http.Request, fol
 		return
 	}
 
+	files, err := h.fileRepo.FindByFolder(r.Context(), userID, parentObjID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "Error retrieving files"})
+		return
+	}
+
 	resp := domain.FolderContentResponse{
 		CurrentFolder: currentFolder,
 		Breadcrumbs:   breadcrumbs,
 		Folders:       subfolders,
-		Files:         make([]domain.FileItem, 0),
+		Files:         files,
 	}
 
 	writeJSON(w, http.StatusOK, resp)
