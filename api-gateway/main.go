@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -26,6 +27,7 @@ import (
 	userspb "stashr/proto/users"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -48,6 +50,19 @@ func main() {
 	certFile := env("TLS_CERT_FILE", "/certs/server.crt")
 	keyFile := env("TLS_KEY_FILE", "/certs/server.key")
 	frontendURL := env("FRONTEND_URL", "https://localhost:3000")
+
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if len(jwtSecret) < 32 {
+		log.Fatal("JWT_SECRET must be set and at least 32 chars")
+	}
+	ratePerSecond, err := strconv.ParseFloat(env("RATE_LIMIT_PER_SECOND", "1"), 64)
+	if err != nil || ratePerSecond <= 0 {
+		log.Fatal("RATE_LIMIT_PER_SECOND must be a positive number")
+	}
+	rateBurst, err := strconv.Atoi(env("RATE_LIMIT_BURST", "20"))
+	if err != nil || rateBurst < 1 {
+		log.Fatal("RATE_LIMIT_BURST must be a positive integer")
+	}
 
 	// ---- gRPC clients (gateway -> services) ----
 	// Plaintext HTTP/2 inside the private Docker network. grpc.NewClient does not
@@ -95,9 +110,10 @@ func main() {
 		log.Fatalf("Failed to register StorageService routes: %v", err)
 	}
 
-	startCleanup()
+	limiter := newRateLimiter(rate.Limit(ratePerSecond), rateBurst, []byte(jwtSecret))
+	limiter.startCleanup()
 
-	handler := securityHeaders(corsMiddleware(rateLimitMiddleware(verifyRedirect(gw, frontendURL))))
+	handler := securityHeaders(corsMiddleware(limiter.middleware(verifyRedirect(gw, frontendURL))))
 
 	// ---- HTTPS server (client -> gateway) ----
 	srv := &http.Server{

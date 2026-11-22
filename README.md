@@ -176,6 +176,8 @@ or `*.pb.gw.go` files by hand.
 | `GATEWAY_PORT` | 8443 | API gateway (HTTPS) |
 | `FRONTEND_PORT` | 3000 | Frontend |
 | `JWT_SECRET` | none | Required, at least 32 chars |
+| `RATE_LIMIT_PER_SECOND` | 1 | Sustained requests per second allowed per user (per IP when not logged in) |
+| `RATE_LIMIT_BURST` | 20 | Burst size of that limit; the next request gets `429` |
 
 ### `config.yaml` (tunable behavior)
 | Key | Default | Meaning |
@@ -204,6 +206,55 @@ Durations use Go syntax (`30m`, `2160h`); there is no `d` unit.
 - Edited `.env`: `docker compose up -d`
 - Edited Go code: `docker compose up -d --build`
 - Edited a `.proto` file: `bash proto/generate.sh`, then `docker compose up -d --build`
+
+---
+
+## Security (access control and input validation)
+
+### Access control
+| Layer | What is enforced |
+| :--- | :--- |
+| `storage-service` | Every rpc requires a valid HS256 session JWT: missing, forged or expired token → `401`; restricted token (expired password) or a role other than `RK` → `403`. Folder operations also check that the caller owns the folder. |
+| Frontend | The dashboard is only shown for a session with role `RK`; otherwise the login screen is shown. |
+| Client state | The session (JWT, e-mail, role) is stored in `localStorage` as AES-GCM ciphertext (`frontend/secure-session.js`). The key is non-extractable and kept in IndexedDB; a modified value fails authentication and is discarded. |
+
+### Rate limiting (DoS protection)
+The gateway keeps one token bucket per caller: per user ID for requests with a valid JWT (signature verified),
+per IP address otherwise. When the bucket is empty the gateway answers `429` with a `Retry-After` header.
+Limits are set with `RATE_LIMIT_PER_SECOND` and `RATE_LIMIT_BURST` (see [Configuration](#env-ports-and-secrets)).
+Behind nginx the IP is taken from the last `X-Forwarded-For` entry (the one nginx appends).
+
+### Input validation
+Every check below runs on the server (`users-service/service/validation.go`, `storage-service/handler`) and again in
+the browser (`frontend/validation.js`) for quick feedback. The server never trusts the client check.
+
+| Input | Rule |
+| :--- | :--- |
+| First / last name | Letters, spaces, `'` and `-`; 1–100 characters |
+| Email | Format check, max 254 characters |
+| Password | Strength rules on registration/reset; 8–72 characters (bcrypt limit); login only bounds the length |
+| OTP | Exactly 6 digits |
+| Verification, reset and magic-link tokens | 64 lower-case hex characters |
+| Folder name | Letters, digits, space and `. _ - ( )`; 1–100 characters; not only dots |
+| Folder / parent IDs | Valid MongoDB ObjectID |
+| `default_quota_bytes` | Positive number (checked at startup) |
+
+### Output encoding and injection
+Names are rendered with `textContent`; the few `innerHTML` templates pass values through `escapeHtml`. All MongoDB
+filters are built from typed values (never from concatenated strings), and the whitelists above keep operator-like
+input such as `{"$ne": ""}` from reaching the database.
+
+### File checks
+`storage-service/filecheck` is ready for the upload/download endpoints, which do not exist yet: filename and
+extension whitelist (`txt, md, csv, json, pdf, png, jpg, jpeg, gif`), content sniffing so a renamed executable is
+rejected, and SHA-256 `Checksum` / `Verify` for integrity.
+
+### Running the security tests
+```bash
+cd api-gateway && go test ./...
+cd storage-service && go test ./...
+cd users-service && go test ./...
+```
 
 ---
 
@@ -305,3 +356,6 @@ docker exec -it users_mongodb mongosh users_db --eval "db.users.updateOne({ emai
   * `google.golang.org/grpc v1.85.0` – gRPC servers (services) and clients (gateway)
   * `github.com/grpc-ecosystem/grpc-gateway/v2 v2.34.0` – REST/JSON ⇄ gRPC translation in the API gateway
   * `google.golang.org/protobuf v1.36.12` – protobuf messages and JSON (protojson) encoding
+- **Go libraries (`api-gateway`, `storage-service`):**
+  * `github.com/golang-jwt/jwt/v5 v5.2.1` – session token verification (per-user rate limiting, authorization)
+  * `golang.org/x/time v0.16.0` – token-bucket rate limiter in the gateway

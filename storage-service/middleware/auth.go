@@ -50,7 +50,7 @@ func AuthUnaryInterceptor(jwtSecret []byte) grpc.UnaryServerInterceptor {
 				return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 			}
 			return jwtSecret, nil
-		})
+		}, jwt.WithValidMethods([]string{"HS256"}))
 		if err != nil || !token.Valid {
 			return nil, status.Error(codes.Unauthenticated, "Invalid or expired session token")
 		}

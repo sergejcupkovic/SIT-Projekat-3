@@ -1,75 +1,10 @@
 package main
 
 import (
-	"net"
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
-	"time"
-
-	"golang.org/x/time/rate"
 )
-
-type visitor struct {
-	limiter  *rate.Limiter
-	lastSeen time.Time
-}
-
-var (
-	mu       sync.Mutex
-	visitors = make(map[string]*visitor)
-)
-
-func getVisitor(ip string) *rate.Limiter {
-	mu.Lock()
-	defer mu.Unlock()
-
-	v, exists := visitors[ip]
-	if !exists {
-		v = &visitor{limiter: rate.NewLimiter(rate.Every(time.Second), 20)}
-		visitors[ip] = v
-	}
-	v.lastSeen = time.Now()
-	return v.limiter
-}
-
-func startCleanup() {
-	go func() {
-		for {
-			time.Sleep(time.Minute)
-			mu.Lock()
-			for ip, v := range visitors {
-				if time.Since(v.lastSeen) > 3*time.Minute {
-					delete(visitors, ip)
-				}
-			}
-			mu.Unlock()
-		}
-	}()
-}
-
-func clientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		return strings.TrimSpace(strings.Split(xff, ",")[0])
-	}
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return ip
-}
-
-func rateLimitMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := clientIP(r)
-		if !getVisitor(ip).Allow() {
-			http.Error(w, `{"message":"Too many requests, please slow down."}`, http.StatusTooManyRequests)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
 
 // corsMiddleware allows the browser frontend to call the gateway directly
 // (https://localhost:8443) in addition to going through nginx. Preflight
