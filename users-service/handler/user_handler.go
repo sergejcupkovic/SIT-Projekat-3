@@ -70,6 +70,9 @@ func (h *UserHandler) VerifyEmail(ctx context.Context, req *userspb.VerifyEmailR
 	if token == "" {
 		return nil, status.Error(codes.InvalidArgument, "Missing token parameter")
 	}
+	if err := service.ValidateToken(token); err != nil {
+		return nil, status.Error(codes.InvalidArgument, "Invalid or already used verification token")
+	}
 
 	res, err := h.repo.VerifyToken(ctx, token)
 	if err != nil {
@@ -88,7 +91,7 @@ func (h *UserHandler) VerifyEmail(ctx context.Context, req *userspb.VerifyEmailR
 // ValidateResetToken  <-  GET /api/users/reset-password?token=xyz
 func (h *UserHandler) ValidateResetToken(ctx context.Context, req *userspb.ValidateResetTokenRequest) (*userspb.MessageResponse, error) {
 	token := req.GetToken()
-	if token == "" {
+	if service.ValidateToken(token) != nil {
 		return nil, resetLinkError()
 	}
 
@@ -169,6 +172,10 @@ func (h *UserHandler) Login(ctx context.Context, in *userspb.LoginRequest) (*use
 	email := service.NormalizeEmail(in.GetEmail())
 	password := in.GetPassword()
 
+	if err := service.ValidateCredentials(email, password); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
 	user, err := h.repo.FindByEmail(ctx, email)
 	if err != nil {
 		service.DummyPasswordCheck(password)
@@ -217,6 +224,13 @@ func (h *UserHandler) Login(ctx context.Context, in *userspb.LoginRequest) (*use
 func (h *UserHandler) VerifyOTP(ctx context.Context, in *userspb.VerifyOTPRequest) (*userspb.AuthResponse, error) {
 	email := service.NormalizeEmail(in.GetEmail())
 	password := in.GetPassword()
+
+	if err := service.ValidateCredentials(email, password); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	if err := service.ValidateOTP(in.GetOtp()); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
 
 	user, err := h.repo.FindByEmail(ctx, email)
 	if err != nil {
@@ -290,6 +304,10 @@ func (h *UserHandler) ResendOTP(ctx context.Context, in *userspb.ResendOTPReques
 		Message: "If an account with that email exists, a new code has been sent.",
 	}
 
+	if err := service.ValidateCredentials(email, password); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
 	user, err := h.repo.FindByEmail(ctx, email)
 	if err != nil {
 		service.DummyPasswordCheck(password)
@@ -343,6 +361,10 @@ func (h *UserHandler) ForgotPassword(ctx context.Context, in *userspb.ForgotPass
 		Message: "If an account with that email exists, a password reset link has been sent.",
 	}
 
+	if err := service.ValidateEmail(email); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
 	user, err := h.repo.FindByEmail(ctx, email)
 	if err != nil {
 		return genericOK, nil
@@ -384,6 +406,9 @@ func (h *UserHandler) ResetPassword(ctx context.Context, in *userspb.ResetPasswo
 		ConfirmPassword: in.GetConfirmPassword(),
 	}
 
+	if service.ValidateToken(req.Token) != nil {
+		return nil, resetLinkError()
+	}
 	if err := service.ValidateResetPassword(req); err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
@@ -460,6 +485,10 @@ func (h *UserHandler) RequestMagicLink(ctx context.Context, in *userspb.MagicLin
 		Message: "If an account with that email exists and is verified, a magic link has been sent.",
 	}
 
+	if err := service.ValidateEmail(email); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
 	user, err := h.repo.FindByEmail(ctx, email)
 	if err != nil || !user.IsVerified {
 		return genericOK, nil
@@ -496,6 +525,9 @@ func (h *UserHandler) RequestMagicLink(ctx context.Context, in *userspb.MagicLin
 func (h *UserHandler) MagicLinkLogin(ctx context.Context, in *userspb.MagicLinkLoginRequest) (*userspb.AuthResponse, error) {
 	if in.GetToken() == "" {
 		return nil, status.Error(codes.InvalidArgument, "Missing magic link token")
+	}
+	if service.ValidateToken(in.GetToken()) != nil {
+		return nil, status.Error(codes.InvalidArgument, "Invalid or expired magic link")
 	}
 
 	user, err := h.repo.ConsumeMagicLinkToken(ctx, service.HashResetToken(in.GetToken()))

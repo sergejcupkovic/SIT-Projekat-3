@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 	"users-service/config"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -31,6 +32,7 @@ var (
 	Cfg        *config.Config
 	dummyHash  []byte
 	emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
+	nameRegex  = regexp.MustCompile(`^\p{L}[\p{L} '\-]*$`)
 )
 
 func Init(c *config.Config) {
@@ -114,8 +116,11 @@ func ValidateRegistration(req *RegisterRequest) error {
 	if req.FirstName == "" || req.LastName == "" || req.Email == "" {
 		return errors.New("all fields are required")
 	}
-	if len(req.FirstName) > maxNameLen || len(req.LastName) > maxNameLen {
+	if utf8.RuneCountInString(req.FirstName) > maxNameLen || utf8.RuneCountInString(req.LastName) > maxNameLen {
 		return errors.New("name is too long")
+	}
+	if !nameRegex.MatchString(req.FirstName) || !nameRegex.MatchString(req.LastName) {
+		return errors.New("name may only contain letters, spaces, apostrophes and hyphens")
 	}
 	if len(req.Email) > maxEmailLen {
 		return errors.New("email is too long")

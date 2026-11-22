@@ -88,5 +88,8 @@ func LoadConfig() *Config {
 	if cfg.BcryptCost < 4 || cfg.BcryptCost > 31 {
 		log.Fatal("bcrypt_cost must be 4..31")
 	}
+	if cfg.DefaultQuotaBytes <= 0 {
+		log.Fatal("default_quota_bytes must be a positive number")
+	}
 	return cfg
 }

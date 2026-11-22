@@ -12,9 +12,11 @@ import (
 	"context"
 	"errors"
 	"log"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"storage-service/domain"
 	"storage-service/middleware"
@@ -268,14 +270,19 @@ func (h *FolderHandler) buildBreadcrumbs(ctx context.Context, current *domain.Fo
 
 // #region helperi
 
+const maxFolderNameLen = 100
+
+// letters, digits, space and . _ - ( ); everything else is rejected
+var folderNameRegex = regexp.MustCompile(`^[\p{L}\p{N} ._()\-]+$`)
+
 func validateFolderName(name string) error {
 	if name == "" {
 		return errors.New("folder name is required")
 	}
-	if len(name) > 100 {
+	if utf8.RuneCountInString(name) > maxFolderNameLen {
 		return errors.New("folder name must not exceed 100 characters")
 	}
-	if name == "." || name == ".." || strings.ContainsAny(name, `/\:*?"<>|`) {
+	if !folderNameRegex.MatchString(name) || strings.Trim(name, ". ") == "" {
 		return errors.New("folder name contains invalid characters")
 	}
 	return nil
