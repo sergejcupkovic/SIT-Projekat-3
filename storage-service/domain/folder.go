@@ -20,14 +20,11 @@ type BreadcrumbItem struct {
 }
 
 type FileItem struct {
-	ID        primitive.ObjectID  `bson:"_id,omitempty" json:"id"`
-	Name      string              `bson:"name" json:"name"`
-	FolderID  *primitive.ObjectID `bson:"folderId" json:"folderId"`
-	OwnerID   string              `bson:"ownerId" json:"ownerId"`
-	SizeBytes int64               `bson:"sizeBytes" json:"sizeBytes"`
-	MimeType  string              `bson:"mimeType" json:"mimeType"`
-	ObjectKey string              `bson:"objectKey" json:"-"`
-	CreatedAt time.Time           `bson:"createdAt" json:"createdAt"`
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	SizeBytes int64     `json:"sizeBytes"`
+	MimeType  string    `json:"mimeType"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 type FolderContentResponse struct {
