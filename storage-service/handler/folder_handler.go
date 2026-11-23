@@ -37,12 +37,13 @@ type FolderHandler struct {
 	storagepb.UnimplementedStorageServiceServer
 
 	repo *repository.FolderRepository
+	fileRepo *repository.FileRepository
 }
 
 var _ storagepb.StorageServiceServer = (*FolderHandler)(nil)
 
-func NewFolderHandler(repo *repository.FolderRepository) *FolderHandler {
-	return &FolderHandler{repo: repo}
+func NewFolderHandler(repo *repository.FolderRepository, fileRepo *repository.FileRepository) *FolderHandler {
+	return &FolderHandler{repo: repo, fileRepo: fileRepo}
 }
 
 const duplicateNameMsg = "A folder with this name already exists in the current directory"
@@ -207,6 +208,12 @@ func (h *FolderHandler) BrowseFolder(ctx context.Context, req *storagepb.BrowseF
 	if err != nil {
 		return nil, status.Error(codes.Internal, "Error retrieving folder contents")
 	}
+
+files, err := h.fileRepo.FindByFolder(ctx, userID, parentObjID)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "Error retrieving files")
+	}
+	_ = files // Mapiraćemo u resp.Files čim provjerimo polja u storagepb.FileItem
 
 	resp := &storagepb.FolderContentResponse{
 		Breadcrumbs: make([]*storagepb.BreadcrumbItem, 0, len(breadcrumbs)),
