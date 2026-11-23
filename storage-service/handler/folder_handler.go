@@ -36,13 +36,17 @@ import (
 type FolderHandler struct {
 	storagepb.UnimplementedStorageServiceServer
 
-	repo *repository.FolderRepository
+	repo  *repository.FolderRepository
+	files fileLister
 }
 
-var _ storagepb.StorageServiceServer = (*FolderHandler)(nil)
+// fileLister is what BrowseFolder needs to show the files of a folder.
+type fileLister interface {
+	FindByFolder(ctx context.Context, ownerID string, folderID *primitive.ObjectID) ([]domain.FileItem, error)
+}
 
-func NewFolderHandler(repo *repository.FolderRepository) *FolderHandler {
-	return &FolderHandler{repo: repo}
+func NewFolderHandler(repo *repository.FolderRepository, files fileLister) *FolderHandler {
+	return &FolderHandler{repo: repo, files: files}
 }
 
 const duplicateNameMsg = "A folder with this name already exists in the current directory"
@@ -208,10 +212,15 @@ func (h *FolderHandler) BrowseFolder(ctx context.Context, req *storagepb.BrowseF
 		return nil, status.Error(codes.Internal, "Error retrieving folder contents")
 	}
 
+	files, err := h.files.FindByFolder(ctx, userID, parentObjID)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "Error retrieving files")
+	}
+
 	resp := &storagepb.FolderContentResponse{
 		Breadcrumbs: make([]*storagepb.BreadcrumbItem, 0, len(breadcrumbs)),
 		Folders:     make([]*storagepb.Folder, 0, len(subfolders)),
-		Files:       make([]*storagepb.FileItem, 0),
+		Files:       make([]*storagepb.FileItem, 0, len(files)),
 	}
 	if currentFolder != nil {
 		resp.CurrentFolder = toProtoFolder(currentFolder)
@@ -221,6 +230,9 @@ func (h *FolderHandler) BrowseFolder(ctx context.Context, req *storagepb.BrowseF
 	}
 	for i := range subfolders {
 		resp.Folders = append(resp.Folders, toProtoFolder(&subfolders[i]))
+	}
+	for i := range files {
+		resp.Files = append(resp.Files, toProtoFile(&files[i]))
 	}
 
 	return resp, nil

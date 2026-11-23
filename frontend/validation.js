@@ -9,6 +9,10 @@ const Validation = (() => {
   const MAX_EMAIL_LEN = 254;
   const MAX_PASSWORD_LEN = 72;
   const MAX_FOLDER_NAME_LEN = 100;
+  const MAX_FILE_NAME_LEN = 255;
+  const ALLOWED_FILE_EXTENSIONS = [
+    ".txt", ".md", ".csv", ".json", ".pdf", ".png", ".jpg", ".jpeg", ".gif",
+  ];
 
   const length = (value) => [...value].length;
 
@@ -50,6 +54,20 @@ const Validation = (() => {
     return "";
   }
 
+  // Same whitelist as storage-service/filecheck (the server also sniffs the content).
+  function fileName(value, size) {
+    if (!value) return "Please select a file";
+    if (size === 0) return "Cannot upload an empty file (0 bytes)";
+    if (length(value) > MAX_FILE_NAME_LEN)
+      return `File name must not exceed ${MAX_FILE_NAME_LEN} characters`;
+    if (!FOLDER_NAME_REGEX.test(value) || value.replace(/[. ]/g, "") === "")
+      return "File name may only contain letters, digits, spaces and . _ - ( )";
+    const ext = value.slice(value.lastIndexOf(".")).toLowerCase();
+    if (!value.includes(".") || !ALLOWED_FILE_EXTENSIONS.includes(ext))
+      return `This file type is not allowed. Allowed: ${ALLOWED_FILE_EXTENSIONS.join(", ")}`;
+    return "";
+  }
+
   // for the few places where a value has to go through innerHTML
   function escapeHtml(value) {
     return String(value).replace(
@@ -61,5 +79,5 @@ const Validation = (() => {
     );
   }
 
-  return { name, email, password, otp, folderName, escapeHtml };
+  return { name, email, password, otp, folderName, fileName, escapeHtml };
 })();

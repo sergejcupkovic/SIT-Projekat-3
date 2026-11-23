@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"unicode/utf8"
 )
@@ -95,4 +96,28 @@ func Verify(r io.Reader, expectedHex string) error {
 		return ErrIntegrity
 	}
 	return nil
+}
+
+// DetectType returns the content type of a file as seen by the SERVER (from
+// its first bytes), without parameters, e.g. "image/png" or "text/plain".
+// Use it instead of the Content-Type the client claims.
+func DetectType(head []byte) string {
+	if len(head) > 512 {
+		head = head[:512]
+	}
+	got := http.DetectContentType(head)
+	if i := strings.Index(got, ";"); i >= 0 {
+		got = got[:i]
+	}
+	return got
+}
+
+// AllowedExtensions lists the whitelisted file extensions (with the dot), sorted.
+func AllowedExtensions() []string {
+	exts := make([]string, 0, len(allowedTypes))
+	for ext := range allowedTypes {
+		exts = append(exts, ext)
+	}
+	sort.Strings(exts)
+	return exts
 }

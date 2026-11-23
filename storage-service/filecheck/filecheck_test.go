@@ -75,3 +75,31 @@ func TestChecksumAndVerify(t *testing.T) {
 		t.Errorf("malformed stored hash must fail verification, got: %v", err)
 	}
 }
+
+func TestDetectType(t *testing.T) {
+	tests := []struct {
+		name string
+		head []byte
+		want string
+	}{
+		{"png", pngHead, "image/png"},
+		{"pdf", pdfHead, "application/pdf"},
+		{"text carries no charset parameter", []byte("hello"), "text/plain"},
+		{"executable is not claimed to be anything friendly", exeHead, "application/octet-stream"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := DetectType(tc.head); got != tc.want {
+				t.Errorf("DetectType = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestAllowedExtensions(t *testing.T) {
+	got := strings.Join(AllowedExtensions(), " ")
+	want := ".csv .gif .jpeg .jpg .json .md .pdf .png .txt"
+	if got != want {
+		t.Errorf("AllowedExtensions = %q, want %q", got, want)
+	}
+}

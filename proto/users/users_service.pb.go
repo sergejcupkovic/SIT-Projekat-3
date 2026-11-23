@@ -36,6 +36,130 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type GetQuotaRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetQuotaRequest) Reset() {
+	*x = GetQuotaRequest{}
+	mi := &file_users_users_service_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetQuotaRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetQuotaRequest) ProtoMessage() {}
+
+func (x *GetQuotaRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_users_users_service_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetQuotaRequest.ProtoReflect.Descriptor instead.
+func (*GetQuotaRequest) Descriptor() ([]byte, []int) {
+	return file_users_users_service_proto_rawDescGZIP(), []int{0}
+}
+
+type ReserveQuotaRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SizeBytes     int64                  `protobuf:"varint,1,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReserveQuotaRequest) Reset() {
+	*x = ReserveQuotaRequest{}
+	mi := &file_users_users_service_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReserveQuotaRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReserveQuotaRequest) ProtoMessage() {}
+
+func (x *ReserveQuotaRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_users_users_service_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReserveQuotaRequest.ProtoReflect.Descriptor instead.
+func (*ReserveQuotaRequest) Descriptor() ([]byte, []int) {
+	return file_users_users_service_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ReserveQuotaRequest) GetSizeBytes() int64 {
+	if x != nil {
+		return x.SizeBytes
+	}
+	return 0
+}
+
+type ReleaseQuotaRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SizeBytes     int64                  `protobuf:"varint,1,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReleaseQuotaRequest) Reset() {
+	*x = ReleaseQuotaRequest{}
+	mi := &file_users_users_service_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReleaseQuotaRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReleaseQuotaRequest) ProtoMessage() {}
+
+func (x *ReleaseQuotaRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_users_users_service_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReleaseQuotaRequest.ProtoReflect.Descriptor instead.
+func (*ReleaseQuotaRequest) Descriptor() ([]byte, []int) {
+	return file_users_users_service_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ReleaseQuotaRequest) GetSizeBytes() int64 {
+	if x != nil {
+		return x.SizeBytes
+	}
+	return 0
+}
+
 type RegisterRequest struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	FirstName       string                 `protobuf:"bytes,1,opt,name=first_name,json=firstName,proto3" json:"first_name,omitempty"`
@@ -49,7 +173,7 @@ type RegisterRequest struct {
 
 func (x *RegisterRequest) Reset() {
 	*x = RegisterRequest{}
-	mi := &file_users_users_service_proto_msgTypes[0]
+	mi := &file_users_users_service_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -61,7 +185,7 @@ func (x *RegisterRequest) String() string {
 func (*RegisterRequest) ProtoMessage() {}
 
 func (x *RegisterRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_users_users_service_proto_msgTypes[0]
+	mi := &file_users_users_service_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -74,7 +198,7 @@ func (x *RegisterRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterRequest.ProtoReflect.Descriptor instead.
 func (*RegisterRequest) Descriptor() ([]byte, []int) {
-	return file_users_users_service_proto_rawDescGZIP(), []int{0}
+	return file_users_users_service_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *RegisterRequest) GetFirstName() string {
@@ -121,7 +245,7 @@ type VerifyEmailRequest struct {
 
 func (x *VerifyEmailRequest) Reset() {
 	*x = VerifyEmailRequest{}
-	mi := &file_users_users_service_proto_msgTypes[1]
+	mi := &file_users_users_service_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -133,7 +257,7 @@ func (x *VerifyEmailRequest) String() string {
 func (*VerifyEmailRequest) ProtoMessage() {}
 
 func (x *VerifyEmailRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_users_users_service_proto_msgTypes[1]
+	mi := &file_users_users_service_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -146,7 +270,7 @@ func (x *VerifyEmailRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VerifyEmailRequest.ProtoReflect.Descriptor instead.
 func (*VerifyEmailRequest) Descriptor() ([]byte, []int) {
-	return file_users_users_service_proto_rawDescGZIP(), []int{1}
+	return file_users_users_service_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *VerifyEmailRequest) GetToken() string {
@@ -166,7 +290,7 @@ type LoginRequest struct {
 
 func (x *LoginRequest) Reset() {
 	*x = LoginRequest{}
-	mi := &file_users_users_service_proto_msgTypes[2]
+	mi := &file_users_users_service_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -178,7 +302,7 @@ func (x *LoginRequest) String() string {
 func (*LoginRequest) ProtoMessage() {}
 
 func (x *LoginRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_users_users_service_proto_msgTypes[2]
+	mi := &file_users_users_service_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -191,7 +315,7 @@ func (x *LoginRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LoginRequest.ProtoReflect.Descriptor instead.
 func (*LoginRequest) Descriptor() ([]byte, []int) {
-	return file_users_users_service_proto_rawDescGZIP(), []int{2}
+	return file_users_users_service_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *LoginRequest) GetEmail() string {
@@ -219,7 +343,7 @@ type VerifyOTPRequest struct {
 
 func (x *VerifyOTPRequest) Reset() {
 	*x = VerifyOTPRequest{}
-	mi := &file_users_users_service_proto_msgTypes[3]
+	mi := &file_users_users_service_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -231,7 +355,7 @@ func (x *VerifyOTPRequest) String() string {
 func (*VerifyOTPRequest) ProtoMessage() {}
 
 func (x *VerifyOTPRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_users_users_service_proto_msgTypes[3]
+	mi := &file_users_users_service_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -244,7 +368,7 @@ func (x *VerifyOTPRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VerifyOTPRequest.ProtoReflect.Descriptor instead.
 func (*VerifyOTPRequest) Descriptor() ([]byte, []int) {
-	return file_users_users_service_proto_rawDescGZIP(), []int{3}
+	return file_users_users_service_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *VerifyOTPRequest) GetEmail() string {
@@ -278,7 +402,7 @@ type ResendOTPRequest struct {
 
 func (x *ResendOTPRequest) Reset() {
 	*x = ResendOTPRequest{}
-	mi := &file_users_users_service_proto_msgTypes[4]
+	mi := &file_users_users_service_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -290,7 +414,7 @@ func (x *ResendOTPRequest) String() string {
 func (*ResendOTPRequest) ProtoMessage() {}
 
 func (x *ResendOTPRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_users_users_service_proto_msgTypes[4]
+	mi := &file_users_users_service_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -303,7 +427,7 @@ func (x *ResendOTPRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResendOTPRequest.ProtoReflect.Descriptor instead.
 func (*ResendOTPRequest) Descriptor() ([]byte, []int) {
-	return file_users_users_service_proto_rawDescGZIP(), []int{4}
+	return file_users_users_service_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ResendOTPRequest) GetEmail() string {
@@ -328,7 +452,7 @@ type LogoutRequest struct {
 
 func (x *LogoutRequest) Reset() {
 	*x = LogoutRequest{}
-	mi := &file_users_users_service_proto_msgTypes[5]
+	mi := &file_users_users_service_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -340,7 +464,7 @@ func (x *LogoutRequest) String() string {
 func (*LogoutRequest) ProtoMessage() {}
 
 func (x *LogoutRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_users_users_service_proto_msgTypes[5]
+	mi := &file_users_users_service_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -353,7 +477,7 @@ func (x *LogoutRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogoutRequest.ProtoReflect.Descriptor instead.
 func (*LogoutRequest) Descriptor() ([]byte, []int) {
-	return file_users_users_service_proto_rawDescGZIP(), []int{5}
+	return file_users_users_service_proto_rawDescGZIP(), []int{8}
 }
 
 type ForgotPasswordRequest struct {
@@ -365,7 +489,7 @@ type ForgotPasswordRequest struct {
 
 func (x *ForgotPasswordRequest) Reset() {
 	*x = ForgotPasswordRequest{}
-	mi := &file_users_users_service_proto_msgTypes[6]
+	mi := &file_users_users_service_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -377,7 +501,7 @@ func (x *ForgotPasswordRequest) String() string {
 func (*ForgotPasswordRequest) ProtoMessage() {}
 
 func (x *ForgotPasswordRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_users_users_service_proto_msgTypes[6]
+	mi := &file_users_users_service_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -390,7 +514,7 @@ func (x *ForgotPasswordRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForgotPasswordRequest.ProtoReflect.Descriptor instead.
 func (*ForgotPasswordRequest) Descriptor() ([]byte, []int) {
-	return file_users_users_service_proto_rawDescGZIP(), []int{6}
+	return file_users_users_service_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ForgotPasswordRequest) GetEmail() string {
@@ -409,7 +533,7 @@ type ValidateResetTokenRequest struct {
 
 func (x *ValidateResetTokenRequest) Reset() {
 	*x = ValidateResetTokenRequest{}
-	mi := &file_users_users_service_proto_msgTypes[7]
+	mi := &file_users_users_service_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -421,7 +545,7 @@ func (x *ValidateResetTokenRequest) String() string {
 func (*ValidateResetTokenRequest) ProtoMessage() {}
 
 func (x *ValidateResetTokenRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_users_users_service_proto_msgTypes[7]
+	mi := &file_users_users_service_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -434,7 +558,7 @@ func (x *ValidateResetTokenRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateResetTokenRequest.ProtoReflect.Descriptor instead.
 func (*ValidateResetTokenRequest) Descriptor() ([]byte, []int) {
-	return file_users_users_service_proto_rawDescGZIP(), []int{7}
+	return file_users_users_service_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ValidateResetTokenRequest) GetToken() string {
@@ -455,7 +579,7 @@ type ResetPasswordRequest struct {
 
 func (x *ResetPasswordRequest) Reset() {
 	*x = ResetPasswordRequest{}
-	mi := &file_users_users_service_proto_msgTypes[8]
+	mi := &file_users_users_service_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -467,7 +591,7 @@ func (x *ResetPasswordRequest) String() string {
 func (*ResetPasswordRequest) ProtoMessage() {}
 
 func (x *ResetPasswordRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_users_users_service_proto_msgTypes[8]
+	mi := &file_users_users_service_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -480,7 +604,7 @@ func (x *ResetPasswordRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResetPasswordRequest.ProtoReflect.Descriptor instead.
 func (*ResetPasswordRequest) Descriptor() ([]byte, []int) {
-	return file_users_users_service_proto_rawDescGZIP(), []int{8}
+	return file_users_users_service_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ResetPasswordRequest) GetToken() string {
@@ -514,7 +638,7 @@ type ChangeExpiredPasswordRequest struct {
 
 func (x *ChangeExpiredPasswordRequest) Reset() {
 	*x = ChangeExpiredPasswordRequest{}
-	mi := &file_users_users_service_proto_msgTypes[9]
+	mi := &file_users_users_service_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -526,7 +650,7 @@ func (x *ChangeExpiredPasswordRequest) String() string {
 func (*ChangeExpiredPasswordRequest) ProtoMessage() {}
 
 func (x *ChangeExpiredPasswordRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_users_users_service_proto_msgTypes[9]
+	mi := &file_users_users_service_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -539,7 +663,7 @@ func (x *ChangeExpiredPasswordRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChangeExpiredPasswordRequest.ProtoReflect.Descriptor instead.
 func (*ChangeExpiredPasswordRequest) Descriptor() ([]byte, []int) {
-	return file_users_users_service_proto_rawDescGZIP(), []int{9}
+	return file_users_users_service_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ChangeExpiredPasswordRequest) GetPassword() string {
@@ -565,7 +689,7 @@ type MagicLinkRequest struct {
 
 func (x *MagicLinkRequest) Reset() {
 	*x = MagicLinkRequest{}
-	mi := &file_users_users_service_proto_msgTypes[10]
+	mi := &file_users_users_service_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -577,7 +701,7 @@ func (x *MagicLinkRequest) String() string {
 func (*MagicLinkRequest) ProtoMessage() {}
 
 func (x *MagicLinkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_users_users_service_proto_msgTypes[10]
+	mi := &file_users_users_service_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -590,7 +714,7 @@ func (x *MagicLinkRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MagicLinkRequest.ProtoReflect.Descriptor instead.
 func (*MagicLinkRequest) Descriptor() ([]byte, []int) {
-	return file_users_users_service_proto_rawDescGZIP(), []int{10}
+	return file_users_users_service_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *MagicLinkRequest) GetEmail() string {
@@ -609,7 +733,7 @@ type MagicLinkLoginRequest struct {
 
 func (x *MagicLinkLoginRequest) Reset() {
 	*x = MagicLinkLoginRequest{}
-	mi := &file_users_users_service_proto_msgTypes[11]
+	mi := &file_users_users_service_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -621,7 +745,7 @@ func (x *MagicLinkLoginRequest) String() string {
 func (*MagicLinkLoginRequest) ProtoMessage() {}
 
 func (x *MagicLinkLoginRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_users_users_service_proto_msgTypes[11]
+	mi := &file_users_users_service_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -634,7 +758,7 @@ func (x *MagicLinkLoginRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MagicLinkLoginRequest.ProtoReflect.Descriptor instead.
 func (*MagicLinkLoginRequest) Descriptor() ([]byte, []int) {
-	return file_users_users_service_proto_rawDescGZIP(), []int{11}
+	return file_users_users_service_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *MagicLinkLoginRequest) GetToken() string {
@@ -654,7 +778,7 @@ type MessageResponse struct {
 
 func (x *MessageResponse) Reset() {
 	*x = MessageResponse{}
-	mi := &file_users_users_service_proto_msgTypes[12]
+	mi := &file_users_users_service_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -666,7 +790,7 @@ func (x *MessageResponse) String() string {
 func (*MessageResponse) ProtoMessage() {}
 
 func (x *MessageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_users_users_service_proto_msgTypes[12]
+	mi := &file_users_users_service_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -679,7 +803,7 @@ func (x *MessageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MessageResponse.ProtoReflect.Descriptor instead.
 func (*MessageResponse) Descriptor() ([]byte, []int) {
-	return file_users_users_service_proto_rawDescGZIP(), []int{12}
+	return file_users_users_service_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *MessageResponse) GetMessage() string {
@@ -702,7 +826,7 @@ type UserInfo struct {
 
 func (x *UserInfo) Reset() {
 	*x = UserInfo{}
-	mi := &file_users_users_service_proto_msgTypes[13]
+	mi := &file_users_users_service_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -714,7 +838,7 @@ func (x *UserInfo) String() string {
 func (*UserInfo) ProtoMessage() {}
 
 func (x *UserInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_users_users_service_proto_msgTypes[13]
+	mi := &file_users_users_service_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -727,7 +851,7 @@ func (x *UserInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UserInfo.ProtoReflect.Descriptor instead.
 func (*UserInfo) Descriptor() ([]byte, []int) {
-	return file_users_users_service_proto_rawDescGZIP(), []int{13}
+	return file_users_users_service_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *UserInfo) GetId() string {
@@ -765,6 +889,76 @@ func (x *UserInfo) GetRole() string {
 	return ""
 }
 
+// Reply of every QuotaService rpc.
+type QuotaResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Only meaningful for ReserveQuota: false = not enough free space, nothing reserved.
+	Allowed           bool  `protobuf:"varint,1,opt,name=allowed,proto3" json:"allowed,omitempty"`
+	StorageQuotaBytes int64 `protobuf:"varint,2,opt,name=storage_quota_bytes,json=storageQuotaBytes,proto3" json:"storage_quota_bytes,omitempty"`
+	UsedStorageBytes  int64 `protobuf:"varint,3,opt,name=used_storage_bytes,json=usedStorageBytes,proto3" json:"used_storage_bytes,omitempty"`
+	RemainingBytes    int64 `protobuf:"varint,4,opt,name=remaining_bytes,json=remainingBytes,proto3" json:"remaining_bytes,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *QuotaResponse) Reset() {
+	*x = QuotaResponse{}
+	mi := &file_users_users_service_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *QuotaResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*QuotaResponse) ProtoMessage() {}
+
+func (x *QuotaResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_users_users_service_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use QuotaResponse.ProtoReflect.Descriptor instead.
+func (*QuotaResponse) Descriptor() ([]byte, []int) {
+	return file_users_users_service_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *QuotaResponse) GetAllowed() bool {
+	if x != nil {
+		return x.Allowed
+	}
+	return false
+}
+
+func (x *QuotaResponse) GetStorageQuotaBytes() int64 {
+	if x != nil {
+		return x.StorageQuotaBytes
+	}
+	return 0
+}
+
+func (x *QuotaResponse) GetUsedStorageBytes() int64 {
+	if x != nil {
+		return x.UsedStorageBytes
+	}
+	return 0
+}
+
+func (x *QuotaResponse) GetRemainingBytes() int64 {
+	if x != nil {
+		return x.RemainingBytes
+	}
+	return 0
+}
+
 // Reply of every login-like rpc (Login, VerifyOTP, MagicLinkLogin).
 //   - Login step 1:        message only.
 //   - Successful login:    message + token + user.
@@ -781,7 +975,7 @@ type AuthResponse struct {
 
 func (x *AuthResponse) Reset() {
 	*x = AuthResponse{}
-	mi := &file_users_users_service_proto_msgTypes[14]
+	mi := &file_users_users_service_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -793,7 +987,7 @@ func (x *AuthResponse) String() string {
 func (*AuthResponse) ProtoMessage() {}
 
 func (x *AuthResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_users_users_service_proto_msgTypes[14]
+	mi := &file_users_users_service_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -806,7 +1000,7 @@ func (x *AuthResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuthResponse.ProtoReflect.Descriptor instead.
 func (*AuthResponse) Descriptor() ([]byte, []int) {
-	return file_users_users_service_proto_rawDescGZIP(), []int{14}
+	return file_users_users_service_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *AuthResponse) GetMessage() string {
@@ -841,7 +1035,14 @@ var File_users_users_service_proto protoreflect.FileDescriptor
 
 const file_users_users_service_proto_rawDesc = "" +
 	"\n" +
-	"\x19users/users_service.proto\x12\x05users\x1a\x1cgoogle/api/annotations.proto\"\xaa\x01\n" +
+	"\x19users/users_service.proto\x12\x05users\x1a\x1cgoogle/api/annotations.proto\"\x11\n" +
+	"\x0fGetQuotaRequest\"4\n" +
+	"\x13ReserveQuotaRequest\x12\x1d\n" +
+	"\n" +
+	"size_bytes\x18\x01 \x01(\x03R\tsizeBytes\"4\n" +
+	"\x13ReleaseQuotaRequest\x12\x1d\n" +
+	"\n" +
+	"size_bytes\x18\x01 \x01(\x03R\tsizeBytes\"\xaa\x01\n" +
 	"\x0fRegisterRequest\x12\x1d\n" +
 	"\n" +
 	"first_name\x18\x01 \x01(\tR\tfirstName\x12\x1b\n" +
@@ -885,7 +1086,12 @@ const file_users_users_service_proto_rawDesc = "" +
 	"\n" +
 	"first_name\x18\x03 \x01(\tR\tfirstName\x12\x1b\n" +
 	"\tlast_name\x18\x04 \x01(\tR\blastName\x12\x12\n" +
-	"\x04role\x18\x05 \x01(\tR\x04role\"\x83\x01\n" +
+	"\x04role\x18\x05 \x01(\tR\x04role\"\xb0\x01\n" +
+	"\rQuotaResponse\x12\x18\n" +
+	"\aallowed\x18\x01 \x01(\bR\aallowed\x12.\n" +
+	"\x13storage_quota_bytes\x18\x02 \x01(\x03R\x11storageQuotaBytes\x12,\n" +
+	"\x12used_storage_bytes\x18\x03 \x01(\x03R\x10usedStorageBytes\x12'\n" +
+	"\x0fremaining_bytes\x18\x04 \x01(\x03R\x0eremainingBytes\"\x83\x01\n" +
 	"\fAuthResponse\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x12\x14\n" +
 	"\x05token\x18\x02 \x01(\tR\x05token\x12\x1e\n" +
@@ -905,7 +1111,11 @@ const file_users_users_service_proto_rawDesc = "" +
 	"\rResetPassword\x12\x1b.users.ResetPasswordRequest\x1a\x16.users.MessageResponse\"$\x82\xd3\xe4\x93\x02\x1e:\x01*\"\x19/api/users/reset-password\x12\x83\x01\n" +
 	"\x15ChangeExpiredPassword\x12#.users.ChangeExpiredPasswordRequest\x1a\x16.users.MessageResponse\"-\x82\xd3\xe4\x93\x02':\x01*\"\"/api/users/change-expired-password\x12m\n" +
 	"\x10RequestMagicLink\x12\x17.users.MagicLinkRequest\x1a\x16.users.MessageResponse\"(\x82\xd3\xe4\x93\x02\":\x01*\"\x1d/api/users/magic-link-request\x12k\n" +
-	"\x0eMagicLinkLogin\x12\x1c.users.MagicLinkLoginRequest\x1a\x13.users.AuthResponse\"&\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/api/users/magic-link-loginB\x1cZ\x1astashr/proto/users;userspbb\x06proto3"
+	"\x0eMagicLinkLogin\x12\x1c.users.MagicLinkLoginRequest\x1a\x13.users.AuthResponse\"&\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/api/users/magic-link-login2\xcc\x01\n" +
+	"\fQuotaService\x128\n" +
+	"\bGetQuota\x12\x16.users.GetQuotaRequest\x1a\x14.users.QuotaResponse\x12@\n" +
+	"\fReserveQuota\x12\x1a.users.ReserveQuotaRequest\x1a\x14.users.QuotaResponse\x12@\n" +
+	"\fReleaseQuota\x12\x1a.users.ReleaseQuotaRequest\x1a\x14.users.QuotaResponseB\x1cZ\x1astashr/proto/users;userspbb\x06proto3"
 
 var (
 	file_users_users_service_proto_rawDescOnce sync.Once
@@ -919,52 +1129,62 @@ func file_users_users_service_proto_rawDescGZIP() []byte {
 	return file_users_users_service_proto_rawDescData
 }
 
-var file_users_users_service_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_users_users_service_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_users_users_service_proto_goTypes = []any{
-	(*RegisterRequest)(nil),              // 0: users.RegisterRequest
-	(*VerifyEmailRequest)(nil),           // 1: users.VerifyEmailRequest
-	(*LoginRequest)(nil),                 // 2: users.LoginRequest
-	(*VerifyOTPRequest)(nil),             // 3: users.VerifyOTPRequest
-	(*ResendOTPRequest)(nil),             // 4: users.ResendOTPRequest
-	(*LogoutRequest)(nil),                // 5: users.LogoutRequest
-	(*ForgotPasswordRequest)(nil),        // 6: users.ForgotPasswordRequest
-	(*ValidateResetTokenRequest)(nil),    // 7: users.ValidateResetTokenRequest
-	(*ResetPasswordRequest)(nil),         // 8: users.ResetPasswordRequest
-	(*ChangeExpiredPasswordRequest)(nil), // 9: users.ChangeExpiredPasswordRequest
-	(*MagicLinkRequest)(nil),             // 10: users.MagicLinkRequest
-	(*MagicLinkLoginRequest)(nil),        // 11: users.MagicLinkLoginRequest
-	(*MessageResponse)(nil),              // 12: users.MessageResponse
-	(*UserInfo)(nil),                     // 13: users.UserInfo
-	(*AuthResponse)(nil),                 // 14: users.AuthResponse
+	(*GetQuotaRequest)(nil),              // 0: users.GetQuotaRequest
+	(*ReserveQuotaRequest)(nil),          // 1: users.ReserveQuotaRequest
+	(*ReleaseQuotaRequest)(nil),          // 2: users.ReleaseQuotaRequest
+	(*RegisterRequest)(nil),              // 3: users.RegisterRequest
+	(*VerifyEmailRequest)(nil),           // 4: users.VerifyEmailRequest
+	(*LoginRequest)(nil),                 // 5: users.LoginRequest
+	(*VerifyOTPRequest)(nil),             // 6: users.VerifyOTPRequest
+	(*ResendOTPRequest)(nil),             // 7: users.ResendOTPRequest
+	(*LogoutRequest)(nil),                // 8: users.LogoutRequest
+	(*ForgotPasswordRequest)(nil),        // 9: users.ForgotPasswordRequest
+	(*ValidateResetTokenRequest)(nil),    // 10: users.ValidateResetTokenRequest
+	(*ResetPasswordRequest)(nil),         // 11: users.ResetPasswordRequest
+	(*ChangeExpiredPasswordRequest)(nil), // 12: users.ChangeExpiredPasswordRequest
+	(*MagicLinkRequest)(nil),             // 13: users.MagicLinkRequest
+	(*MagicLinkLoginRequest)(nil),        // 14: users.MagicLinkLoginRequest
+	(*MessageResponse)(nil),              // 15: users.MessageResponse
+	(*UserInfo)(nil),                     // 16: users.UserInfo
+	(*QuotaResponse)(nil),                // 17: users.QuotaResponse
+	(*AuthResponse)(nil),                 // 18: users.AuthResponse
 }
 var file_users_users_service_proto_depIdxs = []int32{
-	13, // 0: users.AuthResponse.user:type_name -> users.UserInfo
-	0,  // 1: users.UsersService.Register:input_type -> users.RegisterRequest
-	1,  // 2: users.UsersService.VerifyEmail:input_type -> users.VerifyEmailRequest
-	2,  // 3: users.UsersService.Login:input_type -> users.LoginRequest
-	3,  // 4: users.UsersService.VerifyOTP:input_type -> users.VerifyOTPRequest
-	4,  // 5: users.UsersService.ResendOTP:input_type -> users.ResendOTPRequest
-	5,  // 6: users.UsersService.Logout:input_type -> users.LogoutRequest
-	6,  // 7: users.UsersService.ForgotPassword:input_type -> users.ForgotPasswordRequest
-	7,  // 8: users.UsersService.ValidateResetToken:input_type -> users.ValidateResetTokenRequest
-	8,  // 9: users.UsersService.ResetPassword:input_type -> users.ResetPasswordRequest
-	9,  // 10: users.UsersService.ChangeExpiredPassword:input_type -> users.ChangeExpiredPasswordRequest
-	10, // 11: users.UsersService.RequestMagicLink:input_type -> users.MagicLinkRequest
-	11, // 12: users.UsersService.MagicLinkLogin:input_type -> users.MagicLinkLoginRequest
-	12, // 13: users.UsersService.Register:output_type -> users.MessageResponse
-	12, // 14: users.UsersService.VerifyEmail:output_type -> users.MessageResponse
-	14, // 15: users.UsersService.Login:output_type -> users.AuthResponse
-	14, // 16: users.UsersService.VerifyOTP:output_type -> users.AuthResponse
-	12, // 17: users.UsersService.ResendOTP:output_type -> users.MessageResponse
-	12, // 18: users.UsersService.Logout:output_type -> users.MessageResponse
-	12, // 19: users.UsersService.ForgotPassword:output_type -> users.MessageResponse
-	12, // 20: users.UsersService.ValidateResetToken:output_type -> users.MessageResponse
-	12, // 21: users.UsersService.ResetPassword:output_type -> users.MessageResponse
-	12, // 22: users.UsersService.ChangeExpiredPassword:output_type -> users.MessageResponse
-	12, // 23: users.UsersService.RequestMagicLink:output_type -> users.MessageResponse
-	14, // 24: users.UsersService.MagicLinkLogin:output_type -> users.AuthResponse
-	13, // [13:25] is the sub-list for method output_type
-	1,  // [1:13] is the sub-list for method input_type
+	16, // 0: users.AuthResponse.user:type_name -> users.UserInfo
+	3,  // 1: users.UsersService.Register:input_type -> users.RegisterRequest
+	4,  // 2: users.UsersService.VerifyEmail:input_type -> users.VerifyEmailRequest
+	5,  // 3: users.UsersService.Login:input_type -> users.LoginRequest
+	6,  // 4: users.UsersService.VerifyOTP:input_type -> users.VerifyOTPRequest
+	7,  // 5: users.UsersService.ResendOTP:input_type -> users.ResendOTPRequest
+	8,  // 6: users.UsersService.Logout:input_type -> users.LogoutRequest
+	9,  // 7: users.UsersService.ForgotPassword:input_type -> users.ForgotPasswordRequest
+	10, // 8: users.UsersService.ValidateResetToken:input_type -> users.ValidateResetTokenRequest
+	11, // 9: users.UsersService.ResetPassword:input_type -> users.ResetPasswordRequest
+	12, // 10: users.UsersService.ChangeExpiredPassword:input_type -> users.ChangeExpiredPasswordRequest
+	13, // 11: users.UsersService.RequestMagicLink:input_type -> users.MagicLinkRequest
+	14, // 12: users.UsersService.MagicLinkLogin:input_type -> users.MagicLinkLoginRequest
+	0,  // 13: users.QuotaService.GetQuota:input_type -> users.GetQuotaRequest
+	1,  // 14: users.QuotaService.ReserveQuota:input_type -> users.ReserveQuotaRequest
+	2,  // 15: users.QuotaService.ReleaseQuota:input_type -> users.ReleaseQuotaRequest
+	15, // 16: users.UsersService.Register:output_type -> users.MessageResponse
+	15, // 17: users.UsersService.VerifyEmail:output_type -> users.MessageResponse
+	18, // 18: users.UsersService.Login:output_type -> users.AuthResponse
+	18, // 19: users.UsersService.VerifyOTP:output_type -> users.AuthResponse
+	15, // 20: users.UsersService.ResendOTP:output_type -> users.MessageResponse
+	15, // 21: users.UsersService.Logout:output_type -> users.MessageResponse
+	15, // 22: users.UsersService.ForgotPassword:output_type -> users.MessageResponse
+	15, // 23: users.UsersService.ValidateResetToken:output_type -> users.MessageResponse
+	15, // 24: users.UsersService.ResetPassword:output_type -> users.MessageResponse
+	15, // 25: users.UsersService.ChangeExpiredPassword:output_type -> users.MessageResponse
+	15, // 26: users.UsersService.RequestMagicLink:output_type -> users.MessageResponse
+	18, // 27: users.UsersService.MagicLinkLogin:output_type -> users.AuthResponse
+	17, // 28: users.QuotaService.GetQuota:output_type -> users.QuotaResponse
+	17, // 29: users.QuotaService.ReserveQuota:output_type -> users.QuotaResponse
+	17, // 30: users.QuotaService.ReleaseQuota:output_type -> users.QuotaResponse
+	16, // [16:31] is the sub-list for method output_type
+	1,  // [1:16] is the sub-list for method input_type
 	1,  // [1:1] is the sub-list for extension type_name
 	1,  // [1:1] is the sub-list for extension extendee
 	0,  // [0:1] is the sub-list for field type_name
@@ -981,9 +1201,9 @@ func file_users_users_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_users_users_service_proto_rawDesc), len(file_users_users_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   15,
+			NumMessages:   19,
 			NumExtensions: 0,
-			NumServices:   1,
+			NumServices:   2,
 		},
 		GoTypes:           file_users_users_service_proto_goTypes,
 		DependencyIndexes: file_users_users_service_proto_depIdxs,

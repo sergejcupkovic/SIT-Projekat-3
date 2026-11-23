@@ -115,6 +115,21 @@
               "path": ["api", "users", "verify-otp"]
             }
           },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// keep the session token for the Files requests",
+                  "if (pm.response.code === 200) {",
+                  "  const token = pm.response.json().token;",
+                  "  if (token) pm.collectionVariables.set('jwt', token);",
+                  "}"
+                ]
+              }
+            }
+          ],
           "response": []
         },
         {
@@ -337,6 +352,130 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "Files (US-2.2)",
+      "description": "Log in first (Login -> Potvrda OTP stores the token in {{jwt}}). Allowed types: txt, md, csv, json, pdf, png, jpg, jpeg, gif. In the file picker choose any such file.",
+      "item": [
+        {
+          "name": "Get storage quota",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{jwt}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/files/quota",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "quota"]
+            },
+            "description": "Returns storageQuotaBytes, usedStorageBytes and remainingBytes (int64 values are JSON strings)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 with quota numbers', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const q = pm.response.json();",
+                  "  pm.expect(q).to.have.property('storageQuotaBytes');",
+                  "  pm.expect(q).to.have.property('usedStorageBytes');",
+                  "  pm.expect(q).to.have.property('remainingBytes');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Upload file (My Drive)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{jwt}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [{ "key": "file", "type": "file", "src": [] }]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/files/upload",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "upload"]
+            },
+            "description": "Select a file in the 'file' field. 201 = stored (response carries the file metadata and the updated quota). 413 = storage quota exceeded, nothing is stored. 409 = same name already in this folder. 400 = file type/name/content not allowed."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created, or a clear error message', () => {",
+                  "  if (pm.response.code === 201) {",
+                  "    const r = pm.response.json();",
+                  "    pm.expect(r.file.name).to.be.a('string');",
+                  "    pm.expect(r.quota).to.have.property('usedStorageBytes');",
+                  "  } else {",
+                  "    pm.expect(pm.response.json().message).to.be.a('string').and.not.empty;",
+                  "  }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Upload file (into folder)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{jwt}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": [] },
+                { "key": "folderId", "value": "{{folderId}}", "type": "text" }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/files/upload",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "upload"]
+            },
+            "description": "Same as above, into the folder whose id is in {{folderId}} (GET /api/folders returns the ids). Someone else's folder gives 403, an unknown one 404."
+          },
+          "response": []
+        },
+        {
+          "name": "Upload without token (401)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [{ "key": "file", "type": "file", "src": [] }]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/files/upload",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "upload"]
+            },
+            "description": "Must answer 401 before the body is read."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 without a token', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
     }
   ],
   "variable": [
@@ -354,6 +493,14 @@
     },
     {
       "key": "resetToken",
+      "value": ""
+    },
+    {
+      "key": "jwt",
+      "value": ""
+    },
+    {
+      "key": "folderId",
       "value": ""
     }
   ]

@@ -1,4 +1,4 @@
-// IDL contract for the Storage service (folders).
+// IDL contract for the Storage service (folders and files).
 //
 // Every rpc is bound to a URI + HTTP method via google.api.http so the
 // api-gateway can expose it as REST/JSON over HTTPS.
@@ -49,6 +49,24 @@ service StorageService {
       }
     };
   }
+
+  // GET /api/files/quota - the caller's storage quota and current usage
+  // (answered by asking users-service).
+  rpc GetQuota(GetQuotaRequest) returns (StorageQuota) {
+    option (google.api.http) = {
+      get: "/api/files/quota"
+    };
+  }
+
+  // POST /api/files/upload  (multipart/form-data: "file" + optional "folderId")
+  //
+  // Client-streaming: the first message carries the metadata, every following
+  // message one chunk of the content. The upload is NOT bound with
+  // google.api.http because grpc-gateway cannot parse multipart bodies; the
+  // api-gateway serves this route by hand (api-gateway/upload.go) and streams
+  // the received file into this rpc. Answered with HTTP 201 on success and
+  // HTTP 413 when the quota is exceeded.
+  rpc UploadFile(stream UploadFileRequest) returns (UploadFileResponse);
 }
 
 // ---------- Domain messages ----------
@@ -77,7 +95,36 @@ message FileItem {
   google.protobuf.Timestamp created_at = 5;
 }
 
+// The caller's quota, as kept by users-service.
+// Note: protojson encodes int64 as a JSON string ("123").
+message StorageQuota {
+  int64 storage_quota_bytes = 1;
+  int64 used_storage_bytes = 2;
+  int64 remaining_bytes = 3;
+}
+
 // ---------- Requests ----------
+
+message GetQuotaRequest {}
+
+// One message of the UploadFile stream: the first one must be `metadata`,
+// every later one a `chunk` of the file content.
+message UploadFileRequest {
+  oneof payload {
+    UploadFileMetadata metadata = 1;
+    bytes chunk = 2;
+  }
+}
+
+message UploadFileMetadata {
+  string file_name = 1;
+  // Target folder; unset / empty = root ("My Drive").
+  optional string folder_id = 2;
+  // Exact size of the content that follows. The quota is reserved for this
+  // number BEFORE anything is stored, and the upload is rejected if the stream
+  // delivers more or fewer bytes.
+  int64 size_bytes = 3;
+}
 
 message CreateFolderRequest {
   string name = 1;
@@ -103,6 +150,13 @@ message RenameFolderRequest {
 message FolderResponse {
   string message = 1;
   Folder folder = 2;
+}
+
+message UploadFileResponse {
+  string message = 1;
+  FileItem file = 2;
+  // Quota after this upload was accounted.
+  StorageQuota quota = 3;
 }
 
 message FolderContentResponse {

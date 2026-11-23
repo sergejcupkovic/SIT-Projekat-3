@@ -279,6 +279,38 @@ func VerifyRestrictedToken(tokenString string) (string, error) {
 	return email, nil
 }
 
+// VerifySessionToken validates a full session JWT (HS256, not expired, not the
+// restricted password-change token, role RK) and returns the user ID it was
+// issued for. Used by the internal quota rpcs so a caller can only ever touch
+// the quota of the user its token belongs to.
+func VerifySessionToken(tokenString string) (string, error) {
+	token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+		}
+		return JWTSecret, nil
+	}, jwt.WithValidMethods([]string{"HS256"}))
+	if err != nil || !token.Valid {
+		return "", errors.New("invalid or expired token")
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return "", errors.New("invalid token claims")
+	}
+	if restricted, _ := claims["restricted"].(bool); restricted {
+		return "", errors.New("restricted token cannot access storage quota")
+	}
+	if role, _ := claims["role"].(string); role != "RK" {
+		return "", errors.New("storage quota is available to regular users only")
+	}
+	userID, _ := claims["sub"].(string)
+	if userID == "" {
+		return "", errors.New("user ID not found in token")
+	}
+	return userID, nil
+}
+
 func PasswordChangeAllowed(lastChanged time.Time) (ok bool, retryAt time.Time) {
 	if time.Since(lastChanged) < Cfg.PasswordMinAge {
 		return false, lastChanged.Add(Cfg.PasswordMinAge)

@@ -579,3 +579,215 @@ var UsersService_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "users/users_service.proto",
 }
+
+const (
+	QuotaService_GetQuota_FullMethodName     = "/users.QuotaService/GetQuota"
+	QuotaService_ReserveQuota_FullMethodName = "/users.QuotaService/ReserveQuota"
+	QuotaService_ReleaseQuota_FullMethodName = "/users.QuotaService/ReleaseQuota"
+)
+
+// QuotaServiceClient is the client API for QuotaService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// Internal service used by storage-service for the synchronous quota check
+// that precedes every file upload (US-2.2).
+//
+// It deliberately has NO google.api.http options, so the api-gateway never
+// exposes it over REST: it is reachable only over gRPC inside the Docker
+// network. Every rpc still requires the caller's session JWT in the
+// "authorization" metadata (storage-service forwards the one it received), and
+// only ever touches the quota of the user that JWT belongs to.
+type QuotaServiceClient interface {
+	// Current quota / usage of the caller.
+	GetQuota(ctx context.Context, in *GetQuotaRequest, opts ...grpc.CallOption) (*QuotaResponse, error)
+	// Atomically checks that the caller has `size_bytes` of free space and, if
+	// so, reserves it (used += size_bytes). Check and reservation are one
+	// database operation, so two concurrent uploads cannot both squeeze into the
+	// last free bytes. A quota violation is NOT an error: it is a normal reply
+	// with allowed = false and the current numbers.
+	ReserveQuota(ctx context.Context, in *ReserveQuotaRequest, opts ...grpc.CallOption) (*QuotaResponse, error)
+	// Gives a reservation back (used -= size_bytes, never below 0), e.g. when
+	// storing the file failed after the space was reserved.
+	ReleaseQuota(ctx context.Context, in *ReleaseQuotaRequest, opts ...grpc.CallOption) (*QuotaResponse, error)
+}
+
+type quotaServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewQuotaServiceClient(cc grpc.ClientConnInterface) QuotaServiceClient {
+	return &quotaServiceClient{cc}
+}
+
+func (c *quotaServiceClient) GetQuota(ctx context.Context, in *GetQuotaRequest, opts ...grpc.CallOption) (*QuotaResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(QuotaResponse)
+	err := c.cc.Invoke(ctx, QuotaService_GetQuota_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *quotaServiceClient) ReserveQuota(ctx context.Context, in *ReserveQuotaRequest, opts ...grpc.CallOption) (*QuotaResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(QuotaResponse)
+	err := c.cc.Invoke(ctx, QuotaService_ReserveQuota_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *quotaServiceClient) ReleaseQuota(ctx context.Context, in *ReleaseQuotaRequest, opts ...grpc.CallOption) (*QuotaResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(QuotaResponse)
+	err := c.cc.Invoke(ctx, QuotaService_ReleaseQuota_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// QuotaServiceServer is the server API for QuotaService service.
+// All implementations must embed UnimplementedQuotaServiceServer
+// for forward compatibility.
+//
+// Internal service used by storage-service for the synchronous quota check
+// that precedes every file upload (US-2.2).
+//
+// It deliberately has NO google.api.http options, so the api-gateway never
+// exposes it over REST: it is reachable only over gRPC inside the Docker
+// network. Every rpc still requires the caller's session JWT in the
+// "authorization" metadata (storage-service forwards the one it received), and
+// only ever touches the quota of the user that JWT belongs to.
+type QuotaServiceServer interface {
+	// Current quota / usage of the caller.
+	GetQuota(context.Context, *GetQuotaRequest) (*QuotaResponse, error)
+	// Atomically checks that the caller has `size_bytes` of free space and, if
+	// so, reserves it (used += size_bytes). Check and reservation are one
+	// database operation, so two concurrent uploads cannot both squeeze into the
+	// last free bytes. A quota violation is NOT an error: it is a normal reply
+	// with allowed = false and the current numbers.
+	ReserveQuota(context.Context, *ReserveQuotaRequest) (*QuotaResponse, error)
+	// Gives a reservation back (used -= size_bytes, never below 0), e.g. when
+	// storing the file failed after the space was reserved.
+	ReleaseQuota(context.Context, *ReleaseQuotaRequest) (*QuotaResponse, error)
+	mustEmbedUnimplementedQuotaServiceServer()
+}
+
+// UnimplementedQuotaServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedQuotaServiceServer struct{}
+
+func (UnimplementedQuotaServiceServer) GetQuota(context.Context, *GetQuotaRequest) (*QuotaResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetQuota not implemented")
+}
+func (UnimplementedQuotaServiceServer) ReserveQuota(context.Context, *ReserveQuotaRequest) (*QuotaResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReserveQuota not implemented")
+}
+func (UnimplementedQuotaServiceServer) ReleaseQuota(context.Context, *ReleaseQuotaRequest) (*QuotaResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReleaseQuota not implemented")
+}
+func (UnimplementedQuotaServiceServer) mustEmbedUnimplementedQuotaServiceServer() {}
+func (UnimplementedQuotaServiceServer) testEmbeddedByValue()                      {}
+
+// UnsafeQuotaServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to QuotaServiceServer will
+// result in compilation errors.
+type UnsafeQuotaServiceServer interface {
+	mustEmbedUnimplementedQuotaServiceServer()
+}
+
+func RegisterQuotaServiceServer(s grpc.ServiceRegistrar, srv QuotaServiceServer) {
+	// If the following call panics, it indicates UnimplementedQuotaServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&QuotaService_ServiceDesc, srv)
+}
+
+func _QuotaService_GetQuota_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetQuotaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QuotaServiceServer).GetQuota(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: QuotaService_GetQuota_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QuotaServiceServer).GetQuota(ctx, req.(*GetQuotaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _QuotaService_ReserveQuota_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReserveQuotaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QuotaServiceServer).ReserveQuota(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: QuotaService_ReserveQuota_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QuotaServiceServer).ReserveQuota(ctx, req.(*ReserveQuotaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _QuotaService_ReleaseQuota_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReleaseQuotaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QuotaServiceServer).ReleaseQuota(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: QuotaService_ReleaseQuota_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QuotaServiceServer).ReleaseQuota(ctx, req.(*ReleaseQuotaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// QuotaService_ServiceDesc is the grpc.ServiceDesc for QuotaService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var QuotaService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "users.QuotaService",
+	HandlerType: (*QuotaServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GetQuota",
+			Handler:    _QuotaService_GetQuota_Handler,
+		},
+		{
+			MethodName: "ReserveQuota",
+			Handler:    _QuotaService_ReserveQuota_Handler,
+		},
+		{
+			MethodName: "ReleaseQuota",
+			Handler:    _QuotaService_ReleaseQuota_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "users/users_service.proto",
+}

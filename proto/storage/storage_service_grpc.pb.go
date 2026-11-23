@@ -1,4 +1,4 @@
-// IDL contract for the Storage service (folders).
+// IDL contract for the Storage service (folders and files).
 //
 // Every rpc is bound to a URI + HTTP method via google.api.http so the
 // api-gateway can expose it as REST/JSON over HTTPS.
@@ -34,6 +34,8 @@ const (
 	StorageService_CreateFolder_FullMethodName = "/storage.StorageService/CreateFolder"
 	StorageService_BrowseFolder_FullMethodName = "/storage.StorageService/BrowseFolder"
 	StorageService_RenameFolder_FullMethodName = "/storage.StorageService/RenameFolder"
+	StorageService_GetQuota_FullMethodName     = "/storage.StorageService/GetQuota"
+	StorageService_UploadFile_FullMethodName   = "/storage.StorageService/UploadFile"
 )
 
 // StorageServiceClient is the client API for StorageService service.
@@ -47,6 +49,18 @@ type StorageServiceClient interface {
 	BrowseFolder(ctx context.Context, in *BrowseFolderRequest, opts ...grpc.CallOption) (*FolderContentResponse, error)
 	// PATCH or PUT /api/folders/{folder_id}  body: {"name": "..."}
 	RenameFolder(ctx context.Context, in *RenameFolderRequest, opts ...grpc.CallOption) (*FolderResponse, error)
+	// GET /api/files/quota - the caller's storage quota and current usage
+	// (answered by asking users-service).
+	GetQuota(ctx context.Context, in *GetQuotaRequest, opts ...grpc.CallOption) (*StorageQuota, error)
+	// POST /api/files/upload  (multipart/form-data: "file" + optional "folderId")
+	//
+	// Client-streaming: the first message carries the metadata, every following
+	// message one chunk of the content. The upload is NOT bound with
+	// google.api.http because grpc-gateway cannot parse multipart bodies; the
+	// api-gateway serves this route by hand (api-gateway/upload.go) and streams
+	// the received file into this rpc. Answered with HTTP 201 on success and
+	// HTTP 413 when the quota is exceeded.
+	UploadFile(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadFileRequest, UploadFileResponse], error)
 }
 
 type storageServiceClient struct {
@@ -87,6 +101,29 @@ func (c *storageServiceClient) RenameFolder(ctx context.Context, in *RenameFolde
 	return out, nil
 }
 
+func (c *storageServiceClient) GetQuota(ctx context.Context, in *GetQuotaRequest, opts ...grpc.CallOption) (*StorageQuota, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StorageQuota)
+	err := c.cc.Invoke(ctx, StorageService_GetQuota_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *storageServiceClient) UploadFile(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadFileRequest, UploadFileResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &StorageService_ServiceDesc.Streams[0], StorageService_UploadFile_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[UploadFileRequest, UploadFileResponse]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type StorageService_UploadFileClient = grpc.ClientStreamingClient[UploadFileRequest, UploadFileResponse]
+
 // StorageServiceServer is the server API for StorageService service.
 // All implementations must embed UnimplementedStorageServiceServer
 // for forward compatibility.
@@ -98,6 +135,18 @@ type StorageServiceServer interface {
 	BrowseFolder(context.Context, *BrowseFolderRequest) (*FolderContentResponse, error)
 	// PATCH or PUT /api/folders/{folder_id}  body: {"name": "..."}
 	RenameFolder(context.Context, *RenameFolderRequest) (*FolderResponse, error)
+	// GET /api/files/quota - the caller's storage quota and current usage
+	// (answered by asking users-service).
+	GetQuota(context.Context, *GetQuotaRequest) (*StorageQuota, error)
+	// POST /api/files/upload  (multipart/form-data: "file" + optional "folderId")
+	//
+	// Client-streaming: the first message carries the metadata, every following
+	// message one chunk of the content. The upload is NOT bound with
+	// google.api.http because grpc-gateway cannot parse multipart bodies; the
+	// api-gateway serves this route by hand (api-gateway/upload.go) and streams
+	// the received file into this rpc. Answered with HTTP 201 on success and
+	// HTTP 413 when the quota is exceeded.
+	UploadFile(grpc.ClientStreamingServer[UploadFileRequest, UploadFileResponse]) error
 	mustEmbedUnimplementedStorageServiceServer()
 }
 
@@ -116,6 +165,12 @@ func (UnimplementedStorageServiceServer) BrowseFolder(context.Context, *BrowseFo
 }
 func (UnimplementedStorageServiceServer) RenameFolder(context.Context, *RenameFolderRequest) (*FolderResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RenameFolder not implemented")
+}
+func (UnimplementedStorageServiceServer) GetQuota(context.Context, *GetQuotaRequest) (*StorageQuota, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetQuota not implemented")
+}
+func (UnimplementedStorageServiceServer) UploadFile(grpc.ClientStreamingServer[UploadFileRequest, UploadFileResponse]) error {
+	return status.Error(codes.Unimplemented, "method UploadFile not implemented")
 }
 func (UnimplementedStorageServiceServer) mustEmbedUnimplementedStorageServiceServer() {}
 func (UnimplementedStorageServiceServer) testEmbeddedByValue()                        {}
@@ -192,6 +247,31 @@ func _StorageService_RenameFolder_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _StorageService_GetQuota_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetQuotaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StorageServiceServer).GetQuota(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: StorageService_GetQuota_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StorageServiceServer).GetQuota(ctx, req.(*GetQuotaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StorageService_UploadFile_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(StorageServiceServer).UploadFile(&grpc.GenericServerStream[UploadFileRequest, UploadFileResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type StorageService_UploadFileServer = grpc.ClientStreamingServer[UploadFileRequest, UploadFileResponse]
+
 // StorageService_ServiceDesc is the grpc.ServiceDesc for StorageService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -211,7 +291,17 @@ var StorageService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "RenameFolder",
 			Handler:    _StorageService_RenameFolder_Handler,
 		},
+		{
+			MethodName: "GetQuota",
+			Handler:    _StorageService_GetQuota_Handler,
+		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "UploadFile",
+			Handler:       _StorageService_UploadFile_Handler,
+			ClientStreams: true,
+		},
+	},
 	Metadata: "storage/storage_service.proto",
 }

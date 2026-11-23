@@ -9,6 +9,8 @@ import (
 	"storage-service/handler"
 	"storage-service/middleware"
 	"storage-service/repository"
+	"storage-service/service"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -17,6 +19,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
@@ -38,6 +41,24 @@ func main() {
 		log.Fatal("JWT_SECRET environment variable is required")
 	}
 
+	// Object store (S3 API) that holds the file contents. Credentials have no
+	// built-in default on purpose: docker-compose passes them from .env.
+	objEndpoint := envOr("OBJECT_STORE_ENDPOINT", "object-store:9000")
+	objAccessKey := os.Getenv("OBJECT_STORE_ACCESS_KEY")
+	objSecretKey := os.Getenv("OBJECT_STORE_SECRET_KEY")
+	if objAccessKey == "" || objSecretKey == "" {
+		log.Fatal("OBJECT_STORE_ACCESS_KEY and OBJECT_STORE_SECRET_KEY environment variables are required")
+	}
+	objBucket := envOr("OBJECT_STORE_BUCKET", "stashr-files")
+	objUseSSL := os.Getenv("OBJECT_STORE_USE_SSL") == "true"
+
+	usersAddr := envOr("USERS_GRPC_ADDR", "users-service:50051")
+
+	maxUploadBytes, err := strconv.ParseInt(envOr("MAX_UPLOAD_BYTES", "209715200"), 10, 64)
+	if err != nil || maxUploadBytes <= 0 {
+		log.Fatal("MAX_UPLOAD_BYTES must be a positive integer")
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -54,9 +75,26 @@ func main() {
 	}
 	log.Println("Storage service connected to MongoDB")
 
+	objectStore, err := service.NewObjectStore(objEndpoint, objAccessKey, objSecretKey, objBucket, objUseSSL)
+	if err != nil {
+		log.Fatalf("Failed to initialize the object store: %v", err)
+	}
+	log.Printf("Storage service connected to object store %s (bucket %q)", objEndpoint, objBucket)
+
+	// Client of users-service's internal QuotaService. grpc.NewClient connects
+	// lazily and reconnects on its own, so start-up order does not matter.
+	usersConn, err := grpc.NewClient(usersAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatalf("Failed to create users-service gRPC client (%s): %v", usersAddr, err)
+	}
+	defer usersConn.Close()
+
 	db := client.Database(dbName)
 	folderRepo := repository.NewFolderRepository(db)
-	folderHandler := handler.NewFolderHandler(folderRepo)
+	fileRepo := repository.NewFileRepository(db)
+
+	folderHandler := handler.NewFolderHandler(folderRepo, fileRepo)
+	fileHandler := handler.NewFileHandler(fileRepo, folderRepo, objectStore, service.NewQuotaClient(usersConn), maxUploadBytes)
 
 	port := os.Getenv("STORAGE_GRPC_PORT")
 	if port == "" {
@@ -68,11 +106,13 @@ func main() {
 		log.Fatalf("Failed to listen on :%s: %v", port, err)
 	}
 
-	// Every unary rpc passes through the JWT interceptor before reaching the handler.
+	// Every rpc (unary, and the streaming file upload) passes through the JWT
+	// interceptor before reaching the handler.
 	srv := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(middleware.AuthUnaryInterceptor([]byte(jwtSecret))),
+		grpc.ChainStreamInterceptor(middleware.AuthStreamInterceptor([]byte(jwtSecret))),
 	)
-	storagepb.RegisterStorageServiceServer(srv, folderHandler) // generated in storage_service_grpc.pb.go
+	storagepb.RegisterStorageServiceServer(srv, handler.NewStorageServer(folderHandler, fileHandler)) // generated in storage_service_grpc.pb.go
 
 	healthSrv := health.NewServer()
 	healthpb.RegisterHealthServer(srv, healthSrv)
@@ -92,4 +132,11 @@ func main() {
 	if err := srv.Serve(lis); err != nil {
 		log.Fatalf("gRPC server error: %v", err)
 	}
+}
+
+func envOr(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
 }

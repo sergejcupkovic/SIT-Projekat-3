@@ -91,3 +91,57 @@ func TestInterceptorAllowsRegularUser(t *testing.T) {
 		t.Fatalf("expected the handler to run, got %v (reached: %v)", code, reached)
 	}
 }
+
+// fakeServerStream is the minimum of grpc.ServerStream the interceptor touches.
+type fakeServerStream struct {
+	grpc.ServerStream
+	ctx context.Context
+}
+
+func (f fakeServerStream) Context() context.Context { return f.ctx }
+
+func streamCallWith(t *testing.T, authHeader string) (code codes.Code, gotUserID string) {
+	t.Helper()
+	ctx := context.Background()
+	if authHeader != "" {
+		ctx = metadata.NewIncomingContext(ctx, metadata.Pairs("authorization", authHeader))
+	}
+	info := &grpc.StreamServerInfo{FullMethod: "/storage.StorageService/UploadFile", IsClientStream: true}
+	handler := func(_ any, ss grpc.ServerStream) error {
+		gotUserID, _ = ss.Context().Value(UserIDKey).(string)
+		return nil
+	}
+	err := AuthStreamInterceptor(secret)(nil, fakeServerStream{ctx: ctx}, info, handler)
+	return status.Code(err), gotUserID
+}
+
+func TestStreamInterceptorRejectsMissingAndForgedTokens(t *testing.T) {
+	if code, _ := streamCallWith(t, ""); code != codes.Unauthenticated {
+		t.Fatalf("missing token: expected Unauthenticated, got %v", code)
+	}
+	forged := signToken(t, []byte("some-other-secret-some-other-secret"), jwt.SigningMethodHS256,
+		jwt.MapClaims{"sub": "u1", "role": "RK"})
+	if code, _ := streamCallWith(t, "Bearer "+forged); code != codes.Unauthenticated {
+		t.Fatalf("forged token: expected Unauthenticated, got %v", code)
+	}
+}
+
+func TestStreamInterceptorForbidsRestrictedAndAdmin(t *testing.T) {
+	restricted := signToken(t, secret, jwt.SigningMethodHS256,
+		jwt.MapClaims{"sub": "u1", "role": "RK", "restricted": true})
+	if code, _ := streamCallWith(t, "Bearer "+restricted); code != codes.PermissionDenied {
+		t.Fatalf("restricted: expected PermissionDenied, got %v", code)
+	}
+	admin := signToken(t, secret, jwt.SigningMethodHS256, jwt.MapClaims{"sub": "u1", "role": "A"})
+	if code, _ := streamCallWith(t, "Bearer "+admin); code != codes.PermissionDenied {
+		t.Fatalf("admin: expected PermissionDenied, got %v", code)
+	}
+}
+
+func TestStreamInterceptorPutsUserIDIntoStreamContext(t *testing.T) {
+	tok := signToken(t, secret, jwt.SigningMethodHS256, jwt.MapClaims{"sub": "user-42", "role": "RK"})
+	code, uid := streamCallWith(t, "Bearer "+tok)
+	if code != codes.OK || uid != "user-42" {
+		t.Fatalf("expected OK with user-42, got %v / %q", code, uid)
+	}
+}

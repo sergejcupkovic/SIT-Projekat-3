@@ -117,7 +117,41 @@ service UsersService {
   }
 }
 
+// Internal service used by storage-service for the synchronous quota check
+// that precedes every file upload (US-2.2).
+//
+// It deliberately has NO google.api.http options, so the api-gateway never
+// exposes it over REST: it is reachable only over gRPC inside the Docker
+// network. Every rpc still requires the caller's session JWT in the
+// "authorization" metadata (storage-service forwards the one it received), and
+// only ever touches the quota of the user that JWT belongs to.
+service QuotaService {
+  // Current quota / usage of the caller.
+  rpc GetQuota(GetQuotaRequest) returns (QuotaResponse);
+
+  // Atomically checks that the caller has `size_bytes` of free space and, if
+  // so, reserves it (used += size_bytes). Check and reservation are one
+  // database operation, so two concurrent uploads cannot both squeeze into the
+  // last free bytes. A quota violation is NOT an error: it is a normal reply
+  // with allowed = false and the current numbers.
+  rpc ReserveQuota(ReserveQuotaRequest) returns (QuotaResponse);
+
+  // Gives a reservation back (used -= size_bytes, never below 0), e.g. when
+  // storing the file failed after the space was reserved.
+  rpc ReleaseQuota(ReleaseQuotaRequest) returns (QuotaResponse);
+}
+
 // ---------- Requests ----------
+
+message GetQuotaRequest {}
+
+message ReserveQuotaRequest {
+  int64 size_bytes = 1;
+}
+
+message ReleaseQuotaRequest {
+  int64 size_bytes = 1;
+}
 
 message RegisterRequest {
   string first_name = 1;
@@ -189,6 +223,15 @@ message UserInfo {
   string first_name = 3;
   string last_name = 4;
   string role = 5;
+}
+
+// Reply of every QuotaService rpc.
+message QuotaResponse {
+  // Only meaningful for ReserveQuota: false = not enough free space, nothing reserved.
+  bool allowed = 1;
+  int64 storage_quota_bytes = 2;
+  int64 used_storage_bytes = 3;
+  int64 remaining_bytes = 4;
 }
 
 // Reply of every login-like rpc (Login, VerifyOTP, MagicLinkLogin).

@@ -67,10 +67,14 @@ func main() {
 	srv := grpc.NewServer()
 	userspb.RegisterUsersServiceServer(srv, userHandler) // generated in users_service_grpc.pb.go
 
+	// Internal quota rpcs for storage-service (no REST binding, see users_service.proto).
+	userspb.RegisterQuotaServiceServer(srv, handler.NewQuotaHandler(userRepo))
+
 	// Standard gRPC health service (replaces the old /ping endpoint).
 	healthSrv := health.NewServer()
 	healthpb.RegisterHealthServer(srv, healthSrv)
 	healthSrv.SetServingStatus(userspb.UsersService_ServiceDesc.ServiceName, healthpb.HealthCheckResponse_SERVING)
+	healthSrv.SetServingStatus(userspb.QuotaService_ServiceDesc.ServiceName, healthpb.HealthCheckResponse_SERVING)
 
 	// Server reflection lets tools like grpcurl list and call services
 	// without having the .proto files locally.

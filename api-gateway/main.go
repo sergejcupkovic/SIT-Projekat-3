@@ -2,13 +2,16 @@
 //
 //	client ──HTTPS (REST/JSON)──▶ api-gateway ──gRPC (protobuf, HTTP/2)──▶ users-service / storage-service
 //
-// It does NOT contain hand-written routes. The routes come from the
-// google.api.http annotations in proto/*/*.proto: protoc-gen-grpc-gateway
-// generated *.pb.gw.go files with Register<Service>Handler functions that
-// add, for every rpc, an HTTP route that
+// Its routes come from the google.api.http annotations in proto/*/*.proto:
+// protoc-gen-grpc-gateway generated *.pb.gw.go files with Register<Service>Handler
+// functions that add, for every annotated rpc, an HTTP route that
 //  1. decodes the JSON body / path params / query params into the protobuf request,
 //  2. calls the rpc through a gRPC client connection,
 //  3. encodes the protobuf reply (or gRPC status error) back to JSON + HTTP status.
+//
+// The single exception is the multipart file upload (upload.go), which
+// grpc-gateway cannot decode; it is registered by hand and streams into the
+// StorageService.UploadFile rpc.
 package main
 
 import (
@@ -64,6 +67,11 @@ func main() {
 		log.Fatal("RATE_LIMIT_BURST must be a positive integer")
 	}
 
+	maxUploadBytes, err := strconv.ParseInt(env("MAX_UPLOAD_BYTES", "209715200"), 10, 64)
+	if err != nil || maxUploadBytes <= 0 {
+		log.Fatal("MAX_UPLOAD_BYTES must be a positive integer")
+	}
+
 	// ---- gRPC clients (gateway -> services) ----
 	// Plaintext HTTP/2 inside the private Docker network. grpc.NewClient does not
 	// connect immediately; it connects on first use and reconnects automatically,
@@ -108,6 +116,12 @@ func main() {
 	}
 	if err := storagepb.RegisterStorageServiceHandler(ctx, gw, storageConn); err != nil {
 		log.Fatalf("Failed to register StorageService routes: %v", err)
+	}
+
+	// POST /api/files/upload: the one hand-written route (multipart -> gRPC stream).
+	up := newUploadHandler(gw, storagepb.NewStorageServiceClient(storageConn), []byte(jwtSecret), maxUploadBytes)
+	if err := gw.HandlePath(http.MethodPost, "/api/files/upload", up.handle); err != nil {
+		log.Fatalf("Failed to register the upload route: %v", err)
 	}
 
 	limiter := newRateLimiter(rate.Limit(ratePerSecond), rateBurst, []byte(jwtSecret))
