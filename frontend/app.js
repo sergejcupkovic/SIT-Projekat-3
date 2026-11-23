@@ -68,6 +68,12 @@ const newFolderNameError = document.getElementById("newFolderNameError");
 const folderLoadingState = document.getElementById("folderLoadingState");
 const folderEmptyState = document.getElementById("folderEmptyState");
 const folderItemsList = document.getElementById("folderItemsList");
+const quotaUsageText = document.getElementById("quotaUsageText");
+const quotaBar = document.getElementById("quotaBar");
+const quotaBarFill = document.getElementById("quotaBarFill");
+const fileUploadInput = document.getElementById("fileUploadInput");
+const uploadFileBtn = document.getElementById("uploadFileBtn");
+const uploadFileSpinner = document.getElementById("uploadFileSpinner");
 
 let currentFolderId = null;
 let currentBreadcrumbs = [];
@@ -1149,6 +1155,7 @@ function showDashboard(email, token) {
   userEmailDisplay.textContent = email;
   jwtTokenDisplay.value = token;
   switchSection(dashboardSection);
+  loadUserQuota();
   loadFolderContents(null);
 }
 
@@ -1205,6 +1212,15 @@ if (navigateUpBtn) {
       loadFolderContents(parentCrumb.id);
     }
   });
+}
+
+if (uploadFileBtn && fileUploadInput) {
+  uploadFileBtn.addEventListener("click", () => {
+    hideAlert();
+    fileUploadInput.value = "";
+    fileUploadInput.click();
+  });
+  fileUploadInput.addEventListener("change", handleFileUploadChange);
 }
 
 async function loadFolderContents(folderId) {
@@ -1383,7 +1399,9 @@ function renderFolderItems(folders, files) {
   files.forEach((file) => {
     const row = document.createElement("div");
     row.className = "storage-item-row";
-    const sizeKB = Math.max(1, Math.round((file.sizeBytes || 0) / 1024));
+    const uploadedDate = file.createdAt
+      ? new Date(file.createdAt).toLocaleDateString()
+      : "";
 
     row.innerHTML = `
       <div class="item-left">
@@ -1393,7 +1411,7 @@ function renderFolderItems(folders, files) {
         </svg>
         <span class="item-name"></span>
       </div>
-      <span class="item-meta">${Validation.escapeHtml(sizeKB)} KB</span>
+      <span class="item-meta">${Validation.escapeHtml(formatBytes(file.sizeBytes))} • ${Validation.escapeHtml(uploadedDate)}</span>
     `;
     row.querySelector(".item-name").textContent = file.name;
     folderItemsList.appendChild(row);
@@ -1536,3 +1554,134 @@ async function handleCreateFolderSubmit(event) {
     createFolderSpinner.classList.add("hidden");
   }
 }
+
+// #region file upload and storage quota (US-2.2)
+
+// The API returns int64 values as JSON strings ("1048576"), so always go
+// through Number() before doing any arithmetic.
+function formatBytes(bytes) {
+  const n = Number(bytes);
+  if (!n || n <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const idx = Math.min(Math.floor(Math.log(n) / Math.log(1024)), units.length - 1);
+  const value = n / Math.pow(1024, idx);
+  return `${idx === 0 ? value : value.toFixed(1)} ${units[idx]}`;
+}
+
+function updateQuotaDisplay(usedBytes, totalBytes) {
+  if (!quotaUsageText) return;
+  const used = Number(usedBytes) || 0;
+  const total = Number(totalBytes) || 0;
+  if (total <= 0) return;
+
+  quotaUsageText.textContent = `${formatBytes(used)} of ${formatBytes(total)} used`;
+  if (quotaBar && quotaBarFill) {
+    const pct = Math.min(100, (used / total) * 100);
+    quotaBarFill.style.width = `${pct}%`;
+    quotaBarFill.classList.toggle("is-nearly-full", pct >= 90);
+    quotaBar.classList.remove("hidden");
+  }
+}
+
+async function loadUserQuota() {
+  const token = session.token;
+  if (!token) return;
+
+  try {
+    const { response } = await fetchWithFallback("/api/files/quota", {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+    });
+    if (response.ok) {
+      const data = await response.json();
+      updateQuotaDisplay(data.usedStorageBytes, data.storageQuotaBytes);
+    }
+  } catch (err) {
+    console.warn("Could not load storage quota:", err);
+  }
+}
+
+// 2.2.1: the user picked a file; it goes into the folder that is open right now.
+async function handleFileUploadChange(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+
+  hideAlert();
+  const problem = Validation.fileName(file.name, file.size);
+  if (problem) {
+    showAlert("danger", "Cannot Upload File", problem);
+    fileUploadInput.value = "";
+    return;
+  }
+
+  const token = session.token;
+  if (!token) {
+    switchSection(loginSection);
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("file", file);
+  if (currentFolderId) {
+    formData.append("folderId", currentFolderId);
+  }
+
+  uploadFileBtn.disabled = true;
+  uploadFileSpinner.classList.remove("hidden");
+
+  try {
+    // No Content-Type header: the browser sets multipart/form-data with the boundary.
+    const { response } = await fetchWithFallback("/api/files/upload", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      body: formData,
+    });
+
+    const text = await response.text();
+    let data = {};
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { message: text.trim() };
+    }
+
+    if (response.status === 201) {
+      if (data.quota) {
+        updateQuotaDisplay(data.quota.usedStorageBytes, data.quota.storageQuotaBytes);
+      }
+      showAlert(
+        "success",
+        "File Uploaded",
+        `"${file.name}" (${formatBytes(file.size)}) was uploaded successfully.`,
+      );
+      await loadFolderContents(currentFolderId);
+    } else if (response.status === 413 && /quota/i.test(data.message || "")) {
+      // 2.2.4: quota violation - the server aborted the upload; show its message.
+      showAlert(
+        "danger",
+        "Storage Quota Exceeded",
+        data.message ||
+          "Upload aborted: you do not have enough free storage space.",
+      );
+      loadUserQuota();
+    } else if (response.status === 413) {
+      showAlert("danger", "File Too Large", data.message || "This file is too large to upload.");
+    } else if (response.status === 401) {
+      session.end();
+      switchSection(loginSection);
+      showAlert("warning", "Session Expired", "Please sign in again.");
+    } else if (response.status === 429) {
+      // fetchWithFallback already showed the "Too Many Requests" alert
+    } else {
+      showAlert("danger", "Upload Failed", data.message || "Could not upload the file.");
+    }
+  } catch (err) {
+    showAlert("danger", "Connection Error", "Could not reach Storage Service.");
+  } finally {
+    uploadFileBtn.disabled = false;
+    uploadFileSpinner.classList.add("hidden");
+    fileUploadInput.value = "";
+  }
+}
+
+// #endregion

@@ -2,10 +2,12 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"time"
 	"users-service/domain"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -249,6 +251,73 @@ func (r *UserRepository) ClearMagicLinkToken(ctx context.Context, email string) 
 	}
 	_, err := r.collection.UpdateOne(ctx, filter, update)
 	return err
+}
+
+// #endregion
+
+// #region storage quota
+
+func (r *UserRepository) FindByID(ctx context.Context, id primitive.ObjectID) (*domain.User, error) {
+	var user domain.User
+	err := r.collection.FindOne(ctx, bson.M{"_id": id}).Decode(&user)
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+// ReserveStorageQuota checks and reserves in ONE atomic update: the filter only
+// matches while usedStorageBytes + sizeBytes still fits into storageQuotaBytes,
+// and the same operation then increments usedStorageBytes. Two concurrent
+// uploads therefore cannot both take the last free bytes (no read-then-write
+// race). Returns (nil, false, nil) when the file does not fit or the user does
+// not exist; the caller tells the two apart with FindByID.
+func (r *UserRepository) ReserveStorageQuota(ctx context.Context, userID primitive.ObjectID, sizeBytes int64) (*domain.User, bool, error) {
+	filter := bson.M{
+		"_id": userID,
+		"$expr": bson.M{
+			"$lte": bson.A{
+				bson.M{"$add": bson.A{"$usedStorageBytes", sizeBytes}},
+				"$storageQuotaBytes",
+			},
+		},
+	}
+	update := bson.M{"$inc": bson.M{"usedStorageBytes": sizeBytes}}
+	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
+
+	var updated domain.User
+	err := r.collection.FindOneAndUpdate(ctx, filter, update, opts).Decode(&updated)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	return &updated, true, nil
+}
+
+// ReleaseStorageQuota gives a reservation back. It is an aggregation-pipeline
+// update so usedStorageBytes is clamped at 0 and can never go negative, even if
+// a release is repeated.
+func (r *UserRepository) ReleaseStorageQuota(ctx context.Context, userID primitive.ObjectID, sizeBytes int64) (*domain.User, error) {
+	update := mongo.Pipeline{
+		{{Key: "$set", Value: bson.D{
+			{Key: "usedStorageBytes", Value: bson.D{
+				{Key: "$max", Value: bson.A{
+					int64(0),
+					bson.D{{Key: "$subtract", Value: bson.A{"$usedStorageBytes", sizeBytes}}},
+				}},
+			}},
+		}}},
+	}
+	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
+
+	var updated domain.User
+	err := r.collection.FindOneAndUpdate(ctx, bson.M{"_id": userID}, update, opts).Decode(&updated)
+	if err != nil {
+		return nil, err
+	}
+	return &updated, nil
 }
 
 // #endregion

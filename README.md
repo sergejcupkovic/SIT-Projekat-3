@@ -5,8 +5,10 @@
 ```
 Browser ──HTTPS──▶ frontend (nginx) :3000 ──HTTPS /api──▶ api-gateway :8443
 Postman ──HTTPS──────────────────────────────────────────▶     │  REST/JSON ⇄ protobuf (grpc-gateway)
-                                                                ├──gRPC──▶ users-service   :50051
-                                                                └──gRPC──▶ storage-service :50052
+                                                                ├──gRPC──▶ users-service   :50051  ◀──gRPC (quota check)──┐
+                                                                └──gRPC──▶ storage-service :50052 ───────────────────────┘
+                                                                              │  S3 API
+                                                                              └────────▶ object-store (SeaweedFS) :9000
 ```
 
 - **Client ↔ gateway: HTTPS.** nginx and the API gateway both terminate TLS with a certificate
@@ -28,7 +30,7 @@ Postman ──HTTPS────────────────────�
 | `PermissionDenied` | 403 |
 | `NotFound` | 404 |
 | `AlreadyExists` | 409 |
-| `ResourceExhausted` | 429 |
+| `ResourceExhausted` | 429 (the file upload maps it to **413**: storage quota exceeded) |
 | `Internal` | 500 |
 
 Error body: `{"code": <grpc code>, "message": "...", "details": []}`.
@@ -96,6 +98,7 @@ docker compose ps
 - **API Gateway**: https://localhost:8443
 - **gRPC services (debugging only)**: `localhost:50051`, `localhost:50052` (plaintext, reflection enabled)
 - **Mailpit Web UI**: http://localhost:8025
+- **Object store (S3 API / web UI, localhost only, for debugging)**: `localhost:9000` / http://localhost:9001
 
 ### Step 6: Try it out
 Open https://localhost:3000, register an account, open Mailpit (http://localhost:8025) to click the
@@ -175,6 +178,10 @@ or `*.pb.gw.go` files by hand.
 | `STORAGE_GRPC_PORT` | 50052 | Storage service (gRPC) |
 | `GATEWAY_PORT` | 8443 | API gateway (HTTPS) |
 | `FRONTEND_PORT` | 3000 | Frontend |
+| `OBJECT_STORE_ACCESS_KEY` / `OBJECT_STORE_SECRET_KEY` | stashr-dev / stashr-dev-secret-change-me | Object store credentials. Must match `s3.json`; local development defaults only |
+| `OBJECT_STORE_BUCKET` | stashr-files | Bucket for uploaded files (created on start-up) |
+| `OBJECT_STORE_API_PORT` / `OBJECT_STORE_UI_PORT` | 9000 / 9001 | Object store S3 API / web UI, published on localhost only |
+| `MAX_UPLOAD_BYTES` | 209715200 | Largest single file (200 MiB). nginx allows `201m` (`frontend/nginx.conf`); change both together |
 | `JWT_SECRET` | none | Required, at least 32 chars |
 | `RATE_LIMIT_PER_SECOND` | 1 | Sustained requests per second allowed per user (per IP when not logged in) |
 | `RATE_LIMIT_BURST` | 20 | Burst size of that limit; the next request gets `429` |
@@ -209,12 +216,64 @@ Durations use Go syntax (`30m`, `2160h`); there is no `d` unit.
 
 ---
 
+## File upload and storage quota (US-2.2)
+
+```
+Browser ──multipart──▶ api-gateway ──gRPC stream──▶ storage-service ──gRPC (ReserveQuota)──▶ users-service
+                                                         │  2.2.3                                  (atomic check + reserve)
+                                                         ├──▶ object-store  (file content)
+                                                         └──▶ MongoDB       (file metadata)
+```
+
+| Step | Where |
+| :--- | :--- |
+| **2.2.1** The user selects a file and the target folder | Frontend: **Upload File** uploads into the folder that is currently open (My Drive = root) |
+| **2.2.2** Before saving, storage-service synchronously asks users-service whether the file fits | `users.QuotaService/ReserveQuota`: check **and** reservation are one atomic MongoDB update, so concurrent uploads cannot both take the last free bytes |
+| **2.2.3** Content to the object store, metadata to the document database | Object store: `<userId>/<fileId>`. MongoDB `storage_db.files`: name, type, size, owner, parent folder, timestamp (+ SHA-256, object key) |
+| **2.2.4** Quota violation aborts the upload with a clear message | `413` + `Storage quota exceeded: this file is 60.0 MB but only 50.0 MB is free ...`; nothing is stored |
+
+Order inside storage-service: size/name/type/content checks, target folder is the caller's, no duplicate name,
+**quota reserved**, content stored, metadata saved. If anything fails after the reservation, the stored object is
+deleted and the quota released, so a failed or cancelled upload never costs space. If the Users service cannot be
+reached the upload is refused (it never skips the check).
+
+Why the gateway has a hand-written route: grpc-gateway cannot decode `multipart/form-data`, so `api-gateway/upload.go`
+spools the file, then streams it into the client-streaming rpc `StorageService.UploadFile` (first message = file name,
+**exact size** and folder; then 64 KiB chunks). Knowing the real size up front is what makes the quota check possible
+before storing. The size is enforced: a stream that delivers more or fewer bytes than declared is rejected.
+
+```bash
+# upload into My Drive / into a folder, and read the quota
+curl --cacert certs/ca.crt -H "Authorization: Bearer $JWT" -F file=@notes.txt https://localhost:8443/api/files/upload
+curl --cacert certs/ca.crt -H "Authorization: Bearer $JWT" -F file=@notes.txt -F folderId=<id> https://localhost:8443/api/files/upload
+curl --cacert certs/ca.crt -H "Authorization: Bearer $JWT" https://localhost:8443/api/files/quota
+```
+
+| Response | Meaning |
+| :--- | :--- |
+| `201` | Stored. Body: `file` (id, name, sizeBytes, mimeType, createdAt) and the updated `quota` |
+| `400` | Bad name, type not allowed, content does not match the extension, empty file |
+| `401` / `403` | No or invalid token; or restricted token, not a regular user, or someone else's folder |
+| `404` | Target folder does not exist |
+| `409` | A file with that name already exists in the folder |
+| `413` | Storage quota exceeded, or the file is larger than `MAX_UPLOAD_BYTES` (the message says which) |
+| `503` | Users service unreachable: nothing was uploaded, try again |
+
+`int64` fields (`sizeBytes`, `usedStorageBytes`, ...) are JSON **strings** (protojson); the frontend converts them with `Number()`.
+
+Known limitations: a crash of storage-service between "quota reserved" and "metadata saved" leaves that space
+reserved (there is no reconciliation job); there are no download or delete endpoints yet.
+
+---
+
 ## Security (access control and input validation)
 
 ### Access control
 | Layer | What is enforced |
 | :--- | :--- |
 | `storage-service` | Every rpc requires a valid HS256 session JWT: missing, forged or expired token → `401`; restricted token (expired password) or a role other than `RK` → `403`. Folder operations also check that the caller owns the folder. |
+| `users-service` quota rpcs | `users.QuotaService` has no REST binding, so the gateway never exposes it. Each call must carry the caller's session JWT (storage-service forwards the user's own) and only touches the quota of the user in that token. |
+| api-gateway upload route | `POST /api/files/upload` rejects a missing, forged or expired JWT with `401` before reading the body. |
 | Frontend | The dashboard is only shown for a session with role `RK`; otherwise the login screen is shown. |
 | Client state | The session (JWT, e-mail, role) is stored in `localStorage` as AES-GCM ciphertext (`frontend/secure-session.js`). The key is non-extractable and kept in IndexedDB; a modified value fails authentication and is discarded. |
 
@@ -237,6 +296,7 @@ the browser (`frontend/validation.js`) for quick feedback. The server never trus
 | Verification, reset and magic-link tokens | 64 lower-case hex characters |
 | Folder name | Letters, digits, space and `. _ - ( )`; 1–100 characters; not only dots |
 | Folder / parent IDs | Valid MongoDB ObjectID |
+| File name / type | Same character rule as folder names (max 255); extension whitelist; content must match the extension; not empty; at most `MAX_UPLOAD_BYTES` |
 | `default_quota_bytes` | Positive number (checked at startup) |
 
 ### Output encoding and injection
@@ -245,9 +305,10 @@ filters are built from typed values (never from concatenated strings), and the w
 input such as `{"$ne": ""}` from reaching the database.
 
 ### File checks
-`storage-service/filecheck` is ready for the upload/download endpoints, which do not exist yet: filename and
-extension whitelist (`txt, md, csv, json, pdf, png, jpg, jpeg, gif`), content sniffing so a renamed executable is
-rejected, and SHA-256 `Checksum` / `Verify` for integrity.
+`storage-service/filecheck` is applied to every upload (US-2.2): filename and extension whitelist
+(`txt, md, csv, json, pdf, png, jpg, jpeg, gif`), content sniffing so a renamed executable is rejected, and the
+content type is taken from the sniffed bytes, never from the client's `Content-Type`. The SHA-256 of every stored file
+is saved in its metadata; `filecheck.Verify` is meant for the download endpoint, which does not exist yet.
 
 ### Running the security tests
 ```bash
@@ -318,6 +379,23 @@ docker exec -it users_mongodb mongosh users_db --eval "db.users.deleteMany({})"
 }
 ```
 
+**Database:** `storage_db`, collection `files` (file metadata; the content is in the object store)
+
+```json
+{
+  "_id": ObjectId("6741..."),
+  "name": "report.pdf",
+  "folderId": ObjectId("6740..."),
+  "ownerId": "672f...",
+  "sizeBytes": NumberLong("482113"),
+  "mimeType": "application/pdf",
+  "objectKey": "672f.../6741...",
+  "sha256": "9f86d0...64 hex chars...",
+  "createdAt": ISODate("2026-11-23T10:15:00.000Z")
+}
+```
+`folderId` is `null` for files in My Drive. A unique index on `(ownerId, folderId, name)` prevents duplicate names.
+
 ---
 
 ## Password reset (Postman)
@@ -344,6 +422,7 @@ docker exec -it users_mongodb mongosh users_db --eval "db.users.updateOne({ emai
 - **Go (Golang):** `1.27.3` (primary language for microservices and API Gateway)
 - **Docker & Docker Compose:** Containerization of services and databases
 - **MongoDB (`mongo:7.0`):** Document-oriented NoSQL database for `users-service` and `storage-service`
+- **SeaweedFS (`chrislusf/seaweedfs:4.55`):** S3-compatible object store for uploaded file contents (accessed with `github.com/minio/minio-go/v7`)
 - **Mailpit (`axllent/mailpit:v1.15`):** Local SMTP server and Web UI for catching and testing verification emails https://mailpit.axllent.org/
 - **nginx (`nginx:alpine`):** Serves the frontend over HTTPS and proxies `/api` to the gateway over HTTPS
 - **OpenSSL:** Local CA and server certificate for HTTPS (`certs/generate-certs.sh`)

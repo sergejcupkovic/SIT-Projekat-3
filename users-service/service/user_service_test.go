@@ -7,6 +7,7 @@ import (
 
 	"users-service/config"
 
+	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -207,6 +208,59 @@ func TestVerifyRestrictedToken_StandardTokenRejected(t *testing.T) {
 	if err == nil {
 		t.Errorf("Expected VerifyRestrictedToken to reject standard token without restricted claim")
 	}
+}
+
+func TestVerifySessionToken(t *testing.T) {
+	const userID = "60d5ec49f1b2c82b8c8e4e01"
+
+	t.Run("valid session token returns the user id", func(t *testing.T) {
+		tok, _ := GenerateJWTToken(userID, "a@example.com", "RK")
+		got, err := VerifySessionToken(tok)
+		if err != nil || got != userID {
+			t.Fatalf("expected %s, got %q (err %v)", userID, got, err)
+		}
+	})
+
+	t.Run("restricted token is rejected", func(t *testing.T) {
+		tok, _ := GenerateRestrictedJWTToken(userID, "a@example.com", "RK")
+		if _, err := VerifySessionToken(tok); err == nil {
+			t.Fatal("restricted token must not be accepted")
+		}
+	})
+
+	t.Run("admin role is rejected", func(t *testing.T) {
+		tok, _ := GenerateJWTToken(userID, "a@example.com", "A")
+		if _, err := VerifySessionToken(tok); err == nil {
+			t.Fatal("non-RK role must not be accepted")
+		}
+	})
+
+	t.Run("token signed with another secret is rejected", func(t *testing.T) {
+		forged, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+			"sub": userID, "role": "RK", "exp": time.Now().Add(time.Hour).Unix(),
+		}).SignedString([]byte("some-other-secret-some-other-secret"))
+		if _, err := VerifySessionToken(forged); err == nil {
+			t.Fatal("forged token must not be accepted")
+		}
+	})
+
+	t.Run("expired token is rejected", func(t *testing.T) {
+		expired, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+			"sub": userID, "role": "RK", "exp": time.Now().Add(-time.Minute).Unix(),
+		}).SignedString(JWTSecret)
+		if _, err := VerifySessionToken(expired); err == nil {
+			t.Fatal("expired token must not be accepted")
+		}
+	})
+
+	t.Run("alg none is rejected", func(t *testing.T) {
+		none, _ := jwt.NewWithClaims(jwt.SigningMethodNone, jwt.MapClaims{
+			"sub": userID, "role": "RK", "exp": time.Now().Add(time.Hour).Unix(),
+		}).SignedString(jwt.UnsafeAllowNoneSignatureType)
+		if _, err := VerifySessionToken(none); err == nil {
+			t.Fatal("unsigned token must not be accepted")
+		}
+	})
 }
 
 func TestValidateChangeExpiredPassword(t *testing.T) {

@@ -988,3 +988,32 @@ body {
   color: var(--primary);
   border-color: #bfdbfe;
 }
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.quota-bar {
+  width: 11rem;
+  height: 4px;
+  margin-top: 0.3rem;
+  border-radius: 2px;
+  background-color: #e2e8f0;
+  overflow: hidden;
+}
+
+.quota-bar.hidden {
+  display: none;
+}
+
+.quota-bar-fill {
+  height: 100%;
+  width: 0%;
+  background-color: var(--primary);
+  transition: width 0.3s ease;
+}
+
+.quota-bar-fill.is-nearly-full {
+  background-color: var(--danger);
+}

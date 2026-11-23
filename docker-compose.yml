@@ -23,6 +23,20 @@ services:
       - "${MAILPIT_UI_PORT}:${MAILPIT_UI_PORT}"
       - "${SMTP_PORT}:${SMTP_PORT}"
 
+  # S3-compatible object store (SeaweedFS) that holds the CONTENT of uploaded files;
+  # file metadata lives in MongoDB. Credentials come from s3.json (keep in sync with .env).
+  # Ports are published on localhost only, for debugging (S3 API and web UI).
+  object-store:
+    image: chrislusf/seaweedfs:4.55
+    container_name: stashr_object_store
+    command: ["server", "-dir=/data", "-s3", "-s3.port=9000", "-s3.config=/etc/seaweedfs/s3.json"]
+    ports:
+      - "127.0.0.1:${OBJECT_STORE_API_PORT:-9000}:9000"
+      - "127.0.0.1:${OBJECT_STORE_UI_PORT:-9001}:8888"
+    volumes:
+      - object_store_data:/data
+      - ./s3.json:/etc/seaweedfs/s3.json:ro
+
   # gRPC server (UsersService). Port published only for debugging with grpcurl.
   users-service:
     build:
@@ -55,8 +69,18 @@ services:
       STORAGE_GRPC_PORT: ${STORAGE_GRPC_PORT:-50052}
       MONGO_URI: mongodb://mongodb:${MONGO_PORT}
       MONGO_DB_NAME: storage_db
+      USERS_GRPC_ADDR: users-service:${USERS_GRPC_PORT:-50051}
+      OBJECT_STORE_ENDPOINT: object-store:9000
+      OBJECT_STORE_ACCESS_KEY: ${OBJECT_STORE_ACCESS_KEY:-stashr-dev}
+      OBJECT_STORE_SECRET_KEY: ${OBJECT_STORE_SECRET_KEY:-stashr-dev-secret-change-me}
+      OBJECT_STORE_BUCKET: ${OBJECT_STORE_BUCKET:-stashr-files}
+      OBJECT_STORE_USE_SSL: "false"
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-209715200}
+    restart: on-failure
     depends_on:
       - mongodb
+      - object-store
+      - users-service
 
   # HTTPS REST entry point; translates REST/JSON <-> gRPC.
   api-gateway:
@@ -74,6 +98,7 @@ services:
       TLS_CERT_FILE: /certs/server.crt
       TLS_KEY_FILE: /certs/server.key
       FRONTEND_URL: https://localhost:${FRONTEND_PORT}
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-209715200}
     volumes:
       - ./certs:/certs:ro
     depends_on:
@@ -93,3 +118,4 @@ services:
 
 volumes:
   mongo_data:
+  object_store_data:
