@@ -1,4 +1,8 @@
 name: Stashr
+
+# Request path:
+#   browser ──HTTPS──▶ frontend (nginx) ──HTTPS /api──▶ api-gateway ──gRPC──▶ users-service / storage-service
+# Run `bash certs/generate-certs.sh` once before the first `docker compose up`.
 services:
   mongodb:
     image: mongo:7.0
@@ -36,30 +40,37 @@ services:
     volumes:
       - minio_data:/data
       - ./s3.json:/etc/seaweedfs/s3.json:ro
+  # gRPC server (UsersService). Port published only for debugging with grpcurl.
   users-service:
-    build: ./users-service
+    build:
+      context: .
+      dockerfile: users-service/Dockerfile
     container_name: users_service
     ports:
-      - "${USERS_SERVICE_PORT}:${USERS_SERVICE_PORT}"
+      - "${USERS_GRPC_PORT:-50051}:${USERS_GRPC_PORT:-50051}"
     env_file: .env
     environment:
       CONFIG_PATH: /app/config.yaml
       MONGO_URI: mongodb://mongodb:${MONGO_PORT}
+      USERS_GRPC_PORT: ${USERS_GRPC_PORT:-50051}
     volumes:
       - ./config.yaml:/app/config.yaml:ro
     depends_on:
       - mongodb
       - mailpit
 
+  # gRPC server (StorageService). Port published only for debugging with grpcurl.
   storage-service:
-    build: ./storage-service
+    build:
+      context: .
+      dockerfile: storage-service/Dockerfile
     container_name: storage_service
     restart: on-failure
     ports:
-      - "${STORAGE_SERVICE_PORT:-8082}:${STORAGE_SERVICE_PORT:-8082}"
+      - "${STORAGE_GRPC_PORT:-50052}:${STORAGE_GRPC_PORT:-50052}"
     env_file: .env
     environment:
-      PORT: ${STORAGE_SERVICE_PORT:-8082}
+      STORAGE_GRPC_PORT: ${STORAGE_GRPC_PORT:-50052}
       MONGO_URI: mongodb://mongodb:${MONGO_PORT}
       MONGO_DB_NAME: storage_db
       USERS_SERVICE_URL: http://users-service:${USERS_SERVICE_PORT}
@@ -73,24 +84,36 @@ services:
       - minio
       - users-service
 
+  # HTTPS REST entry point; translates REST/JSON <-> gRPC.
   api-gateway:
-    build: ./api-gateway
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile
     container_name: api_gateway
     ports:
-      - "${GATEWAY_PORT}:${GATEWAY_PORT}"
+      - "${GATEWAY_PORT:-8443}:${GATEWAY_PORT:-8443}"
     env_file: .env
     environment:
-      USERS_SERVICE_URL: http://users-service:${USERS_SERVICE_PORT}
-      STORAGE_SERVICE_URL: http://storage-service:${STORAGE_SERVICE_PORT:-8082}
+      GATEWAY_PORT: ${GATEWAY_PORT:-8443}
+      USERS_GRPC_ADDR: users-service:${USERS_GRPC_PORT:-50051}
+      STORAGE_GRPC_ADDR: storage-service:${STORAGE_GRPC_PORT:-50052}
+      TLS_CERT_FILE: /certs/server.crt
+      TLS_KEY_FILE: /certs/server.key
+      FRONTEND_URL: https://localhost:${FRONTEND_PORT}
+    volumes:
+      - ./certs:/certs:ro
     depends_on:
       - users-service
       - storage-service
 
+  # nginx serving the SPA over HTTPS and proxying /api to the gateway over HTTPS.
   frontend:
     build: ./frontend
     container_name: frontend
     ports:
-      - "${FRONTEND_PORT}:80"
+      - "${FRONTEND_PORT}:443"
+    volumes:
+      - ./certs:/etc/nginx/certs:ro
     depends_on:
       - api-gateway
 

@@ -94,6 +94,7 @@
                   <input
                     type="email"
                     id="loginEmail"
+                    maxlength="254"
                     class="form-input"
                     placeholder="petar@example.com"
                     autocomplete="email"
@@ -111,6 +112,7 @@
                   <input
                     type="password"
                     id="loginPassword"
+                    maxlength="72"
                     class="form-input"
                     placeholder="Enter your password"
                     autocomplete="current-password"
@@ -198,6 +200,7 @@
                   <input
                     type="password"
                     id="forceNewPassword"
+                    maxlength="72"
                     class="form-input"
                     placeholder="••••••••"
                     required
@@ -214,6 +217,7 @@
                   <input
                     type="password"
                     id="forceConfirmPassword"
+                    maxlength="72"
                     class="form-input"
                     placeholder="••••••••"
                     required
@@ -253,6 +257,8 @@
                   <input
                     type="text"
                     id="otpCode"
+                    inputmode="numeric"
+                    pattern="[0-9]{6}"
                     class="form-input otp-input"
                     placeholder="123456"
                     maxlength="6"
@@ -493,6 +499,7 @@
                     <input
                       type="text"
                       id="firstName"
+                      maxlength="100"
                       name="firstName"
                       class="form-input"
                       placeholder="e.g. Petar"
@@ -511,6 +518,7 @@
                     <input
                       type="text"
                       id="lastName"
+                      maxlength="100"
                       name="lastName"
                       class="form-input"
                       placeholder="e.g. Petrovic"
@@ -530,6 +538,7 @@
                   <input
                     type="email"
                     id="email"
+                    maxlength="254"
                     name="email"
                     class="form-input"
                     placeholder="petar@example.com"
@@ -548,6 +557,7 @@
                   <input
                     type="password"
                     id="password"
+                    maxlength="72"
                     name="password"
                     class="form-input"
                     placeholder="At least 8 chars with upper, lower, digit & symbol"
@@ -631,6 +641,7 @@
                   <input
                     type="password"
                     id="confirmPassword"
+                    maxlength="72"
                     name="confirmPassword"
                     class="form-input"
                     placeholder="Re-enter your password"
@@ -702,6 +713,8 @@
       </main>
     </div>
 
+    <script src="validation.js"></script>
+    <script src="secure-session.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

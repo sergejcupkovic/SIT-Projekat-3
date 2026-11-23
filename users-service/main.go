@@ -3,7 +3,10 @@ package main
 import (
 	"context"
 	"log"
-	"net/http"
+	"net"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"users-service/config"
@@ -11,8 +14,14 @@ import (
 	"users-service/repository"
 	"users-service/service"
 
+	userspb "stashr/proto/users"
+
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/reflection"
 )
 
 func main() {
@@ -48,26 +57,35 @@ func main() {
 		cfg.DefaultQuotaBytes,
 	)
 
-	http.HandleFunc("/api/users/register", userHandler.Register)
-	http.HandleFunc("/api/users/verify", userHandler.Verify)
-	http.HandleFunc("/api/users/login", userHandler.Login)
-	http.HandleFunc("/api/users/verify-otp", userHandler.VerifyOTP)
-	http.HandleFunc("/api/users/resend-otp", userHandler.ResendOTP)
-	http.HandleFunc("/api/users/logout", userHandler.Logout)
-	http.HandleFunc("/api/users/forgot-password", userHandler.ForgotPassword)
-	http.HandleFunc("/api/users/reset-password", userHandler.ResetPassword)
-	http.HandleFunc("/api/users/change-expired-password", userHandler.ChangeExpiredPassword)
-	http.HandleFunc("/api/users/magic-link-request", userHandler.RequestMagicLink)
-	http.HandleFunc("/api/users/magic-link-login", userHandler.GetMagicLinkLogin)
-	http.HandleFunc("/api/users/quota", userHandler.GetQuota)
-	http.HandleFunc("/api/users/quota/reserve", userHandler.ReserveQuota)
-	http.HandleFunc("/api/users/quota/release", userHandler.ReleaseQuota)
+	// gRPC server: users-service is no longer an HTTP server. The api-gateway
+	// is the only HTTP(S) entry point and talks to us over gRPC (HTTP/2).
+	lis, err := net.Listen("tcp", ":"+cfg.Port)
+	if err != nil {
+		log.Fatalf("Failed to listen on :%s: %v", cfg.Port, err)
+	}
 
-	http.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("pong"))
-	})
+	srv := grpc.NewServer()
+	userspb.RegisterUsersServiceServer(srv, userHandler) // generated in users_service_grpc.pb.go
 
-	log.Printf("Users Service running on port %s...", cfg.Port)
-	log.Fatal(http.ListenAndServe(":"+cfg.Port, nil))
+	// Standard gRPC health service (replaces the old /ping endpoint).
+	healthSrv := health.NewServer()
+	healthpb.RegisterHealthServer(srv, healthSrv)
+	healthSrv.SetServingStatus(userspb.UsersService_ServiceDesc.ServiceName, healthpb.HealthCheckResponse_SERVING)
+
+	// Server reflection lets tools like grpcurl list and call services
+	// without having the .proto files locally.
+	reflection.Register(srv)
+
+	go func() {
+		stop := make(chan os.Signal, 1)
+		signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+		<-stop
+		log.Println("Shutting down Users gRPC service...")
+		srv.GracefulStop()
+	}()
+
+	log.Printf("Users gRPC service listening on :%s", cfg.Port)
+	if err := srv.Serve(lis); err != nil {
+		log.Fatalf("gRPC server error: %v", err)
+	}
 }
