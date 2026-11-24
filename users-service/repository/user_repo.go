@@ -321,3 +321,47 @@ func (r *UserRepository) ReleaseStorageQuota(ctx context.Context, userID primiti
 }
 
 // #endregion
+
+// #region Seeded Admin
+
+func (r *UserRepository) SeedAdmin(ctx context.Context, admin *domain.User) error {
+	filter := bson.M{"email": admin.Email}
+	update := bson.M{"$setOnInsert": admin}
+	opts := options.Update().SetUpsert(true)
+	_, err := r.collection.UpdateOne(ctx, filter, update, opts)
+	return err
+}
+
+// #endregion
+
+// #region Admin
+
+func (r *UserRepository) FindAllUsers(ctx context.Context) ([]domain.User, error) {
+	opts := options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}})
+	cursor, err := r.collection.Find(ctx, bson.M{}, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var users []domain.User
+	if err := cursor.All(ctx, &users); err != nil {
+		return nil, err
+	}
+	return users, nil
+}
+
+func (r *UserRepository) UpdateStorageQuota(ctx context.Context, userID primitive.ObjectID, newQuotaBytes int64) (*domain.User, error) {
+	filter := bson.M{"_id": userID}
+	update := bson.M{"$set": bson.M{"storageQuotaBytes": newQuotaBytes}}
+	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
+
+	var updated domain.User
+	err := r.collection.FindOneAndUpdate(ctx, filter, update, opts).Decode(&updated)
+	if err != nil {
+		return nil, err
+	}
+	return &updated, nil
+}
+
+// #endregion

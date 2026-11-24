@@ -10,12 +10,14 @@ import (
 
 type Config struct {
 	// env only
-	Port         string `yaml:"-"`
-	SMTPPort     string `yaml:"-"`
-	GatewayPort  string `yaml:"-"`
-	FrontendPort string `yaml:"-"`
-	MongoURI     string `yaml:"-"`
-	JWTSecret    string `yaml:"-"`
+	Port          string `yaml:"-"`
+	SMTPPort      string `yaml:"-"`
+	GatewayPort   string `yaml:"-"`
+	FrontendPort  string `yaml:"-"`
+	MongoURI      string `yaml:"-"`
+	JWTSecret     string `yaml:"-"`
+	AdminEmail    string `yaml:"-"`
+	AdminPassword string `yaml:"-"`
 
 	// yaml
 	PublicHost           string        `yaml:"public_host"`
@@ -54,10 +56,13 @@ func LoadConfig() *Config {
 		MongoURI:     env("MONGO_URI", "mongodb://mongodb:27017"),
 		JWTSecret:    os.Getenv("JWT_SECRET"),
 
+		AdminEmail:    env("ADMIN_EMAIL", "admin@stashr.com"),
+		AdminPassword: env("ADMIN_PASSWORD", ""),
+
 		PublicHost:           "localhost",
 		MongoDBName:          "users_db",
 		SMTPHost:             "mailpit",
-		SMTPFrom:             "noreply@cloudstorage.local",
+		SMTPFrom:             "noreply@stashr.com",
 		DefaultQuotaBytes:    104857600,
 		PasswordMinAge:       1 * time.Minute,
 		PasswordMaxAge:       2 * time.Minute,

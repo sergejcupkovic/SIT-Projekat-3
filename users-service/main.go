@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"users-service/config"
+	"users-service/domain"
 	"users-service/handler"
 	"users-service/repository"
 	"users-service/service"
@@ -56,6 +57,29 @@ func main() {
 		cfg.SMTPFrom,
 		cfg.DefaultQuotaBytes,
 	)
+
+	if cfg.AdminPassword != "" {
+		hash, err := service.HashPassword(cfg.AdminPassword)
+		if err != nil {
+			log.Fatalf("Failed to hash admin password: %v", err)
+		}
+		now := time.Now()
+		admin := &domain.User{
+			FirstName:           "Admin",
+			LastName:            "User",
+			Email:               cfg.AdminEmail,
+			PasswordHash:        hash,
+			Role:                domain.RoleAdmin,
+			IsVerified:          true,
+			StorageQuotaBytes:   cfg.DefaultQuotaBytes,
+			PasswordLastChanged: now,
+			CreatedAt:           now,
+		}
+		if err := userRepo.SeedAdmin(context.Background(), admin); err != nil {
+			log.Fatalf("Failed to seed admin user: %v", err)
+		}
+		log.Printf("Admin user seeded/verified: %s", cfg.AdminEmail)
+	}
 
 	// gRPC server: users-service is no longer an HTTP server. The api-gateway
 	// is the only HTTP(S) entry point and talks to us over gRPC (HTTP/2).

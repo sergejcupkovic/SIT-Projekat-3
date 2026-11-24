@@ -17,6 +17,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"log"
 	"strconv"
 	"strings"
@@ -28,6 +29,7 @@ import (
 
 	userspb "stashr/proto/users"
 
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -555,6 +557,85 @@ func (h *UserHandler) MagicLinkLogin(ctx context.Context, in *userspb.MagicLinkL
 			Role:  string(user.Role),
 		},
 	}, nil
+}
+
+// ListUsers  <-  GET /api/admin/users
+func (h *UserHandler) ListUsers(ctx context.Context, _ *userspb.ListUsersRequest) (*userspb.ListUsersResponse, error) {
+	if err := requireAdmin(ctx); err != nil {
+		return nil, err
+	}
+
+	users, err := h.repo.FindAllUsers(ctx)
+	if err != nil {
+		log.Printf("list users error: %v", err)
+		return nil, status.Error(codes.Internal, "Error loading users")
+	}
+
+	resp := &userspb.ListUsersResponse{
+		Users: make([]*userspb.AdminUserInfo, 0, len(users)),
+	}
+	for i := range users {
+		resp.Users = append(resp.Users, toAdminUserInfo(&users[i]))
+	}
+	return resp, nil
+}
+
+// UpdateUserQuota  <-  PATCH /api/admin/users/{user_id}/quota
+func (h *UserHandler) UpdateUserQuota(ctx context.Context, in *userspb.UpdateUserQuotaRequest) (*userspb.AdminUserInfo, error) {
+	if err := requireAdmin(ctx); err != nil {
+		return nil, err
+	}
+
+	oid, err := primitive.ObjectIDFromHex(in.GetUserId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "Invalid user ID")
+	}
+
+	newQuota := in.GetStorageQuotaBytes()
+	if newQuota <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "Storage quota must be greater than 0")
+	}
+
+	existing, err := h.repo.FindByID(ctx, oid)
+	if err != nil {
+		return nil, userLookupError(err)
+	}
+	if newQuota <= existing.StorageQuotaBytes {
+		return nil, status.Error(codes.InvalidArgument, "New storage quota must be greater than current quota")
+	}
+
+	updated, err := h.repo.UpdateStorageQuota(ctx, oid, newQuota)
+	if err != nil {
+		return nil, userLookupError(err)
+	}
+	return toAdminUserInfo(updated), nil
+}
+
+func requireAdmin(ctx context.Context) error {
+	tokenStr, ok := bearerFromMetadata(ctx)
+	if !ok {
+		return status.Error(codes.Unauthenticated, "Missing or invalid authorization token")
+	}
+	if _, err := service.VerifyAdminToken(tokenStr); err != nil {
+		if errors.Is(err, service.ErrAdminRequired) {
+			return status.Error(codes.PermissionDenied, err.Error())
+		}
+		return status.Error(codes.Unauthenticated, err.Error())
+	}
+	return nil
+}
+
+func toAdminUserInfo(u *domain.User) *userspb.AdminUserInfo {
+	return &userspb.AdminUserInfo{
+		Id:                u.ID.Hex(),
+		Email:             u.Email,
+		FirstName:         u.FirstName,
+		LastName:          u.LastName,
+		Role:              string(u.Role),
+		IsVerified:        u.IsVerified,
+		StorageQuotaBytes: u.StorageQuotaBytes,
+		UsedStorageBytes:  u.UsedStorageBytes,
+	}
 }
 
 // #endregion

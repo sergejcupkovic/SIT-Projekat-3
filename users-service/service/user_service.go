@@ -279,11 +279,9 @@ func VerifyRestrictedToken(tokenString string) (string, error) {
 	return email, nil
 }
 
-// VerifySessionToken validates a full session JWT (HS256, not expired, not the
-// restricted password-change token, role RK) and returns the user ID it was
-// issued for. Used by the internal quota rpcs so a caller can only ever touch
-// the quota of the user its token belongs to.
-func VerifySessionToken(tokenString string) (string, error) {
+// parseSessionToken validates a full session JWT (HS256, not expired, not the
+// restricted password-change token) and returns its user ID and role.
+func parseSessionToken(tokenString string) (userID string, role string, err error) {
 	token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
@@ -291,22 +289,49 @@ func VerifySessionToken(tokenString string) (string, error) {
 		return JWTSecret, nil
 	}, jwt.WithValidMethods([]string{"HS256"}))
 	if err != nil || !token.Valid {
-		return "", errors.New("invalid or expired token")
+		return "", "", errors.New("invalid or expired token")
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
-		return "", errors.New("invalid token claims")
+		return "", "", errors.New("invalid token claims")
 	}
 	if restricted, _ := claims["restricted"].(bool); restricted {
-		return "", errors.New("restricted token cannot access storage quota")
+		return "", "", errors.New("restricted token cannot access this resource")
 	}
-	if role, _ := claims["role"].(string); role != "RK" {
+	userID, _ = claims["sub"].(string)
+	if userID == "" {
+		return "", "", errors.New("user ID not found in token")
+	}
+	role, _ = claims["role"].(string)
+	return userID, role, nil
+}
+
+// VerifySessionToken validates a full session JWT (HS256, not expired, not the
+// restricted password-change token, role RK) and returns the user ID it was
+// issued for. Used by the internal quota rpcs so a caller can only ever touch
+// the quota of the user its token belongs to.
+func VerifySessionToken(tokenString string) (string, error) {
+	userID, role, err := parseSessionToken(tokenString)
+	if err != nil {
+		return "", err
+	}
+	if role != "RK" {
 		return "", errors.New("storage quota is available to regular users only")
 	}
-	userID, _ := claims["sub"].(string)
-	if userID == "" {
-		return "", errors.New("user ID not found in token")
+	return userID, nil
+}
+
+var ErrAdminRequired = errors.New("administrator privileges required")
+
+// VerifyAdminToken validates a full session JWT and checks that its role is "A".
+func VerifyAdminToken(tokenString string) (string, error) {
+	userID, role, err := parseSessionToken(tokenString)
+	if err != nil {
+		return "", err
+	}
+	if role != "A" {
+		return "", ErrAdminRequired
 	}
 	return userID, nil
 }
