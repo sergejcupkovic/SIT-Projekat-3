@@ -5,6 +5,7 @@ const tabRegister = document.getElementById("tabRegister");
 const loginSection = document.getElementById("loginSection");
 const otpSection = document.getElementById("otpSection");
 const dashboardSection = document.getElementById("dashboardSection");
+const adminSection = document.getElementById("adminSection");
 const registerSection = document.getElementById("registerSection");
 const forceChangePasswordSection = document.getElementById(
   "forceChangePasswordSection",
@@ -22,6 +23,24 @@ const forceChangeSpinner = document.getElementById("forceChangeSpinner");
 const forceNewPasswordError = document.getElementById("forceNewPasswordError");
 const forceConfirmPasswordError = document.getElementById(
   "forceConfirmPasswordError",
+);
+const toggleForceNewPasswordBtn = document.getElementById(
+  "toggleForceNewPasswordBtn",
+);
+const toggleForceConfirmPasswordBtn = document.getElementById(
+  "toggleForceConfirmPasswordBtn",
+);
+const forceStrengthBarFill = document.getElementById("forceStrengthBarFill");
+const forceStrengthLabelText = document.getElementById(
+  "forceStrengthLabelText",
+);
+const forceRuleLength = document.getElementById("force-rule-length");
+const forceRuleUppercase = document.getElementById("force-rule-uppercase");
+const forceRuleLowercase = document.getElementById("force-rule-lowercase");
+const forceRuleNumber = document.getElementById("force-rule-number");
+const forceRuleSpecial = document.getElementById("force-rule-special");
+const forcePasswordMatchStatus = document.getElementById(
+  "forcePasswordMatchStatus",
 );
 
 let restrictedSessionToken = null;
@@ -221,12 +240,35 @@ async function init() {
       handleForceChangePasswordSubmit,
     );
   }
+  if (toggleForceNewPasswordBtn && forceNewPasswordInput) {
+    toggleForceNewPasswordBtn.addEventListener("click", () =>
+      togglePasswordVisibility(forceNewPasswordInput, toggleForceNewPasswordBtn),
+    );
+  }
+  if (toggleForceConfirmPasswordBtn && forceConfirmPasswordInput) {
+    toggleForceConfirmPasswordBtn.addEventListener("click", () =>
+      togglePasswordVisibility(
+        forceConfirmPasswordInput,
+        toggleForceConfirmPasswordBtn,
+      ),
+    );
+  }
+  if (forceNewPasswordInput && forceConfirmPasswordInput) {
+    forceNewPasswordInput.addEventListener("input", handleForcePasswordInput);
+    forceConfirmPasswordInput.addEventListener(
+      "input",
+      handleForceConfirmPasswordInput,
+    );
+  }
   otpCodeInput.addEventListener("input", () => {
     otpCodeInput.value = otpCodeInput.value.replace(/\D/g, "");
   });
   otpForm.addEventListener("submit", handleOtpSubmit);
   resendOtpBtn.addEventListener("click", handleResendOtp);
-  backToLoginBtn.addEventListener("click", () => switchSection(loginSection));
+  backToLoginBtn.addEventListener("click", () => {
+    resetOtpForm();
+    switchSection(loginSection);
+  });
   logoutBtn.addEventListener("click", handleLogout);
 
   if (cancelRenameFolderBtn) {
@@ -296,38 +338,119 @@ function checkPasswordRules(password) {
   };
 }
 
-function handlePasswordInput() {
-  const password = passwordInput.value;
+function evaluatePasswordInput(pwInput, pwError, confirmInput, ui) {
+  const password = pwInput.value;
   const rules = checkPasswordRules(password);
 
-  updateRuleItem(ruleLength, rules.length);
-  updateRuleItem(ruleUppercase, rules.uppercase);
-  updateRuleItem(ruleLowercase, rules.lowercase);
-  updateRuleItem(ruleNumber, rules.number);
-  updateRuleItem(ruleSpecial, rules.special);
+  updateRuleItem(ui.length, rules.length);
+  updateRuleItem(ui.uppercase, rules.uppercase);
+  updateRuleItem(ui.lowercase, rules.lowercase);
+  updateRuleItem(ui.number, rules.number);
+  updateRuleItem(ui.special, rules.special);
 
   const score = Object.values(rules).filter(Boolean).length;
-  updateStrengthMeter(score, password.length === 0);
+  updateStrengthMeterUI(ui.barFill, ui.labelText, score, password.length === 0);
 
-  if (confirmPasswordInput.value.length > 0) {
-    handleConfirmPasswordInput();
+  if (confirmInput.value.length > 0) {
+    evaluateConfirmPasswordInput(
+      pwInput,
+      confirmInput,
+      ui.confirmError,
+      ui.matchStatus,
+    );
   }
 
   if (password.length === 0) {
-    passwordInput.classList.remove("is-valid", "is-invalid");
-    passwordError.textContent = "";
+    pwInput.classList.remove("is-valid", "is-invalid");
+    pwError.textContent = "";
     return false;
   }
 
   if (score === 5) {
-    passwordInput.classList.remove("is-invalid");
-    passwordInput.classList.add("is-valid");
-    passwordError.textContent = "";
+    pwInput.classList.remove("is-invalid");
+    pwInput.classList.add("is-valid");
+    pwError.textContent = "";
     return true;
-  } else {
-    passwordInput.classList.remove("is-valid");
+  }
+
+  pwInput.classList.remove("is-valid");
+  return false;
+}
+
+function evaluateConfirmPasswordInput(
+  pwInput,
+  confirmInput,
+  confirmErrorEl,
+  matchStatusEl,
+) {
+  const password = pwInput.value;
+  const confirmPassword = confirmInput.value;
+
+  if (!confirmPassword) {
+    confirmInput.classList.remove("is-valid", "is-invalid");
+    confirmErrorEl.textContent = "";
+    matchStatusEl.textContent = "";
+    matchStatusEl.className = "password-match-status";
     return false;
   }
+
+  if (password !== confirmPassword) {
+    confirmInput.classList.add("is-invalid");
+    confirmInput.classList.remove("is-valid");
+    confirmErrorEl.textContent = "Passwords do not match";
+    matchStatusEl.textContent = "✖ Passwords do not match";
+    matchStatusEl.className = "password-match-status mismatch";
+    return false;
+  }
+
+  confirmInput.classList.remove("is-invalid");
+  confirmInput.classList.add("is-valid");
+  confirmErrorEl.textContent = "";
+  matchStatusEl.textContent = "✔ Passwords match";
+  matchStatusEl.className = "password-match-status match";
+  return true;
+}
+
+function handlePasswordInput() {
+  return evaluatePasswordInput(passwordInput, passwordError, confirmPasswordInput, {
+    barFill: strengthBarFill,
+    labelText: strengthLabelText,
+    length: ruleLength,
+    uppercase: ruleUppercase,
+    lowercase: ruleLowercase,
+    number: ruleNumber,
+    special: ruleSpecial,
+    confirmError: confirmPasswordError,
+    matchStatus: passwordMatchStatus,
+  });
+}
+
+function handleForcePasswordInput() {
+  return evaluatePasswordInput(
+    forceNewPasswordInput,
+    forceNewPasswordError,
+    forceConfirmPasswordInput,
+    {
+      barFill: forceStrengthBarFill,
+      labelText: forceStrengthLabelText,
+      length: forceRuleLength,
+      uppercase: forceRuleUppercase,
+      lowercase: forceRuleLowercase,
+      number: forceRuleNumber,
+      special: forceRuleSpecial,
+      confirmError: forceConfirmPasswordError,
+      matchStatus: forcePasswordMatchStatus,
+    },
+  );
+}
+
+function handleForceConfirmPasswordInput() {
+  return evaluateConfirmPasswordInput(
+    forceNewPasswordInput,
+    forceConfirmPasswordInput,
+    forceConfirmPasswordError,
+    forcePasswordMatchStatus,
+  );
 }
 
 function updateRuleItem(element, isValid) {
@@ -339,43 +462,47 @@ function updateRuleItem(element, isValid) {
   }
 }
 
-function updateStrengthMeter(score, isEmpty) {
-  strengthBarFill.className = "strength-meter-fill";
+function updateStrengthMeterUI(barFill, labelText, score, isEmpty) {
+  barFill.className = "strength-meter-fill";
 
   if (isEmpty) {
-    strengthBarFill.style.width = "0%";
-    strengthLabelText.textContent = "None";
-    strengthLabelText.style.color = "var(--text-subtle)";
+    barFill.style.width = "0%";
+    labelText.textContent = "None";
+    labelText.style.color = "var(--text-subtle)";
     return;
   }
 
   switch (score) {
     case 1:
     case 2:
-      strengthBarFill.classList.add("strength-weak");
-      strengthLabelText.textContent = "Weak";
-      strengthLabelText.style.color = "var(--danger)";
+      barFill.classList.add("strength-weak");
+      labelText.textContent = "Weak";
+      labelText.style.color = "var(--danger)";
       break;
     case 3:
-      strengthBarFill.classList.add("strength-fair");
-      strengthLabelText.textContent = "Fair";
-      strengthLabelText.style.color = "var(--warning)";
+      barFill.classList.add("strength-fair");
+      labelText.textContent = "Fair";
+      labelText.style.color = "var(--warning)";
       break;
     case 4:
-      strengthBarFill.classList.add("strength-good");
-      strengthLabelText.textContent = "Good";
-      strengthLabelText.style.color = "#3b82f6";
+      barFill.classList.add("strength-good");
+      labelText.textContent = "Good";
+      labelText.style.color = "#3b82f6";
       break;
     case 5:
-      strengthBarFill.classList.add("strength-strong");
-      strengthLabelText.textContent = "Strong (Ready)";
-      strengthLabelText.style.color = "var(--success)";
+      barFill.classList.add("strength-strong");
+      labelText.textContent = "Strong (Ready)";
+      labelText.style.color = "var(--success)";
       break;
     default:
-      strengthBarFill.classList.add("strength-weak");
-      strengthLabelText.textContent = "Very Weak";
-      strengthLabelText.style.color = "var(--danger)";
+      barFill.classList.add("strength-weak");
+      labelText.textContent = "Very Weak";
+      labelText.style.color = "var(--danger)";
   }
+}
+
+function updateStrengthMeter(score, isEmpty) {
+  updateStrengthMeterUI(strengthBarFill, strengthLabelText, score, isEmpty);
 }
 
 function handleConfirmPasswordInput() {
@@ -700,7 +827,7 @@ async function checkMagicLinkTokenInUrl() {
           email: data.user?.email || "user",
           role: data.user?.role,
         });
-        showDashboard(data.user?.email || "user", data.token);
+        showAuthenticatedView(data.user?.email || "user", data.token);
         showAlert(
           "success",
           "Welcome!",
@@ -821,7 +948,7 @@ function switchTab(tab) {
     tabLogin.classList.add("active");
     tabRegister.classList.remove("active");
     if (session.token) {
-      switchSection(dashboardSection);
+      switchSection(canOpenAdminPanel() ? adminSection : dashboardSection);
     } else {
       switchSection(loginSection);
     }
@@ -836,14 +963,22 @@ function canOpenDashboard() {
   return Boolean(session.token) && session.role === "RK";
 }
 
+function canOpenAdminPanel() {
+  return Boolean(session.token) && session.role === "A";
+}
+
 function switchSection(sectionToDisplay) {
   if (sectionToDisplay === dashboardSection && !canOpenDashboard()) {
+    sectionToDisplay = loginSection;
+  }
+  if (sectionToDisplay === adminSection && !canOpenAdminPanel()) {
     sectionToDisplay = loginSection;
   }
   [
     loginSection,
     otpSection,
     dashboardSection,
+    adminSection,
     registerSection,
     forceChangePasswordSection,
   ].forEach((sec) => {
@@ -852,8 +987,12 @@ function switchSection(sectionToDisplay) {
   if (sectionToDisplay) sectionToDisplay.classList.remove("hidden");
 
   const isDashboard = sectionToDisplay === dashboardSection;
-  if (authCard) authCard.classList.toggle("dashboard-wide", isDashboard);
-  if (authTabs) authTabs.classList.toggle("hidden", isDashboard);
+  const isAdmin = sectionToDisplay === adminSection;
+  if (authCard) {
+    authCard.classList.toggle("dashboard-wide", isDashboard);
+    authCard.classList.toggle("admin-wide", isAdmin);
+  }
+  if (authTabs) authTabs.classList.toggle("hidden", isDashboard || isAdmin);
 }
 
 async function handleLoginSubmit(event) {
@@ -910,6 +1049,7 @@ async function handleLoginSubmit(event) {
       }
 
       otpEmailTarget.textContent = activeLoginEmail;
+      resetOtpForm();
       switchSection(otpSection);
       showAlert(
         "success",
@@ -989,12 +1129,13 @@ async function handleOtpSubmit(event) {
           "Your ban period has expired. Please choose a new password.",
         );
       } else {
+        resetOtpForm();
         await session.start({
           token: data.token,
           email: activeLoginEmail,
           role: data.user?.role,
         });
-        showDashboard(activeLoginEmail, data.token);
+        showAuthenticatedView(activeLoginEmail, data.token);
         showAlert("success", "Authenticated!", "2FA verification successful.");
       }
     } else {
@@ -1038,6 +1179,49 @@ async function handleResendOtp() {
   }
 }
 
+function resetOtpForm() {
+  if (otpForm) otpForm.reset();
+  if (otpCodeInput) {
+    otpCodeInput.value = "";
+    otpCodeInput.classList.remove("is-invalid", "is-valid");
+  }
+  if (otpCodeError) otpCodeError.textContent = "";
+}
+
+function resetForceChangePasswordUI() {
+  if (forceChangePasswordForm) forceChangePasswordForm.reset();
+  [forceNewPasswordInput, forceConfirmPasswordInput].forEach((input) => {
+    if (input) {
+      input.type = "password";
+      input.classList.remove("is-valid", "is-invalid");
+    }
+  });
+  [toggleForceNewPasswordBtn, toggleForceConfirmPasswordBtn].forEach((btn) => {
+    if (btn) {
+      btn.classList.remove("active");
+      btn.setAttribute("aria-label", "Show password");
+    }
+  });
+  if (forceNewPasswordError) forceNewPasswordError.textContent = "";
+  if (forceConfirmPasswordError) forceConfirmPasswordError.textContent = "";
+  if (forcePasswordMatchStatus) {
+    forcePasswordMatchStatus.textContent = "";
+    forcePasswordMatchStatus.className = "password-match-status";
+  }
+  if (forceStrengthBarFill && forceStrengthLabelText) {
+    updateStrengthMeterUI(forceStrengthBarFill, forceStrengthLabelText, 0, true);
+  }
+  [
+    forceRuleLength,
+    forceRuleUppercase,
+    forceRuleLowercase,
+    forceRuleNumber,
+    forceRuleSpecial,
+  ].forEach((rule) => {
+    if (rule) rule.classList.remove("valid", "invalid-touched");
+  });
+}
+
 async function handleLogout() {
   logoutBtn.disabled = true;
   logoutSpinner.classList.remove("hidden");
@@ -1047,6 +1231,7 @@ async function handleLogout() {
     console.warn("Logout API warning:", err);
   } finally {
     session.end();
+    resetOtpForm();
     currentFolderId = null;
     currentBreadcrumbs = [];
     activeLoginPassword = "";
@@ -1072,6 +1257,12 @@ async function handleForceChangePasswordSubmit(event) {
   if (newPasswordProblem) {
     forceNewPasswordInput.classList.add("is-invalid");
     forceNewPasswordError.textContent = newPasswordProblem;
+    return;
+  }
+  if (!handleForcePasswordInput()) {
+    forceNewPasswordInput.classList.add("is-invalid");
+    forceNewPasswordError.textContent =
+      "Password does not meet all security requirements";
     return;
   }
   forceNewPasswordInput.classList.remove("is-invalid");
@@ -1114,7 +1305,7 @@ async function handleForceChangePasswordSubmit(event) {
 
     if (response.ok) {
       restrictedSessionToken = null;
-      forceChangePasswordForm.reset();
+      resetForceChangePasswordUI();
       switchSection(loginSection);
       showAlert(
         "success",
@@ -1140,6 +1331,14 @@ async function handleForceChangePasswordSubmit(event) {
   }
 }
 
+function showAuthenticatedView(email, token) {
+  if (canOpenAdminPanel()) {
+    showAdminPanel(email, token);
+    return;
+  }
+  showDashboard(email, token);
+}
+
 function showDashboard(email, token) {
   activeLoginPassword = "";
   if (!canOpenDashboard()) {
@@ -1163,6 +1362,11 @@ async function checkExistingSession() {
   const token = session.token;
   const email = session.email;
   if (!token || !email) return;
+
+  if (canOpenAdminPanel()) {
+    showAdminPanel(email, token);
+    return;
+  }
 
   try {
     const { response } = await fetchWithFallback("/api/folders", {
@@ -1683,5 +1887,451 @@ async function handleFileUploadChange(event) {
     fileUploadInput.value = "";
   }
 }
+
+// #endregion
+
+// #region Admin Panel
+
+const adminEmailDisplay = document.getElementById("adminEmailDisplay");
+const adminToggleTokenBtn = document.getElementById("adminToggleTokenBtn");
+const adminJwtDrawer = document.getElementById("adminJwtDrawer");
+const adminJwtTokenDisplay = document.getElementById("adminJwtTokenDisplay");
+const adminLogoutBtn = document.getElementById("adminLogoutBtn");
+const adminLogoutSpinner = document.getElementById("adminLogoutSpinner");
+
+const adminTabUsers = document.getElementById("adminTabUsers");
+const adminTabNotifications = document.getElementById("adminTabNotifications");
+const adminUsersPanel = document.getElementById("adminUsersPanel");
+const adminNotificationsPanel = document.getElementById("adminNotificationsPanel");
+
+const adminPreviewBanner = document.getElementById("adminPreviewBanner");
+const adminStatUsers = document.getElementById("adminStatUsers");
+const adminStatUsed = document.getElementById("adminStatUsed");
+const adminStatQuota = document.getElementById("adminStatQuota");
+const adminUserSearchInput = document.getElementById("adminUserSearchInput");
+const adminRefreshUsersBtn = document.getElementById("adminRefreshUsersBtn");
+
+const adminQuotaForm = document.getElementById("adminQuotaForm");
+const adminQuotaTargetTitle = document.getElementById("adminQuotaTargetTitle");
+const adminQuotaTargetMeta = document.getElementById("adminQuotaTargetMeta");
+const adminNewQuotaMbInput = document.getElementById("adminNewQuotaMbInput");
+const adminQuotaSubmitBtn = document.getElementById("adminQuotaSubmitBtn");
+const adminQuotaSpinner = document.getElementById("adminQuotaSpinner");
+const adminQuotaCancelBtn = document.getElementById("adminQuotaCancelBtn");
+const adminQuotaError = document.getElementById("adminQuotaError");
+const adminPresetBtns = document.querySelectorAll(".admin-preset-btn");
+
+const adminUsersLoading = document.getElementById("adminUsersLoading");
+const adminUsersEmpty = document.getElementById("adminUsersEmpty");
+const adminUsersList = document.getElementById("adminUsersList");
+
+const MB_BYTES = 1024 * 1024;
+let adminUsers = [];
+let adminPreviewMode = false;
+let adminQuotaTargetUser = null;
+
+function createPreviewAdminUsers() {
+  return [
+    {
+      id: "preview-1",
+      firstName: "Petar",
+      lastName: "Petrovic",
+      email: "petar@example.com",
+      role: "RK",
+      isVerified: true,
+      usedStorageBytes: 72 * MB_BYTES,
+      storageQuotaBytes: 100 * MB_BYTES,
+    },
+    {
+      id: "preview-2",
+      firstName: "Milica",
+      lastName: "Jovanovic",
+      email: "milica@example.com",
+      role: "RK",
+      isVerified: true,
+      usedStorageBytes: 94 * MB_BYTES,
+      storageQuotaBytes: 100 * MB_BYTES,
+    },
+    {
+      id: "preview-3",
+      firstName: "Marko",
+      lastName: "Nikolic",
+      email: "marko@example.com",
+      role: "RK",
+      isVerified: false,
+      usedStorageBytes: 0,
+      storageQuotaBytes: 100 * MB_BYTES,
+    },
+  ];
+}
+
+function showAdminPanel(email, token) {
+  activeLoginPassword = "";
+  if (!canOpenAdminPanel()) {
+    session.end();
+    switchSection(loginSection);
+    showAlert("danger", "Access Denied", "Administrator privileges required.");
+    return;
+  }
+  if (adminEmailDisplay) adminEmailDisplay.textContent = email;
+  if (adminJwtTokenDisplay) adminJwtTokenDisplay.value = token;
+  switchSection(adminSection);
+  switchAdminTab("users");
+  loadAdminUsers();
+}
+
+function switchAdminTab(tab) {
+  const showUsers = tab === "users";
+  if (adminTabUsers) {
+    adminTabUsers.classList.toggle("active", showUsers);
+    adminTabUsers.setAttribute("aria-selected", String(showUsers));
+  }
+  if (adminTabNotifications) {
+    adminTabNotifications.classList.toggle("active", !showUsers);
+    adminTabNotifications.setAttribute("aria-selected", String(!showUsers));
+  }
+  if (adminUsersPanel) adminUsersPanel.classList.toggle("hidden", !showUsers);
+  if (adminNotificationsPanel) {
+    adminNotificationsPanel.classList.toggle("hidden", showUsers);
+  }
+}
+
+async function loadAdminUsers() {
+  const token = session.token;
+  if (!token) {
+    switchSection(loginSection);
+    return;
+  }
+
+  closeAdminQuotaForm();
+  if (adminUsersLoading) adminUsersLoading.classList.remove("hidden");
+  if (adminUsersEmpty) adminUsersEmpty.classList.add("hidden");
+  if (adminUsersList) adminUsersList.innerHTML = "";
+
+  try {
+    const { response } = await fetchWithFallback("/api/admin/users", {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+    });
+
+    if (response.status === 401) {
+      session.end();
+      switchSection(loginSection);
+      showAlert("warning", "Session Expired", "Please sign in again.");
+      return;
+    }
+
+    if (response.status === 404 || response.status === 501) {
+      adminPreviewMode = true;
+      if (adminUsers.length === 0) {
+        adminUsers = createPreviewAdminUsers();
+      }
+      if (adminPreviewBanner) adminPreviewBanner.classList.remove("hidden");
+      renderAdminUsers();
+      return;
+    }
+
+    const text = await response.text();
+    let data = {};
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { message: text.trim() };
+    }
+
+    if (!response.ok) {
+      showAlert(
+        "danger",
+        "Error Loading Users",
+        data.message || "Could not load users.",
+      );
+      return;
+    }
+
+    adminPreviewMode = false;
+    if (adminPreviewBanner) adminPreviewBanner.classList.add("hidden");
+    adminUsers = Array.isArray(data) ? data : data.users || [];
+    renderAdminUsers();
+  } catch (err) {
+    adminPreviewMode = true;
+    if (adminUsers.length === 0) {
+      adminUsers = createPreviewAdminUsers();
+    }
+    if (adminPreviewBanner) adminPreviewBanner.classList.remove("hidden");
+    renderAdminUsers();
+  } finally {
+    if (adminUsersLoading) adminUsersLoading.classList.add("hidden");
+  }
+}
+
+function updateAdminStats(users) {
+  const totalUsers = users.length;
+  const totalUsed = users.reduce(
+    (sum, u) => sum + (Number(u.usedStorageBytes) || 0),
+    0,
+  );
+  const totalQuota = users.reduce(
+    (sum, u) => sum + (Number(u.storageQuotaBytes) || 0),
+    0,
+  );
+
+  if (adminStatUsers) adminStatUsers.textContent = String(totalUsers);
+  if (adminStatUsed) adminStatUsed.textContent = formatBytes(totalUsed);
+  if (adminStatQuota) adminStatQuota.textContent = formatBytes(totalQuota);
+}
+
+function renderAdminUsers() {
+  if (!adminUsersList) return;
+  adminUsersList.innerHTML = "";
+
+  updateAdminStats(adminUsers);
+
+  const query = (adminUserSearchInput?.value || "").trim().toLowerCase();
+  const filtered = adminUsers.filter((u) => {
+    if (!query) return true;
+    const fullName = `${u.firstName || ""} ${u.lastName || ""}`.toLowerCase();
+    const email = (u.email || "").toLowerCase();
+    return fullName.includes(query) || email.includes(query);
+  });
+
+  if (filtered.length === 0) {
+    if (adminUsersEmpty) adminUsersEmpty.classList.remove("hidden");
+    return;
+  }
+  if (adminUsersEmpty) adminUsersEmpty.classList.add("hidden");
+
+  filtered.forEach((user) => {
+    const used = Number(user.usedStorageBytes) || 0;
+    const quota = Number(user.storageQuotaBytes) || 0;
+    const pct = quota > 0 ? Math.min(100, (used / quota) * 100) : 0;
+    const fullName =
+      `${user.firstName || ""} ${user.lastName || ""}`.trim() || "Unnamed User";
+    const isAdminUser = user.role === "A";
+
+    const row = document.createElement("div");
+    row.className = "admin-user-row";
+
+    row.innerHTML = `
+      <div class="admin-user-info">
+        <div class="admin-user-name-line">
+          <span class="admin-user-name"></span>
+          <span class="role-pill ${isAdminUser ? "role-admin" : "role-user"}">
+            ${isAdminUser ? "Admin" : "Regular"}
+          </span>
+          <span class="status-pill ${user.isVerified ? "verified" : "unverified"}">
+            ${user.isVerified ? "Verified" : "Unverified"}
+          </span>
+        </div>
+        <div class="admin-user-email"></div>
+      </div>
+      <div class="admin-user-storage">
+        <div class="admin-storage-text">
+          ${Validation.escapeHtml(formatBytes(used))} / ${Validation.escapeHtml(formatBytes(quota))}
+        </div>
+        <div class="quota-bar" aria-hidden="true">
+          <div class="quota-bar-fill ${pct >= 90 ? "is-nearly-full" : ""}" style="width: ${pct}%"></div>
+        </div>
+      </div>
+      <div class="admin-user-actions">
+        <button type="button" class="btn-outline-sm admin-increase-quota-btn">
+          + Increase Storage
+        </button>
+      </div>
+    `;
+
+    row.querySelector(".admin-user-name").textContent = fullName;
+    row.querySelector(".admin-user-email").textContent = user.email || "";
+
+    const increaseBtn = row.querySelector(".admin-increase-quota-btn");
+    increaseBtn.addEventListener("click", () => openAdminQuotaForm(user));
+
+    adminUsersList.appendChild(row);
+  });
+}
+
+function openAdminQuotaForm(user) {
+  hideAlert();
+  adminQuotaTargetUser = user;
+  const currentMb = Math.round((Number(user.storageQuotaBytes) || 0) / MB_BYTES);
+  const usedStr = formatBytes(user.usedStorageBytes);
+  const quotaStr = formatBytes(user.storageQuotaBytes);
+  const fullName =
+    `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email;
+
+  if (adminQuotaTargetTitle) {
+    adminQuotaTargetTitle.textContent = `Increase Storage for ${fullName}`;
+  }
+  if (adminQuotaTargetMeta) {
+    adminQuotaTargetMeta.textContent = `${user.email} • Current usage: ${usedStr} / ${quotaStr}`;
+  }
+  if (adminNewQuotaMbInput) {
+    adminNewQuotaMbInput.min = String(currentMb + 1);
+    adminNewQuotaMbInput.value = String(currentMb + 100);
+    adminNewQuotaMbInput.classList.remove("is-invalid");
+    adminNewQuotaMbInput.focus();
+  }
+  if (adminQuotaError) adminQuotaError.textContent = "";
+  if (adminQuotaForm) adminQuotaForm.classList.remove("hidden");
+}
+
+function closeAdminQuotaForm() {
+  adminQuotaTargetUser = null;
+  if (adminQuotaForm) adminQuotaForm.classList.add("hidden");
+  if (adminNewQuotaMbInput) {
+    adminNewQuotaMbInput.value = "";
+    adminNewQuotaMbInput.classList.remove("is-invalid");
+  }
+  if (adminQuotaError) adminQuotaError.textContent = "";
+}
+
+async function handleAdminQuotaSubmit(event) {
+  event.preventDefault();
+  hideAlert();
+  if (!adminQuotaTargetUser) return;
+
+  const currentQuotaBytes = Number(adminQuotaTargetUser.storageQuotaBytes) || 0;
+  const currentMb = Math.round(currentQuotaBytes / MB_BYTES);
+  const newMb = Number(adminNewQuotaMbInput.value);
+
+  if (!Number.isFinite(newMb) || newMb <= currentMb) {
+    adminNewQuotaMbInput.classList.add("is-invalid");
+    adminQuotaError.textContent = `New quota must be greater than current ${currentMb} MB.`;
+    return;
+  }
+
+  adminNewQuotaMbInput.classList.remove("is-invalid");
+  adminQuotaError.textContent = "";
+
+  const newQuotaBytes = Math.round(newMb * MB_BYTES);
+  const token = session.token;
+  if (!token) {
+    switchSection(loginSection);
+    return;
+  }
+
+  adminQuotaSubmitBtn.disabled = true;
+  adminQuotaSpinner.classList.remove("hidden");
+
+  try {
+    if (!adminPreviewMode) {
+      const { response } = await fetchWithFallback(
+        `/api/admin/users/${encodeURIComponent(adminQuotaTargetUser.id)}/quota`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ storageQuotaBytes: newQuotaBytes }),
+        },
+      );
+
+      if (response.status === 401) {
+        session.end();
+        switchSection(loginSection);
+        showAlert("warning", "Session Expired", "Please sign in again.");
+        return;
+      }
+
+      if (response.status !== 404 && response.status !== 501 && !response.ok) {
+        const text = await response.text();
+        let data = {};
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = { message: text.trim() };
+        }
+        adminNewQuotaMbInput.classList.add("is-invalid");
+        adminQuotaError.textContent =
+          data.message || "Failed to update storage quota.";
+        return;
+      }
+    }
+
+    const updatedEmail = adminQuotaTargetUser.email;
+    adminUsers = adminUsers.map((u) =>
+      u.id === adminQuotaTargetUser.id
+        ? { ...u, storageQuotaBytes: newQuotaBytes }
+        : u,
+    );
+    closeAdminQuotaForm();
+    renderAdminUsers();
+    showAlert(
+      "success",
+      "Storage Quota Updated",
+      `Storage quota for ${updatedEmail} increased to ${formatBytes(newQuotaBytes)}.`,
+    );
+  } catch (err) {
+    const updatedEmail = adminQuotaTargetUser.email;
+    adminUsers = adminUsers.map((u) =>
+      u.id === adminQuotaTargetUser.id
+        ? { ...u, storageQuotaBytes: newQuotaBytes }
+        : u,
+    );
+    closeAdminQuotaForm();
+    renderAdminUsers();
+    showAlert(
+      "success",
+      "Storage Quota Updated (Preview)",
+      `Storage quota for ${updatedEmail} increased to ${formatBytes(newQuotaBytes)}.`,
+    );
+  } finally {
+    adminQuotaSubmitBtn.disabled = false;
+    adminQuotaSpinner.classList.add("hidden");
+  }
+}
+
+if (adminToggleTokenBtn) {
+  adminToggleTokenBtn.addEventListener("click", () => {
+    if (adminJwtDrawer) adminJwtDrawer.classList.toggle("hidden");
+  });
+}
+if (adminLogoutBtn) {
+  adminLogoutBtn.addEventListener("click", async () => {
+    adminLogoutBtn.disabled = true;
+    if (adminLogoutSpinner) adminLogoutSpinner.classList.remove("hidden");
+    await handleLogout();
+    adminUsers = [];
+    closeAdminQuotaForm();
+    adminLogoutBtn.disabled = false;
+    if (adminLogoutSpinner) adminLogoutSpinner.classList.add("hidden");
+  });
+}
+if (adminTabUsers) {
+  adminTabUsers.addEventListener("click", () => switchAdminTab("users"));
+}
+if (adminTabNotifications) {
+  adminTabNotifications.addEventListener("click", () =>
+    switchAdminTab("notifications"),
+  );
+}
+if (adminUserSearchInput) {
+  adminUserSearchInput.addEventListener("input", renderAdminUsers);
+}
+if (adminRefreshUsersBtn) {
+  adminRefreshUsersBtn.addEventListener("click", loadAdminUsers);
+}
+if (adminQuotaCancelBtn) {
+  adminQuotaCancelBtn.addEventListener("click", closeAdminQuotaForm);
+}
+if (adminQuotaForm) {
+  adminQuotaForm.addEventListener("submit", handleAdminQuotaSubmit);
+}
+adminPresetBtns.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    if (!adminQuotaTargetUser || !adminNewQuotaMbInput) return;
+    const addMb = Number(btn.dataset.addMb) || 0;
+    const currentMb = Math.round(
+      (Number(adminQuotaTargetUser.storageQuotaBytes) || 0) / MB_BYTES,
+    );
+    const baseMb = Math.max(currentMb, Number(adminNewQuotaMbInput.value) || 0);
+    adminNewQuotaMbInput.value = String(baseMb + addMb);
+    adminNewQuotaMbInput.classList.remove("is-invalid");
+    if (adminQuotaError) adminQuotaError.textContent = "";
+  });
+});
 
 // #endregion

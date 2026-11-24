@@ -115,6 +115,21 @@ service UsersService {
       body: "*"
     };
   }
+
+  // GET /api/admin/users - list all users with storage usage (admin only)
+  rpc ListUsers(ListUsersRequest) returns (ListUsersResponse) {
+    option (google.api.http) = {
+      get: "/api/admin/users"
+    };
+  }
+
+  // PATCH /api/admin/users/{user_id}/quota - update a user's storage quota (admin only)
+  rpc UpdateUserQuota(UpdateUserQuotaRequest) returns (AdminUserInfo) {
+    option (google.api.http) = {
+      patch: "/api/admin/users/{user_id}/quota"
+      body: "*"
+    };
+  }
 }
 
 // Internal service used by storage-service for the synchronous quota check
@@ -210,6 +225,13 @@ message MagicLinkLoginRequest {
   string token = 1;
 }
 
+message ListUsersRequest {}
+
+message UpdateUserQuotaRequest {
+  string user_id = 1;
+  int64 storage_quota_bytes = 2;
+}
+
 // ---------- Responses ----------
 
 // Generic reply carrying only a human-readable message.
@@ -223,6 +245,21 @@ message UserInfo {
   string first_name = 3;
   string last_name = 4;
   string role = 5;
+}
+
+message AdminUserInfo {
+  string id = 1;
+  string email = 2;
+  string first_name = 3;
+  string last_name = 4;
+  string role = 5;
+  bool is_verified = 6;
+  int64 storage_quota_bytes = 7;
+  int64 used_storage_bytes = 8;
+}
+
+message ListUsersResponse {
+  repeated AdminUserInfo users = 1;
 }
 
 // Reply of every QuotaService rpc.
