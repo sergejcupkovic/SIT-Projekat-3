@@ -28,6 +28,7 @@ import (
 
 	storagepb "stashr/proto/storage"
 	userspb "stashr/proto/users"
+	notificationspb "stashr/proto/notifications"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"golang.org/x/time/rate"
@@ -49,6 +50,7 @@ func main() {
 
 	usersAddr := env("USERS_GRPC_ADDR", "users-service:50051")
 	storageAddr := env("STORAGE_GRPC_ADDR", "storage-service:50052")
+	notificationsAddr := env("NOTIFICATIONS_GRPC_ADDR", "notifications-service:50053")
 	port := env("GATEWAY_PORT", "8443")
 	certFile := env("TLS_CERT_FILE", "/certs/server.crt")
 	keyFile := env("TLS_KEY_FILE", "/certs/server.key")
@@ -88,6 +90,12 @@ func main() {
 	}
 	defer storageConn.Close()
 
+	notificationsConn, err := grpc.NewClient(notificationsAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatalf("Failed to create notifications-service gRPC client (%s): %v", notificationsAddr, err)
+	}
+	defer notificationsConn.Close()
+
 	// Upper bound for every backend call made on behalf of an HTTP request.
 	runtime.DefaultContextTimeout = 15 * time.Second
 
@@ -116,6 +124,9 @@ func main() {
 	}
 	if err := storagepb.RegisterStorageServiceHandler(ctx, gw, storageConn); err != nil {
 		log.Fatalf("Failed to register StorageService routes: %v", err)
+	}
+	if err := notificationspb.RegisterNotificationServiceHandler(ctx, gw, notificationsConn); err != nil {
+		log.Fatalf("Failed to register NotificationService routes: %v", err)
 	}
 
 	// POST /api/files/upload and POST /api/files/{file_id}/version: hand-written routes (multipart -> gRPC stream).

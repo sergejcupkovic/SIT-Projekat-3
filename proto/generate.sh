@@ -15,6 +15,7 @@ cd "$(dirname "$0")"
 PROTO_FILES=(
   users/users_service.proto
   storage/storage_service.proto
+  notifications/notifications_service.proto
 )
 
 # -I .  : resolve imports such as "google/api/annotations.proto" from ./google/api/.
@@ -28,4 +29,4 @@ protoc -I . \
 go mod tidy
 
 echo "Generated:"
-ls -1 users/*.go storage/*.go
+ls -1 users/*.go storage/*.go notifications/*.go
