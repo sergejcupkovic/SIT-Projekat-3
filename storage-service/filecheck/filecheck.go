@@ -45,9 +45,8 @@ var allowedTypes = map[string][]string{
 // extensions, and that the first bytes of the content really are what the
 // extension claims (a renamed executable is rejected).
 func ValidateUpload(name string, head []byte) error {
-	if name == "" || utf8.RuneCountInString(name) > maxFileNameLen ||
-		!fileNameRegex.MatchString(name) || strings.Trim(name, ". ") == "" {
-		return ErrBadName
+	if err := ValidateFileName(name); err != nil {
+		return err
 	}
 
 	want, ok := allowedTypes[strings.ToLower(filepath.Ext(name))]
@@ -120,4 +119,14 @@ func AllowedExtensions() []string {
 	}
 	sort.Strings(exts)
 	return exts
+}
+
+// ValidateFileName checks that name is non-empty, within maxFileNameLen runes,
+// uses only whitelisted characters, and is not made solely of dots/spaces.
+func ValidateFileName(name string) error {
+	if name == "" || utf8.RuneCountInString(name) > maxFileNameLen ||
+		!fileNameRegex.MatchString(name) || strings.Trim(name, ". ") == "" {
+		return ErrBadName
+	}
+	return nil
 }

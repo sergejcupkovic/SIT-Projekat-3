@@ -50,6 +50,18 @@ service StorageService {
     };
   }
 
+  // PATCH or PUT /api/files/{file_id}  body: {"name": "..."}
+  rpc RenameFile(RenameFileRequest) returns (FileResponse) {
+    option (google.api.http) = {
+      patch: "/api/files/{file_id}"
+      body: "*"
+      additional_bindings {
+        put: "/api/files/{file_id}"
+        body: "*"
+      }
+    };
+  }
+
   // GET /api/files/quota - the caller's storage quota and current usage
   // (answered by asking users-service).
   rpc GetQuota(GetQuotaRequest) returns (StorageQuota) {
@@ -158,11 +170,22 @@ message RenameFolderRequest {
   string name = 2;
 }
 
+message RenameFileRequest {
+  // Bound from the URL path; `name` comes from the JSON body.
+  string file_id = 1;
+  string name = 2;
+}
+
 // ---------- Responses ----------
 
 message FolderResponse {
   string message = 1;
   Folder folder = 2;
+}
+
+message FileResponse {
+  string message = 1;
+  FileItem file = 2;
 }
 
 message UploadFileResponse {

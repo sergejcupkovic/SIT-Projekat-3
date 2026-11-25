@@ -207,6 +207,25 @@ func (e *env) UpdateVersion(_ context.Context, updated *domain.FileItem) error {
 	return mongo.ErrNoDocuments
 }
 
+func (e *env) Rename(_ context.Context, id primitive.ObjectID, ownerID, newName string, updatedAt time.Time) error {
+	e.log("rename")
+	if e.updateErr != nil {
+		return e.updateErr
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for i, f := range e.files {
+		if f.ID == id && f.OwnerID == ownerID {
+			cp := *f
+			cp.Name = newName
+			cp.UpdatedAt = updatedAt
+			e.files[i] = &cp
+			return nil
+		}
+	}
+	return mongo.ErrNoDocuments
+}
+
 // folderLookup stand-in (separate type because FindByID returns *domain.Folder)
 type folderLookupAdapter struct{ e *env }
 
@@ -249,6 +268,10 @@ func (s testServer) UploadNewFileVersion(st storagepb.StorageService_UploadNewFi
 
 func (s testServer) GetQuota(ctx context.Context, r *storagepb.GetQuotaRequest) (*storagepb.StorageQuota, error) {
 	return s.fh.GetQuota(ctx, r)
+}
+
+func (s testServer) RenameFile(ctx context.Context, r *storagepb.RenameFileRequest) (*storagepb.FileResponse, error) {
+	return s.fh.RenameFile(ctx, r)
 }
 
 func newEnv(quota, used int64) *env {
@@ -994,5 +1017,121 @@ func TestHumanBytes(t *testing.T) {
 		if got := humanBytes(in); got != want {
 			t.Errorf("humanBytes(%d) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestRenameFile_UpdatesNameAndTimestampWithoutTouchingObjectStore(t *testing.T) {
+	e := newEnv(1000, 0)
+	orig := seedExistingFile(e, alice, "draft.txt", []byte("hello"))
+	oldKey := orig.ObjectKey
+	c := start(t, e, 0)
+
+	resp, err := c.RenameFile(authCtx(t, alice), &storagepb.RenameFileRequest{
+		FileId: orig.ID.Hex(),
+		Name:   "  final-report.txt  ",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := e.eventList(); got != "rename" {
+		t.Fatalf("expected only metadata rename, got %s", got)
+	}
+	if e.files[0].Name != "final-report.txt" || e.files[0].ObjectKey != oldKey {
+		t.Fatalf("unexpected file state after rename: %+v", e.files[0])
+	}
+	if !e.files[0].UpdatedAt.After(orig.CreatedAt) {
+		t.Fatal("expected UpdatedAt to be refreshed")
+	}
+	if resp.GetFile().GetName() != "final-report.txt" || resp.GetMessage() == "" {
+		t.Fatalf("unexpected response: %+v", resp)
+	}
+}
+
+func TestRenameFile_SameNameIsNoOp(t *testing.T) {
+	e := newEnv(1000, 0)
+	orig := seedExistingFile(e, alice, "notes.txt", []byte("hello"))
+	c := start(t, e, 0)
+
+	resp, err := c.RenameFile(authCtx(t, alice), &storagepb.RenameFileRequest{
+		FileId: orig.ID.Hex(),
+		Name:   "notes.txt",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.eventList() != "" {
+		t.Fatalf("no-op rename should not write to DB, got %s", e.eventList())
+	}
+	if resp.GetFile().GetName() != "notes.txt" {
+		t.Fatalf("unexpected file name: %q", resp.GetFile().GetName())
+	}
+}
+
+func TestRenameFile_RejectsDuplicateInSameFolderButAllowsDifferentFolder(t *testing.T) {
+	e := newEnv(1000, 0)
+	f1 := seedExistingFile(e, alice, "a.txt", []byte("1"))
+	seedExistingFile(e, alice, "b.txt", []byte("2"))
+
+	subFolder := primitive.NewObjectID()
+	fInSub := seedExistingFile(e, alice, "c.txt", []byte("3"))
+	fInSub.FolderID = &subFolder
+
+	c := start(t, e, 0)
+
+	_, err := c.RenameFile(authCtx(t, alice), &storagepb.RenameFileRequest{
+		FileId: f1.ID.Hex(),
+		Name:   "b.txt",
+	})
+	wantCode(t, err, codes.AlreadyExists)
+
+	if _, err := c.RenameFile(authCtx(t, alice), &storagepb.RenameFileRequest{
+		FileId: fInSub.ID.Hex(),
+		Name:   "b.txt",
+	}); err != nil {
+		t.Fatalf("same name in a different folder must succeed: %v", err)
+	}
+}
+
+func TestRenameFile_ValidationAndOwnershipErrors(t *testing.T) {
+	e := newEnv(1000, 0)
+	alicesFile := seedExistingFile(e, alice, "notes.txt", []byte("hello"))
+	c := start(t, e, 0)
+
+	// Unauthenticated
+	_, err := c.RenameFile(context.Background(), &storagepb.RenameFileRequest{
+		FileId: alicesFile.ID.Hex(), Name: "new.txt",
+	})
+	wantCode(t, err, codes.Unauthenticated)
+
+	// Other user's file
+	_, err = c.RenameFile(authCtx(t, bob), &storagepb.RenameFileRequest{
+		FileId: alicesFile.ID.Hex(), Name: "hacked.txt",
+	})
+	wantCode(t, err, codes.PermissionDenied)
+
+	// Non-existent file
+	_, err = c.RenameFile(authCtx(t, alice), &storagepb.RenameFileRequest{
+		FileId: primitive.NewObjectID().Hex(), Name: "new.txt",
+	})
+	wantCode(t, err, codes.NotFound)
+
+	// Invalid file ID, empty name, illegal chars, changed or missing extension
+	invalidCases := []struct {
+		id   string
+		name string
+	}{
+		{"not-an-object-id", "new.txt"},
+		{alicesFile.ID.Hex(), "   "},
+		{alicesFile.ID.Hex(), "../escape.txt"},
+		{alicesFile.ID.Hex(), "<script>.txt"},
+		{alicesFile.ID.Hex(), "notes.pdf"},
+		{alicesFile.ID.Hex(), "notes"},
+	}
+	for _, tc := range invalidCases {
+		_, err := c.RenameFile(authCtx(t, alice), &storagepb.RenameFileRequest{
+			FileId: tc.id, Name: tc.name,
+		})
+		wantCode(t, err, codes.InvalidArgument)
 	}
 }

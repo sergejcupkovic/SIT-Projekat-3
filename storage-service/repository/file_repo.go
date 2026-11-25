@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"time"
 	"context"
 	"storage-service/domain"
 
@@ -97,6 +98,27 @@ func (r *FileRepository) UpdateVersion(ctx context.Context, file *domain.FileIte
 			"objectKey": file.ObjectKey,
 			"sha256":    file.SHA256,
 			"updatedAt": file.UpdatedAt,
+		},
+	}
+	res, err := r.collection.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return err
+	}
+	if res.MatchedCount == 0 {
+		return mongo.ErrNoDocuments
+	}
+	return nil
+}
+
+func (r *FileRepository) Rename(ctx context.Context, id primitive.ObjectID, ownerID, newName string, updatedAt time.Time) error {
+	filter := bson.M{
+		"_id":     id,
+		"ownerId": ownerID,
+	}
+	update := bson.M{
+		"$set": bson.M{
+			"name":      newName,
+			"updatedAt": updatedAt,
 		},
 	}
 	res, err := r.collection.UpdateOne(ctx, filter, update)
