@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package notifications;
+
+option go_package = "stashr/proto/notifications;notificationspb";
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+service NotificationService {
+  // GET /api/notifications - returns notifications for the authenticated user
+  rpc GetNotifications(GetNotificationsRequest) returns (GetNotificationsResponse) {
+    option (google.api.http) = {
+      get: "/api/notifications"
+    };
+  }
+}
+
+message NotificationItem {
+  string id = 1;
+  string title = 2;
+  string message = 3;
+  string type = 4; // "info", "warning", "success"
+  bool is_read = 5;
+  google.protobuf.Timestamp created_at = 6;
+}
+
+message GetNotificationsRequest {}
+
+message GetNotificationsResponse {
+  repeated NotificationItem notifications = 1;
+}

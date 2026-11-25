@@ -163,6 +163,13 @@ const renameFileNameError = document.getElementById("renameFileNameError");
 
 let renameFileTarget = null; // { id: string, currentName: string }
 
+const notificationsWrapper = document.getElementById("notificationsWrapper");
+const notificationsBellBtn = document.getElementById("notificationsBellBtn");
+const notificationsBadge = document.getElementById("notificationsBadge");
+const notificationsPopover = document.getElementById("notificationsPopover");
+const notificationsCountLabel = document.getElementById("notificationsCountLabel");
+const notificationsList = document.getElementById("notificationsList");
+
 function getCandidateEndpoints(path) {
   const endpoints = [];
 
@@ -297,6 +304,25 @@ async function init() {
   }
   if (renameFileForm) {
     renameFileForm.addEventListener("submit", handleRenameFileSubmit);
+  }
+
+  if (notificationsBellBtn && notificationsPopover) {
+    notificationsBellBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const isHidden = notificationsPopover.classList.toggle("hidden");
+      notificationsBellBtn.setAttribute("aria-expanded", String(!isHidden));
+    });
+
+    document.addEventListener("click", (e) => {
+      if (
+        notificationsWrapper &&
+        !notificationsWrapper.contains(e.target) &&
+        !notificationsPopover.classList.contains("hidden")
+      ) {
+        notificationsPopover.classList.add("hidden");
+        notificationsBellBtn.setAttribute("aria-expanded", "false");
+      }
+    });
   }
 
   checkExistingSession();
@@ -1251,6 +1277,8 @@ async function handleLogout() {
   } catch (err) {
     console.warn("Logout API warning:", err);
   } finally {
+    if (notificationsPopover) notificationsPopover.classList.add("hidden");
+    if (notificationsBellBtn) notificationsBellBtn.setAttribute("aria-expanded", "false");
     session.end();
     resetOtpForm();
     currentFolderId = null;
@@ -1373,9 +1401,10 @@ function showDashboard(email, token) {
     return;
   }
   userEmailDisplay.textContent = email;
-  jwtTokenDisplay.value = token;
+  if (jwtTokenDisplay) jwtTokenDisplay.value = token;
   switchSection(dashboardSection);
   loadUserQuota();
+  loadUserNotifications();
   loadFolderContents(null);
 }
 
@@ -1884,6 +1913,73 @@ async function loadUserQuota() {
   } catch (err) {
     console.warn("Could not load storage quota:", err);
   }
+}
+
+async function loadUserNotifications() {
+  const token = session.token;
+  if (!token || !notificationsList) return;
+
+  try {
+    const { response } = await fetchWithFallback("/api/notifications", {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+    });
+
+    if (!response.ok) return;
+
+    const data = await response.json();
+    const items = Array.isArray(data.notifications) ? data.notifications : [];
+    renderNotifications(items);
+  } catch (err) {
+    console.warn("Could not load notifications:", err);
+  }
+}
+
+function renderNotifications(items) {
+  if (!notificationsList) return;
+
+  const count = items.length;
+  if (notificationsCountLabel) {
+    notificationsCountLabel.textContent = String(count);
+  }
+  if (notificationsBadge) {
+    notificationsBadge.textContent = String(count);
+    notificationsBadge.classList.toggle("hidden", count === 0);
+  }
+
+  if (count === 0) {
+    notificationsList.innerHTML =
+      '<div class="notifications-empty">No notifications yet.</div>';
+    return;
+  }
+
+  notificationsList.innerHTML = "";
+  items.forEach((n) => {
+    const typeClass =
+      n.type === "success" || n.type === "warning" || n.type === "info"
+        ? `type-${n.type}`
+        : "type-info";
+
+    const timeText = n.createdAt
+      ? new Date(n.createdAt).toLocaleString()
+      : "";
+
+    const card = document.createElement("div");
+    card.className = `notification-item ${typeClass}`;
+    card.innerHTML = `
+      <div class="notification-item-title"></div>
+      <div class="notification-item-message"></div>
+      <div class="notification-item-time"></div>
+    `;
+    card.querySelector(".notification-item-title").textContent = n.title || "";
+    card.querySelector(".notification-item-message").textContent = n.message || "";
+    card.querySelector(".notification-item-time").textContent = timeText;
+
+    notificationsList.appendChild(card);
+  });
 }
 
 // 2.2.1: the user picked a file; it goes into the folder that is open right now.
