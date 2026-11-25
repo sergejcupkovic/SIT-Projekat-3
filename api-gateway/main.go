@@ -118,10 +118,13 @@ func main() {
 		log.Fatalf("Failed to register StorageService routes: %v", err)
 	}
 
-	// POST /api/files/upload: the one hand-written route (multipart -> gRPC stream).
+	// POST /api/files/upload and POST /api/files/{file_id}/version: hand-written routes (multipart -> gRPC stream).
 	up := newUploadHandler(gw, storagepb.NewStorageServiceClient(storageConn), []byte(jwtSecret), maxUploadBytes)
 	if err := gw.HandlePath(http.MethodPost, "/api/files/upload", up.handle); err != nil {
 		log.Fatalf("Failed to register the upload route: %v", err)
+	}
+	if err := gw.HandlePath(http.MethodPost, "/api/files/{file_id}/version", up.handleVersion); err != nil {
+		log.Fatalf("Failed to register the file version upload route: %v", err)
 	}
 
 	limiter := newRateLimiter(rate.Limit(ratePerSecond), rateBurst, []byte(jwtSecret))

@@ -28,13 +28,13 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-
 // received is what the fake storage-service saw of one upload.
 type received struct {
-	meta    *storagepb.UploadFileMetadata
-	content []byte
-	auth    string
-	chunks  int
+	meta        *storagepb.UploadFileMetadata
+	versionMeta *storagepb.UploadNewFileVersionMetadata
+	content     []byte
+	auth        string
+	chunks      int
 }
 
 // fakeStorage answers by file name so each test can pick the outcome.
@@ -96,6 +96,63 @@ func (f *fakeStorage) UploadFile(stream storagepb.StorageService_UploadFileServe
 	})
 }
 
+func (f *fakeStorage) UploadNewFileVersion(stream storagepb.StorageService_UploadNewFileVersionServer) error {
+	r := &received{}
+	if md, ok := metadata.FromIncomingContext(stream.Context()); ok {
+		if v := md.Get("authorization"); len(v) > 0 {
+			r.auth = v[0]
+		}
+	}
+
+	first, err := stream.Recv()
+	if err != nil {
+		return err
+	}
+	r.versionMeta = first.GetMetadata()
+
+	f.mu.Lock()
+	f.last = r
+	f.mu.Unlock()
+
+	switch r.versionMeta.GetFileId() {
+	case "missing":
+		return status.Error(codes.NotFound, "File not found")
+	case "forbidden":
+		return status.Error(codes.PermissionDenied, "Access denied to target file")
+	}
+	switch r.versionMeta.GetFileName() {
+	case "quota.txt":
+		return status.Error(codes.ResourceExhausted, "Storage quota exceeded: this file is 50 B but only 10 B is free")
+	case "mismatch.pdf":
+		return status.Error(codes.InvalidArgument, "New file version must keep the original extension (.txt)")
+	}
+
+	for {
+		msg, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		r.content = append(r.content, msg.GetChunk()...)
+		r.chunks++
+	}
+
+	return stream.SendAndClose(&storagepb.UploadFileResponse{
+		Message: "File version updated successfully",
+		File: &storagepb.FileItem{
+			Id:        r.versionMeta.GetFileId(),
+			Name:      "original.txt",
+			SizeBytes: int64(len(r.content)),
+			MimeType:  "text/plain",
+			CreatedAt: timestamppb.New(time.Unix(1700000000, 0)),
+			UpdatedAt: timestamppb.New(time.Unix(1700003600, 0)),
+		},
+		Quota: &storagepb.StorageQuota{StorageQuotaBytes: 1000, UsedStorageBytes: 450, RemainingBytes: 550},
+	})
+}
+
 func (f *fakeStorage) GetQuota(context.Context, *storagepb.GetQuotaRequest) (*storagepb.StorageQuota, error) {
 	return &storagepb.StorageQuota{StorageQuotaBytes: 104857600, UsedStorageBytes: 2048, RemainingBytes: 104855552}, nil
 }
@@ -106,7 +163,7 @@ func (f *fakeStorage) lastUpload() *received {
 	return f.last
 }
 
-// newGateway wires the real grpc-gateway mux and the real upload route to a
+// newGateway wires the real grpc-gateway mux and the real upload routes to a
 // fake storage-service over an in-memory gRPC connection.
 func newGateway(t *testing.T, maxBytes int64) (*httptest.Server, *fakeStorage) {
 	t.Helper()
@@ -133,6 +190,9 @@ func newGateway(t *testing.T, maxBytes int64) (*httptest.Server, *fakeStorage) {
 	}
 	up := newUploadHandler(gw, storagepb.NewStorageServiceClient(conn), testSecret, maxBytes)
 	if err := gw.HandlePath(http.MethodPost, "/api/files/upload", up.handle); err != nil {
+		t.Fatal(err)
+	}
+	if err := gw.HandlePath(http.MethodPost, "/api/files/{file_id}/version", up.handleVersion); err != nil {
 		t.Fatal(err)
 	}
 
@@ -166,6 +226,16 @@ type field struct{ name, value string }
 // post sends a multipart upload. fileName == "" omits the file part.
 func post(t *testing.T, ts *httptest.Server, auth, fileName string, content []byte, fields ...field) (*http.Response, map[string]any) {
 	t.Helper()
+	return postTo(t, ts.URL+"/api/files/upload", auth, fileName, content, fields...)
+}
+
+func postVersion(t *testing.T, ts *httptest.Server, auth, fileID, fileName string, content []byte) (*http.Response, map[string]any) {
+	t.Helper()
+	return postTo(t, ts.URL+"/api/files/"+fileID+"/version", auth, fileName, content)
+}
+
+func postTo(t *testing.T, targetURL, auth, fileName string, content []byte, fields ...field) (*http.Response, map[string]any) {
+	t.Helper()
 
 	var body bytes.Buffer
 	mw := multipart.NewWriter(&body)
@@ -178,7 +248,7 @@ func post(t *testing.T, ts *httptest.Server, auth, fileName string, content []by
 	}
 	_ = mw.Close()
 
-	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/files/upload", &body)
+	req, _ := http.NewRequest(http.MethodPost, targetURL, &body)
 	req.Header.Set("Content-Type", mw.FormDataContentType())
 	if auth != "" {
 		req.Header.Set("Authorization", auth)
@@ -361,6 +431,73 @@ func TestUpload_OnlyPostIsRouted(t *testing.T) {
 	}
 }
 
+// ---------- US-2.3: POST /api/files/{file_id}/version ----------
+
+func TestUploadVersion_SuccessStreamsMetadataAndContentWith200(t *testing.T) {
+	ts, fake := newGateway(t, 10<<20)
+
+	content := bytes.Repeat([]byte("abcdefghij"), 15000) // 150,000 bytes (> 2 chunks)
+	auth := validAuth(t)
+	resp, body := postVersion(t, ts, auth, "64b0c0ffee00000000001234", "updated.txt", content)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %v", resp.StatusCode, body)
+	}
+	got := fake.lastUpload()
+	if got.versionMeta.GetFileId() != "64b0c0ffee00000000001234" ||
+		got.versionMeta.GetFileName() != "updated.txt" ||
+		got.versionMeta.GetSizeBytes() != int64(len(content)) {
+		t.Fatalf("version metadata sent to storage is wrong: %+v", got.versionMeta)
+	}
+	if got.auth != auth {
+		t.Fatalf("token must be forwarded, got %q", got.auth)
+	}
+	if !bytes.Equal(got.content, content) || got.chunks < 3 {
+		t.Fatalf("content corrupted or not chunked: %d bytes in %d chunks", len(got.content), got.chunks)
+	}
+
+	file := body["file"].(map[string]any)
+	if file["id"] != "64b0c0ffee00000000001234" || file["updatedAt"] == "" {
+		t.Fatalf("unexpected file payload: %v", file)
+	}
+}
+
+func TestUploadVersion_ErrorsMapToHTTPStatuses(t *testing.T) {
+	ts, _ := newGateway(t, 10<<20)
+
+	resp, body := postVersion(t, ts, validAuth(t), "f1", "quota.txt", []byte("hello"))
+	if resp.StatusCode != http.StatusRequestEntityTooLarge || !strings.Contains(body["message"].(string), "Storage quota exceeded") {
+		t.Fatalf("quota exceeded must return 413, got %d %v", resp.StatusCode, body)
+	}
+
+	resp, _ = postVersion(t, ts, validAuth(t), "missing", "ok.txt", []byte("hello"))
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("missing file must return 404, got %d", resp.StatusCode)
+	}
+
+	resp, _ = postVersion(t, ts, validAuth(t), "forbidden", "ok.txt", []byte("hello"))
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("other user's file must return 403, got %d", resp.StatusCode)
+	}
+
+	resp, _ = postVersion(t, ts, validAuth(t), "f1", "mismatch.pdf", []byte("%PDF-"))
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("type mismatch must return 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestUploadVersion_RejectsUnauthenticatedRequests(t *testing.T) {
+	ts, fake := newGateway(t, 10<<20)
+
+	resp, _ := postVersion(t, ts, "", "f1", "a.txt", []byte("x"))
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", resp.StatusCode)
+	}
+	if fake.lastUpload() != nil {
+		t.Fatal("unauthenticated version upload must not reach storage-service")
+	}
+}
+
 // The frontend relies on this exact JSON: protojson sends int64 as strings.
 func TestGetQuotaRouteJSONShape(t *testing.T) {
 	ts, _ := newGateway(t, 10<<20)
@@ -387,3 +524,4 @@ func TestHumanSize(t *testing.T) {
 		}
 	}
 }
+	

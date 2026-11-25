@@ -67,6 +67,18 @@ service StorageService {
   // the received file into this rpc. Answered with HTTP 201 on success and
   // HTTP 413 when the quota is exceeded.
   rpc UploadFile(stream UploadFileRequest) returns (UploadFileResponse);
+
+  // POST /api/files/{file_id}/version  (multipart/form-data: "file")
+  //
+  // Client-streaming: the first message carries the metadata (including the
+  // target file_id), and every following message carries one chunk of the new
+  // file content. Not bound with google.api.http because grpc-gateway cannot
+  // parse multipart bodies; api-gateway serves this route by hand
+  // (api-gateway/upload.go) and streams the received file into this rpc.
+  // Answered with HTTP 200 on success, HTTP 404/403 if the file does not exist
+  // or belongs to another user, HTTP 415/400 on file type mismatch, and
+  // HTTP 413 when the additional quota required exceeds the user's limit.
+  rpc UploadNewFileVersion(stream UploadNewFileVersionRequest) returns (UploadFileResponse);
 }
 
 // ---------- Domain messages ----------
@@ -93,6 +105,7 @@ message FileItem {
   int64 size_bytes = 3;
   string mime_type = 4;
   google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp updated_at = 6;
 }
 
 // The caller's quota, as kept by users-service.
@@ -165,4 +178,18 @@ message FolderContentResponse {
   repeated BreadcrumbItem breadcrumbs = 2;
   repeated Folder folders = 3;
   repeated FileItem files = 4;
+}
+
+
+message UploadNewFileVersionRequest {
+  oneof payload {
+    UploadNewFileVersionMetadata metadata = 1;
+    bytes chunk = 2;
+  }
+}
+
+message UploadNewFileVersionMetadata {
+  string file_id = 1;
+  string file_name = 2;
+  int64 size_bytes = 3;
 }

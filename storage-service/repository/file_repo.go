@@ -76,3 +76,35 @@ func (r *FileRepository) FindByFolder(ctx context.Context, ownerID string, folde
 	}
 	return files, nil
 }
+
+func (r *FileRepository) FindByID(ctx context.Context, id primitive.ObjectID) (*domain.FileItem, error) {
+	var file domain.FileItem
+	if err := r.collection.FindOne(ctx, bson.M{"_id": id}).Decode(&file); err != nil {
+		return nil, err
+	}
+	return &file, nil
+}
+
+func (r *FileRepository) UpdateVersion(ctx context.Context, file *domain.FileItem) error {
+	filter := bson.M{
+		"_id":     file.ID,
+		"ownerId": file.OwnerID,
+	}
+	update := bson.M{
+		"$set": bson.M{
+			"sizeBytes": file.SizeBytes,
+			"mimeType":  file.MimeType,
+			"objectKey": file.ObjectKey,
+			"sha256":    file.SHA256,
+			"updatedAt": file.UpdatedAt,
+		},
+	}
+	res, err := r.collection.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return err
+	}
+	if res.MatchedCount == 0 {
+		return mongo.ErrNoDocuments
+	}
+	return nil
+}

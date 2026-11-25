@@ -57,18 +57,84 @@ func newUploadHandler(gw *runtime.ServeMux, storage storagepb.StorageServiceClie
 	return &uploadHandler{gw: gw, storage: storage, jwtSecret: jwtSecret, maxBytes: maxFileBytes}
 }
 
-// handle has the signature gw.HandlePath expects.
+// handle serves POST /api/files/upload.
 func (u *uploadHandler) handle(w http.ResponseWriter, r *http.Request, _ map[string]string) {
 	authHeader := r.Header.Get("Authorization")
-
-	// Refuse callers without a valid token BEFORE accepting a body of up to
-	// maxBytes: otherwise anyone could make the gateway spool large files to
-	// disk. (storage-service checks the token again, and the role.)
 	if !u.validToken(authHeader) {
 		writeError(w, http.StatusUnauthorized, codes.Unauthenticated, "Missing or invalid Authorization header")
 		return
 	}
 
+	file, header, cleanup, ok := u.parseMultipartFile(w, r)
+	if !ok {
+		return
+	}
+	defer cleanup()
+	defer file.Close()
+
+	meta := &storagepb.UploadFileMetadata{
+		FileName:  header.Filename,
+		SizeBytes: header.Size,
+	}
+	if vals := r.MultipartForm.Value["folderId"]; len(vals) > 0 && strings.TrimSpace(vals[0]) != "" {
+		folderID := strings.TrimSpace(vals[0])
+		meta.FolderId = &folderID
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), uploadTimeout)
+	defer cancel()
+	ctx = metadata.AppendToOutgoingContext(ctx, "authorization", authHeader)
+
+	resp, err := u.stream(ctx, meta, file)
+	if err != nil {
+		writeGRPCError(w, err)
+		return
+	}
+
+	u.writeProtoResponse(w, r, http.StatusCreated, resp)
+}
+
+// handleVersion serves POST /api/files/{file_id}/version.
+func (u *uploadHandler) handleVersion(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
+	authHeader := r.Header.Get("Authorization")
+	if !u.validToken(authHeader) {
+		writeError(w, http.StatusUnauthorized, codes.Unauthenticated, "Missing or invalid Authorization header")
+		return
+	}
+
+	fileID := strings.TrimSpace(pathParams["file_id"])
+	if fileID == "" {
+		writeError(w, http.StatusBadRequest, codes.InvalidArgument, "Missing target file ID")
+		return
+	}
+
+	file, header, cleanup, ok := u.parseMultipartFile(w, r)
+	if !ok {
+		return
+	}
+	defer cleanup()
+	defer file.Close()
+
+	meta := &storagepb.UploadNewFileVersionMetadata{
+		FileId:    fileID,
+		FileName:  header.Filename,
+		SizeBytes: header.Size,
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), uploadTimeout)
+	defer cancel()
+	ctx = metadata.AppendToOutgoingContext(ctx, "authorization", authHeader)
+
+	resp, err := u.streamVersion(ctx, meta, file)
+	if err != nil {
+		writeGRPCError(w, err)
+		return
+	}
+
+	u.writeProtoResponse(w, r, http.StatusOK, resp)
+}
+
+func (u *uploadHandler) parseMultipartFile(w http.ResponseWriter, r *http.Request) (multipart.File, *multipart.FileHeader, func(), bool) {
 	rc := http.NewResponseController(w)
 	_ = rc.SetReadDeadline(time.Now().Add(uploadTimeout))
 	_ = rc.SetWriteDeadline(time.Now().Add(uploadTimeout))
@@ -85,37 +151,26 @@ func (u *uploadHandler) handle(w http.ResponseWriter, r *http.Request, _ map[str
 		default:
 			writeError(w, http.StatusBadRequest, codes.InvalidArgument, "Invalid multipart upload request")
 		}
-		return
+		return nil, nil, nil, false
 	}
-	defer r.MultipartForm.RemoveAll() // deletes the temporary files
+
+	cleanup := func() {
+		if r.MultipartForm != nil {
+			_ = r.MultipartForm.RemoveAll()
+		}
+	}
 
 	file, header, err := r.FormFile("file")
 	if err != nil {
+		cleanup()
 		writeError(w, http.StatusBadRequest, codes.InvalidArgument, "Please select a file to upload")
-		return
-	}
-	defer file.Close()
-
-	meta := &storagepb.UploadFileMetadata{
-		FileName:  header.Filename,
-		SizeBytes: header.Size,
-	}
-	if vals := r.MultipartForm.Value["folderId"]; len(vals) > 0 && strings.TrimSpace(vals[0]) != "" {
-		folderID := strings.TrimSpace(vals[0])
-		meta.FolderId = &folderID
+		return nil, nil, nil, false
 	}
 
-	// The caller's token is forwarded to storage-service, as grpc-gateway does for the generated routes.
-	ctx, cancel := context.WithTimeout(r.Context(), uploadTimeout)
-	defer cancel()
-	ctx = metadata.AppendToOutgoingContext(ctx, "authorization", authHeader)
+	return file, header, cleanup, true
+}
 
-	resp, err := u.stream(ctx, meta, file)
-	if err != nil {
-		writeGRPCError(w, err)
-		return
-	}
-
+func (u *uploadHandler) writeProtoResponse(w http.ResponseWriter, r *http.Request, statusCode int, resp *storagepb.UploadFileResponse) {
 	_, outbound := runtime.MarshalerForRequest(u.gw, r)
 	body, err := outbound.Marshal(resp)
 	if err != nil {
@@ -124,7 +179,7 @@ func (u *uploadHandler) handle(w http.ResponseWriter, r *http.Request, _ map[str
 		return
 	}
 	w.Header().Set("Content-Type", outbound.ContentType(resp))
-	w.WriteHeader(http.StatusCreated)
+	w.WriteHeader(statusCode)
 	_, _ = w.Write(body)
 }
 
@@ -159,6 +214,37 @@ func (u *uploadHandler) stream(ctx context.Context, meta *storagepb.UploadFileMe
 
 	// A failed Send only says "the stream is over"; the real reason (quota
 	// exceeded, bad file type, ...) is the status that CloseAndRecv returns.
+	return stream.CloseAndRecv()
+}
+
+func (u *uploadHandler) streamVersion(ctx context.Context, meta *storagepb.UploadNewFileVersionMetadata, file multipart.File) (*storagepb.UploadFileResponse, error) {
+	stream, err := u.storage.UploadNewFileVersion(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	send := func(m *storagepb.UploadNewFileVersionRequest) bool { return stream.Send(m) == nil }
+
+	if send(&storagepb.UploadNewFileVersionRequest{Payload: &storagepb.UploadNewFileVersionRequest_Metadata{Metadata: meta}}) {
+		buf := make([]byte, uploadChunkSize)
+		for {
+			n, readErr := file.Read(buf)
+			if n > 0 {
+				chunk := &storagepb.UploadNewFileVersionRequest{Payload: &storagepb.UploadNewFileVersionRequest_Chunk{Chunk: buf[:n]}}
+				if !send(chunk) {
+					break
+				}
+			}
+			if errors.Is(readErr, io.EOF) {
+				break
+			}
+			if readErr != nil {
+				log.Printf("read spooled version upload: %v", readErr)
+				return nil, status.Error(codes.Internal, "Failed to read the uploaded file")
+			}
+		}
+	}
+
 	return stream.CloseAndRecv()
 }
 
