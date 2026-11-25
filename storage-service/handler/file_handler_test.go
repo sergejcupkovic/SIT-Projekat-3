@@ -53,6 +53,7 @@ type env struct {
 	files     []*domain.FileItem
 	folders   map[primitive.ObjectID]*domain.Folder
 	createErr error
+	updateErr error
 }
 
 func (e *env) log(ev string) {
@@ -177,9 +178,61 @@ func (e *env) FindByFolder(_ context.Context, owner string, folder *primitive.Ob
 	return out, nil
 }
 
-// folderLookup stand-in
-func (e *env) FindByID(_ context.Context, id primitive.ObjectID) (*domain.Folder, error) {
-	f, ok := e.folders[id]
+func (e *env) FindByID(_ context.Context, id primitive.ObjectID) (*domain.FileItem, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for _, f := range e.files {
+		if f.ID == id {
+			cp := *f
+			return &cp, nil
+		}
+	}
+	return nil, mongo.ErrNoDocuments
+}
+
+func (e *env) UpdateVersion(_ context.Context, updated *domain.FileItem) error {
+	e.log("update")
+	if e.updateErr != nil {
+		return e.updateErr
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for i, f := range e.files {
+		if f.ID == updated.ID && f.OwnerID == updated.OwnerID {
+			cp := *updated
+			e.files[i] = &cp
+			return nil
+		}
+	}
+	return mongo.ErrNoDocuments
+}
+
+func (e *env) Rename(_ context.Context, id primitive.ObjectID, ownerID, newName string, updatedAt time.Time) error {
+	e.log("rename")
+	if e.updateErr != nil {
+		return e.updateErr
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for i, f := range e.files {
+		if f.ID == id && f.OwnerID == ownerID {
+			cp := *f
+			cp.Name = newName
+			cp.UpdatedAt = updatedAt
+			e.files[i] = &cp
+			return nil
+		}
+	}
+	return mongo.ErrNoDocuments
+}
+
+// folderLookup stand-in (separate type because FindByID returns *domain.Folder)
+type folderLookupAdapter struct{ e *env }
+
+func (a folderLookupAdapter) FindByID(_ context.Context, id primitive.ObjectID) (*domain.Folder, error) {
+	a.e.mu.Lock()
+	defer a.e.mu.Unlock()
+	f, ok := a.e.folders[id]
 	if !ok {
 		return nil, mongo.ErrNoDocuments
 	}
@@ -209,8 +262,16 @@ func (s testServer) UploadFile(st storagepb.StorageService_UploadFileServer) err
 	return s.fh.UploadFile(st)
 }
 
+func (s testServer) UploadNewFileVersion(st storagepb.StorageService_UploadNewFileVersionServer) error {
+	return s.fh.UploadNewFileVersion(st)
+}
+
 func (s testServer) GetQuota(ctx context.Context, r *storagepb.GetQuotaRequest) (*storagepb.StorageQuota, error) {
 	return s.fh.GetQuota(ctx, r)
+}
+
+func (s testServer) RenameFile(ctx context.Context, r *storagepb.RenameFileRequest) (*storagepb.FileResponse, error) {
+	return s.fh.RenameFile(ctx, r)
 }
 
 func newEnv(quota, used int64) *env {
@@ -232,7 +293,7 @@ func start(t *testing.T, e *env, maxFileBytes int64) storagepb.StorageServiceCli
 		grpc.ChainUnaryInterceptor(middleware.AuthUnaryInterceptor(jwtSecret)),
 		grpc.ChainStreamInterceptor(middleware.AuthStreamInterceptor(jwtSecret)),
 	)
-	storagepb.RegisterStorageServiceServer(srv, testServer{fh: NewFileHandler(e, e, e, e, maxFileBytes)})
+	storagepb.RegisterStorageServiceServer(srv, testServer{fh: NewFileHandler(e, folderLookupAdapter{e}, e, e, maxFileBytes)})
 	go func() { _ = srv.Serve(lis) }()
 
 	conn, err := grpc.NewClient("passthrough:///bufnet",
@@ -286,6 +347,24 @@ func upload(ctx context.Context, c storagepb.StorageServiceClient, meta *storage
 
 func simpleUpload(ctx context.Context, c storagepb.StorageServiceClient, name string, content []byte) (*storagepb.UploadFileResponse, error) {
 	return upload(ctx, c, &storagepb.UploadFileMetadata{FileName: name, SizeBytes: int64(len(content))}, content)
+}
+
+func uploadVersion(ctx context.Context, c storagepb.StorageServiceClient, meta *storagepb.UploadNewFileVersionMetadata, chunks ...[]byte) (*storagepb.UploadFileResponse, error) {
+	stream, err := c.UploadNewFileVersion(ctx)
+	if err != nil {
+		return nil, err
+	}
+	send := func(m *storagepb.UploadNewFileVersionRequest) bool {
+		return !errors.Is(stream.Send(m), io.EOF)
+	}
+	if send(&storagepb.UploadNewFileVersionRequest{Payload: &storagepb.UploadNewFileVersionRequest_Metadata{Metadata: meta}}) {
+		for _, ch := range chunks {
+			if !send(&storagepb.UploadNewFileVersionRequest{Payload: &storagepb.UploadNewFileVersionRequest_Chunk{Chunk: ch}}) {
+				break
+			}
+		}
+	}
+	return stream.CloseAndRecv()
 }
 
 func wantCode(t *testing.T, err error, want codes.Code) *status.Status {
@@ -720,6 +799,196 @@ func TestUpload_OwnerComesFromTheTokenNotTheRequest(t *testing.T) {
 	}
 }
 
+// ---------- US-2.3: UploadNewFileVersion ----------
+
+func seedExistingFile(e *env, owner, name string, content []byte) *domain.FileItem {
+	id := primitive.NewObjectID()
+	key := owner + "/" + id.Hex()
+	created := time.Now().UTC().Add(-time.Hour)
+	sum := sha256.Sum256(content)
+	f := &domain.FileItem{
+		ID:        id,
+		Name:      name,
+		OwnerID:   owner,
+		SizeBytes: int64(len(content)),
+		MimeType:  "text/plain",
+		ObjectKey: key,
+		SHA256:    hex.EncodeToString(sum[:]),
+		CreatedAt: created,
+		UpdatedAt: created,
+	}
+	e.files = append(e.files, f)
+	e.objects[key] = append([]byte(nil), content...)
+	e.used += int64(len(content))
+	return f
+}
+
+func TestUploadVersion_LargerFileReservesDeltaAndReplacesContent(t *testing.T) {
+	e := newEnv(1000, 0)
+	orig := seedExistingFile(e, alice, "report.txt", []byte("v1-short")) // 8 B
+	oldKey := orig.ObjectKey
+	c := start(t, e, 0)
+
+	newContent := []byte("v2-much-longer-content-here") // 27 B (delta = +19 B)
+	resp, err := uploadVersion(authCtx(t, alice), c, &storagepb.UploadNewFileVersionMetadata{
+		FileId:    orig.ID.Hex(),
+		FileName:  "different-local-name.txt",
+		SizeBytes: int64(len(newContent)),
+	}, newContent[:10], newContent[10:])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := e.eventList(); got != "reserve,put,update,delete" {
+		t.Fatalf("expected reserve -> put -> update -> delete old object, got %s", got)
+	}
+	if e.usedBytes() != 27 {
+		t.Fatalf("expected quota usage 27, got %d", e.usedBytes())
+	}
+	if _, exists := e.objects[oldKey]; exists {
+		t.Fatal("superseded S3 object should be removed after commit")
+	}
+	if len(e.objects) != 1 {
+		t.Fatalf("expected exactly 1 object in store, got %d", len(e.objects))
+	}
+
+	updated := e.files[0]
+	if updated.Name != "report.txt" {
+		t.Fatalf("file name must remain unchanged, got %q", updated.Name)
+	}
+	if updated.SizeBytes != 27 || !updated.UpdatedAt.After(updated.CreatedAt) {
+		t.Fatalf("expected updated size and newer UpdatedAt timestamp: %+v", updated)
+	}
+	if !bytes.Equal(e.objects[updated.ObjectKey], newContent) {
+		t.Fatal("stored content does not match new version")
+	}
+	if resp.GetFile().GetId() != orig.ID.Hex() || resp.GetQuota().GetUsedStorageBytes() != 27 {
+		t.Fatalf("unexpected response payload: %+v", resp)
+	}
+}
+
+func TestUploadVersion_SmallerFileReleasesFreedQuota(t *testing.T) {
+	e := newEnv(1000, 0)
+	orig := seedExistingFile(e, alice, "notes.txt", bytes.Repeat([]byte("a"), 100))
+	c := start(t, e, 0)
+
+	newContent := bytes.Repeat([]byte("b"), 40) // delta = -60 B
+	resp, err := uploadVersion(authCtx(t, alice), c, &storagepb.UploadNewFileVersionMetadata{
+		FileId:    orig.ID.Hex(),
+		FileName:  "notes.txt",
+		SizeBytes: 40,
+	}, newContent)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := e.eventList(); got != "put,update,delete,release" {
+		t.Fatalf("expected put -> update -> delete -> release, got %s", got)
+	}
+	if e.usedBytes() != 40 || resp.GetQuota().GetUsedStorageBytes() != 40 {
+		t.Fatalf("expected quota usage 40, got env=%d resp=%d", e.usedBytes(), resp.GetQuota().GetUsedStorageBytes())
+	}
+}
+
+func TestUploadVersion_SameSizeDoesNotTouchQuota(t *testing.T) {
+	e := newEnv(1000, 0)
+	orig := seedExistingFile(e, alice, "same.txt", []byte("12345"))
+	c := start(t, e, 0)
+
+	if _, err := uploadVersion(authCtx(t, alice), c, &storagepb.UploadNewFileVersionMetadata{
+		FileId:    orig.ID.Hex(),
+		FileName:  "same.txt",
+		SizeBytes: 5,
+	}, []byte("abcde")); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := e.eventList(); got != "put,update,delete" {
+		t.Fatalf("same-size replacement should not reserve or release quota, got %s", got)
+	}
+	if e.usedBytes() != 5 {
+		t.Fatalf("expected usage 5, got %d", e.usedBytes())
+	}
+}
+
+func TestUploadVersion_QuotaExceededAbortsAndKeepsOldVersion(t *testing.T) {
+	e := newEnv(50, 0)
+	orig := seedExistingFile(e, alice, "doc.txt", bytes.Repeat([]byte("x"), 30)) // 20 B free
+	oldKey := orig.ObjectKey
+	c := start(t, e, 0)
+
+	// New version is 60 B -> delta is +30 B, which exceeds the 20 B remaining.
+	_, err := uploadVersion(authCtx(t, alice), c, &storagepb.UploadNewFileVersionMetadata{
+		FileId:    orig.ID.Hex(),
+		FileName:  "doc.txt",
+		SizeBytes: 60,
+	}, bytes.Repeat([]byte("y"), 60))
+	wantCode(t, err, codes.ResourceExhausted)
+
+	if e.usedBytes() != 30 {
+		t.Fatalf("usage must stay 30, got %d", e.usedBytes())
+	}
+	if !bytes.Equal(e.objects[oldKey], bytes.Repeat([]byte("x"), 30)) {
+		t.Fatal("original file content must remain intact")
+	}
+}
+
+func TestUploadVersion_RollbackPreservesOldVersionOnFailure(t *testing.T) {
+	e := newEnv(1000, 0)
+	orig := seedExistingFile(e, alice, "doc.txt", []byte("original"))
+	oldKey := orig.ObjectKey
+	e.updateErr = errors.New("mongo write failed")
+	c := start(t, e, 0)
+
+	_, err := uploadVersion(authCtx(t, alice), c, &storagepb.UploadNewFileVersionMetadata{
+		FileId:    orig.ID.Hex(),
+		FileName:  "doc.txt",
+		SizeBytes: 20,
+	}, bytes.Repeat([]byte("z"), 20))
+	wantCode(t, err, codes.Internal)
+
+	if e.usedBytes() != 8 {
+		t.Fatalf("reserved delta must be released on failure, got %d", e.usedBytes())
+	}
+	if len(e.objects) != 1 || !bytes.Equal(e.objects[oldKey], []byte("original")) {
+		t.Fatal("new object must be cleaned up and original object kept")
+	}
+}
+
+func TestUploadVersion_ValidationAndOwnershipChecks(t *testing.T) {
+	e := newEnv(1000, 0)
+	alicesFile := seedExistingFile(e, alice, "notes.txt", []byte("hello"))
+	c := start(t, e, 0)
+
+	// Other user cannot replace Alice's file
+	_, err := uploadVersion(authCtx(t, bob), c, &storagepb.UploadNewFileVersionMetadata{
+		FileId: alicesFile.ID.Hex(), FileName: "notes.txt", SizeBytes: 4,
+	}, []byte("hack"))
+	wantCode(t, err, codes.PermissionDenied)
+
+	// Non-existent file ID
+	_, err = uploadVersion(authCtx(t, alice), c, &storagepb.UploadNewFileVersionMetadata{
+		FileId: primitive.NewObjectID().Hex(), FileName: "notes.txt", SizeBytes: 4,
+	}, []byte("test"))
+	wantCode(t, err, codes.NotFound)
+
+	// Mismatched extension
+	_, err = uploadVersion(authCtx(t, alice), c, &storagepb.UploadNewFileVersionMetadata{
+		FileId: alicesFile.ID.Hex(), FileName: "notes.pdf", SizeBytes: 5,
+	}, []byte("%PDF-"))
+	wantCode(t, err, codes.InvalidArgument)
+
+	// Content does not match extension
+	_, err = uploadVersion(authCtx(t, alice), c, &storagepb.UploadNewFileVersionMetadata{
+		FileId: alicesFile.ID.Hex(), FileName: "notes.txt", SizeBytes: 8,
+	}, []byte("MZ\x90\x00\x03\x00\x00\x00"))
+	wantCode(t, err, codes.InvalidArgument)
+
+	if e.eventList() != "" {
+		t.Fatalf("rejected version uploads must not touch quota or store, got %s", e.eventList())
+	}
+}
+
 // ---------- GetQuota ----------
 
 func TestGetQuota(t *testing.T) {
@@ -748,5 +1017,121 @@ func TestHumanBytes(t *testing.T) {
 		if got := humanBytes(in); got != want {
 			t.Errorf("humanBytes(%d) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestRenameFile_UpdatesNameAndTimestampWithoutTouchingObjectStore(t *testing.T) {
+	e := newEnv(1000, 0)
+	orig := seedExistingFile(e, alice, "draft.txt", []byte("hello"))
+	oldKey := orig.ObjectKey
+	c := start(t, e, 0)
+
+	resp, err := c.RenameFile(authCtx(t, alice), &storagepb.RenameFileRequest{
+		FileId: orig.ID.Hex(),
+		Name:   "  final-report.txt  ",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := e.eventList(); got != "rename" {
+		t.Fatalf("expected only metadata rename, got %s", got)
+	}
+	if e.files[0].Name != "final-report.txt" || e.files[0].ObjectKey != oldKey {
+		t.Fatalf("unexpected file state after rename: %+v", e.files[0])
+	}
+	if !e.files[0].UpdatedAt.After(orig.CreatedAt) {
+		t.Fatal("expected UpdatedAt to be refreshed")
+	}
+	if resp.GetFile().GetName() != "final-report.txt" || resp.GetMessage() == "" {
+		t.Fatalf("unexpected response: %+v", resp)
+	}
+}
+
+func TestRenameFile_SameNameIsNoOp(t *testing.T) {
+	e := newEnv(1000, 0)
+	orig := seedExistingFile(e, alice, "notes.txt", []byte("hello"))
+	c := start(t, e, 0)
+
+	resp, err := c.RenameFile(authCtx(t, alice), &storagepb.RenameFileRequest{
+		FileId: orig.ID.Hex(),
+		Name:   "notes.txt",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.eventList() != "" {
+		t.Fatalf("no-op rename should not write to DB, got %s", e.eventList())
+	}
+	if resp.GetFile().GetName() != "notes.txt" {
+		t.Fatalf("unexpected file name: %q", resp.GetFile().GetName())
+	}
+}
+
+func TestRenameFile_RejectsDuplicateInSameFolderButAllowsDifferentFolder(t *testing.T) {
+	e := newEnv(1000, 0)
+	f1 := seedExistingFile(e, alice, "a.txt", []byte("1"))
+	seedExistingFile(e, alice, "b.txt", []byte("2"))
+
+	subFolder := primitive.NewObjectID()
+	fInSub := seedExistingFile(e, alice, "c.txt", []byte("3"))
+	fInSub.FolderID = &subFolder
+
+	c := start(t, e, 0)
+
+	_, err := c.RenameFile(authCtx(t, alice), &storagepb.RenameFileRequest{
+		FileId: f1.ID.Hex(),
+		Name:   "b.txt",
+	})
+	wantCode(t, err, codes.AlreadyExists)
+
+	if _, err := c.RenameFile(authCtx(t, alice), &storagepb.RenameFileRequest{
+		FileId: fInSub.ID.Hex(),
+		Name:   "b.txt",
+	}); err != nil {
+		t.Fatalf("same name in a different folder must succeed: %v", err)
+	}
+}
+
+func TestRenameFile_ValidationAndOwnershipErrors(t *testing.T) {
+	e := newEnv(1000, 0)
+	alicesFile := seedExistingFile(e, alice, "notes.txt", []byte("hello"))
+	c := start(t, e, 0)
+
+	// Unauthenticated
+	_, err := c.RenameFile(context.Background(), &storagepb.RenameFileRequest{
+		FileId: alicesFile.ID.Hex(), Name: "new.txt",
+	})
+	wantCode(t, err, codes.Unauthenticated)
+
+	// Other user's file
+	_, err = c.RenameFile(authCtx(t, bob), &storagepb.RenameFileRequest{
+		FileId: alicesFile.ID.Hex(), Name: "hacked.txt",
+	})
+	wantCode(t, err, codes.PermissionDenied)
+
+	// Non-existent file
+	_, err = c.RenameFile(authCtx(t, alice), &storagepb.RenameFileRequest{
+		FileId: primitive.NewObjectID().Hex(), Name: "new.txt",
+	})
+	wantCode(t, err, codes.NotFound)
+
+	// Invalid file ID, empty name, illegal chars, changed or missing extension
+	invalidCases := []struct {
+		id   string
+		name string
+	}{
+		{"not-an-object-id", "new.txt"},
+		{alicesFile.ID.Hex(), "   "},
+		{alicesFile.ID.Hex(), "../escape.txt"},
+		{alicesFile.ID.Hex(), "<script>.txt"},
+		{alicesFile.ID.Hex(), "notes.pdf"},
+		{alicesFile.ID.Hex(), "notes"},
+	}
+	for _, tc := range invalidCases {
+		_, err := c.RenameFile(authCtx(t, alice), &storagepb.RenameFileRequest{
+			FileId: tc.id, Name: tc.name,
+		})
+		wantCode(t, err, codes.InvalidArgument)
 	}
 }

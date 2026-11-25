@@ -93,6 +93,10 @@ const quotaBarFill = document.getElementById("quotaBarFill");
 const fileUploadInput = document.getElementById("fileUploadInput");
 const uploadFileBtn = document.getElementById("uploadFileBtn");
 const uploadFileSpinner = document.getElementById("uploadFileSpinner");
+const fileVersionUploadInput = document.getElementById("fileVersionUploadInput");
+
+let versionTargetFile = null;
+let versionTargetBtn = null;
 
 let currentFolderId = null;
 let currentBreadcrumbs = [];
@@ -148,6 +152,16 @@ const toggleConfirmPasswordBtn = document.getElementById(
 
 const EMAIL_REGEX = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
 const SPECIAL_CHAR_REGEX = /[!@#~$%^&*()+|_.,<>?/{}\-]/;
+
+const renameFileForm = document.getElementById("renameFileForm");
+const renameFileLabel = document.getElementById("renameFileLabel");
+const renameFileNameInput = document.getElementById("renameFileNameInput");
+const renameFileSubmitBtn = document.getElementById("renameFileSubmitBtn");
+const renameFileSpinner = document.getElementById("renameFileSpinner");
+const cancelRenameFileBtn = document.getElementById("cancelRenameFileBtn");
+const renameFileNameError = document.getElementById("renameFileNameError");
+
+let renameFileTarget = null; // { id: string, currentName: string }
 
 function getCandidateEndpoints(path) {
   const endpoints = [];
@@ -276,6 +290,13 @@ async function init() {
   }
   if (renameFolderForm) {
     renameFolderForm.addEventListener("submit", handleRenameFolderSubmit);
+  }
+
+  if (cancelRenameFileBtn) {
+    cancelRenameFileBtn.addEventListener("click", closeRenameFileForm);
+  }
+  if (renameFileForm) {
+    renameFileForm.addEventListener("submit", handleRenameFileSubmit);
   }
 
   checkExistingSession();
@@ -1427,6 +1448,10 @@ if (uploadFileBtn && fileUploadInput) {
   fileUploadInput.addEventListener("change", handleFileUploadChange);
 }
 
+if (fileVersionUploadInput) {
+  fileVersionUploadInput.addEventListener("change", handleFileVersionUploadChange);
+}
+
 async function loadFolderContents(folderId) {
   const token = session.token;
   if (!token) {
@@ -1534,6 +1559,7 @@ function renderBreadcrumbs(breadcrumbs) {
 function openRenameForm(folderId, currentName) {
   hideAlert();
   if (createFolderForm) createFolderForm.classList.add("hidden");
+  closeRenameFileForm();
 
   renameFolderTarget = { id: folderId, currentName };
   renameFolderLabel.textContent = `Rename folder "${currentName}"`;
@@ -1553,6 +1579,37 @@ function closeRenameForm() {
     renameFolderNameInput.classList.remove("is-invalid");
   }
   if (renameFolderNameError) renameFolderNameError.textContent = "";
+}
+
+function openRenameFileForm(fileId, currentName) {
+  hideAlert();
+  if (createFolderForm) createFolderForm.classList.add("hidden");
+  closeRenameForm();
+
+  renameFileTarget = { id: fileId, currentName };
+  renameFileLabel.textContent = `Rename file "${currentName}"`;
+  renameFileNameInput.value = currentName;
+  renameFileNameInput.classList.remove("is-invalid");
+  renameFileNameError.textContent = "";
+  renameFileForm.classList.remove("hidden");
+  renameFileNameInput.focus();
+
+  const dotIdx = currentName.lastIndexOf(".");
+  if (dotIdx > 0) {
+    renameFileNameInput.setSelectionRange(0, dotIdx);
+  } else {
+    renameFileNameInput.select();
+  }
+}
+
+function closeRenameFileForm() {
+  renameFileTarget = null;
+  if (renameFileForm) renameFileForm.classList.add("hidden");
+  if (renameFileNameInput) {
+    renameFileNameInput.value = "";
+    renameFileNameInput.classList.remove("is-invalid");
+  }
+  if (renameFileNameError) renameFileNameError.textContent = "";
 }
 
 function renderFolderItems(folders, files) {
@@ -1603,9 +1660,16 @@ function renderFolderItems(folders, files) {
   files.forEach((file) => {
     const row = document.createElement("div");
     row.className = "storage-item-row";
-    const uploadedDate = file.createdAt
-      ? new Date(file.createdAt).toLocaleDateString()
-      : "";
+
+    const hasUpdated =
+      file.updatedAt &&
+      file.createdAt &&
+      new Date(file.updatedAt).getTime() > new Date(file.createdAt).getTime() + 1000;
+    const dateLabel = hasUpdated
+      ? `Updated ${new Date(file.updatedAt).toLocaleString()}`
+      : file.createdAt
+        ? new Date(file.createdAt).toLocaleDateString()
+        : "";
 
     row.innerHTML = `
       <div class="item-left">
@@ -1615,9 +1679,26 @@ function renderFolderItems(folders, files) {
         </svg>
         <span class="item-name"></span>
       </div>
-      <span class="item-meta">${Validation.escapeHtml(formatBytes(file.sizeBytes))} • ${Validation.escapeHtml(uploadedDate)}</span>
+      <div class="item-right">
+        <span class="item-meta">${Validation.escapeHtml(formatBytes(file.sizeBytes))} • ${Validation.escapeHtml(dateLabel)}</span>
+        <button type="button" class="btn-rename-sm btn-rename-file-sm" title="Rename file">Rename</button>
+        <button type="button" class="btn-rename-sm btn-version-sm" title="Upload a new version of this file">↑ New Version</button>
+      </div>
     `;
     row.querySelector(".item-name").textContent = file.name;
+
+    const renameFileBtn = row.querySelector(".btn-rename-file-sm");
+    renameFileBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openRenameFileForm(file.id, file.name);
+    });
+
+    const versionBtn = row.querySelector(".btn-version-sm");
+    versionBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      startFileVersionUpload(file, versionBtn);
+    });
+
     folderItemsList.appendChild(row);
   });
 }
@@ -1885,6 +1966,130 @@ async function handleFileUploadChange(event) {
     uploadFileBtn.disabled = false;
     uploadFileSpinner.classList.add("hidden");
     fileUploadInput.value = "";
+  }
+}
+
+function getFileExtension(name) {
+  const idx = name.lastIndexOf(".");
+  return idx >= 0 ? name.slice(idx).toLowerCase() : "";
+}
+
+function startFileVersionUpload(file, btnEl) {
+  if (!fileVersionUploadInput) return;
+  hideAlert();
+  versionTargetFile = file;
+  versionTargetBtn = btnEl;
+
+  const ext = getFileExtension(file.name);
+  fileVersionUploadInput.accept = ext || ".txt,.md,.csv,.json,.pdf,.png,.jpg,.jpeg,.gif";
+  fileVersionUploadInput.value = "";
+  fileVersionUploadInput.click();
+}
+
+async function handleFileVersionUploadChange(event) {
+  const selectedFile = event.target.files && event.target.files[0];
+  const targetFile = versionTargetFile;
+  const triggerBtn = versionTargetBtn;
+
+  if (!selectedFile || !targetFile) return;
+
+  hideAlert();
+  const problem = Validation.fileName(selectedFile.name, selectedFile.size);
+  if (problem) {
+    showAlert("danger", "Cannot Upload New Version", problem);
+    fileVersionUploadInput.value = "";
+    return;
+  }
+
+  const expectedExt = getFileExtension(targetFile.name);
+  const actualExt = getFileExtension(selectedFile.name);
+  if (expectedExt && actualExt !== expectedExt) {
+    showAlert(
+      "danger",
+      "File Type Mismatch",
+      `The new version must have the same extension (${expectedExt}) as "${targetFile.name}".`,
+    );
+    fileVersionUploadInput.value = "";
+    return;
+  }
+
+  const token = session.token;
+  if (!token) {
+    switchSection(loginSection);
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("file", selectedFile);
+
+  if (triggerBtn) {
+    triggerBtn.disabled = true;
+    triggerBtn.textContent = "Uploading…";
+  }
+
+  try {
+    const { response } = await fetchWithFallback(
+      `/api/files/${encodeURIComponent(targetFile.id)}/version`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        body: formData,
+      },
+    );
+
+    const text = await response.text();
+    let data = {};
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { message: text.trim() };
+    }
+
+    if (response.ok) {
+      if (data.quota && Number(data.quota.storageQuotaBytes) > 0) {
+        updateQuotaDisplay(data.quota.usedStorageBytes, data.quota.storageQuotaBytes);
+      } else {
+        loadUserQuota();
+      }
+      showAlert(
+        "success",
+        "New Version Uploaded",
+        `New version of "${targetFile.name}" (${formatBytes(selectedFile.size)}) was uploaded successfully.`,
+      );
+      await loadFolderContents(currentFolderId);
+    } else if (response.status === 413 && /quota/i.test(data.message || "")) {
+      showAlert(
+        "danger",
+        "Storage Quota Exceeded",
+        data.message ||
+          "Version upload aborted: you do not have enough free storage space for the larger file.",
+      );
+      loadUserQuota();
+    } else if (response.status === 413) {
+      showAlert("danger", "File Too Large", data.message || "This file is too large to upload.");
+    } else if (response.status === 401) {
+      session.end();
+      switchSection(loginSection);
+      showAlert("warning", "Session Expired", "Please sign in again.");
+    } else if (response.status === 429) {
+      // fetchWithFallback već prikazuje upozorenje za previše zahtjeva
+    } else {
+      showAlert(
+        "danger",
+        "Version Upload Failed",
+        data.message || "Could not upload the new file version.",
+      );
+    }
+  } catch (err) {
+    showAlert("danger", "Connection Error", "Could not reach Storage Service.");
+  } finally {
+    if (triggerBtn) {
+      triggerBtn.disabled = false;
+      triggerBtn.textContent = "New Version";
+    }
+    fileVersionUploadInput.value = "";
+    versionTargetFile = null;
+    versionTargetBtn = null;
   }
 }
 
@@ -2333,5 +2538,74 @@ adminPresetBtns.forEach((btn) => {
     if (adminQuotaError) adminQuotaError.textContent = "";
   });
 });
+
+async function handleRenameFileSubmit(event) {
+  event.preventDefault();
+  hideAlert();
+
+  if (!renameFileTarget) return;
+
+  const newName = renameFileNameInput.value.trim();
+  const renameProblem = Validation.renameFileName(newName, renameFileTarget.currentName);
+  if (renameProblem) {
+    renameFileNameInput.classList.add("is-invalid");
+    renameFileNameError.textContent = renameProblem;
+    return;
+  }
+  renameFileNameInput.classList.remove("is-invalid");
+  renameFileNameError.textContent = "";
+
+  const token = session.token;
+  if (!token) {
+    switchSection(loginSection);
+    return;
+  }
+
+  renameFileSubmitBtn.disabled = true;
+  renameFileSpinner.classList.remove("hidden");
+
+  try {
+    const { response } = await fetchWithFallback(
+      `/api/files/${encodeURIComponent(renameFileTarget.id)}`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ name: newName }),
+      },
+    );
+
+    const text = await response.text();
+    let data = {};
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { message: text.trim() };
+    }
+
+    if (response.ok) {
+      closeRenameFileForm();
+      showAlert("success", "File Renamed", `File renamed to "${newName}".`);
+      await loadFolderContents(currentFolderId);
+    } else if (response.status === 401) {
+      session.end();
+      switchSection(loginSection);
+      showAlert("warning", "Session Expired", "Please sign in again.");
+    } else if (response.status === 403) {
+      showAlert("danger", "Access Denied", "You do not have permission to rename this file.");
+    } else {
+      renameFileNameInput.classList.add("is-invalid");
+      renameFileNameError.textContent =
+        data.message || "Could not rename file.";
+    }
+  } catch (err) {
+    showAlert("danger", "Connection Error", "Could not reach Storage Service.");
+  } finally {
+    renameFileSubmitBtn.disabled = false;
+    renameFileSpinner.classList.add("hidden");
+  }
+}
 
 // #endregion
