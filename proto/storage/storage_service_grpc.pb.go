@@ -34,6 +34,7 @@ const (
 	StorageService_CreateFolder_FullMethodName         = "/storage.StorageService/CreateFolder"
 	StorageService_BrowseFolder_FullMethodName         = "/storage.StorageService/BrowseFolder"
 	StorageService_RenameFolder_FullMethodName         = "/storage.StorageService/RenameFolder"
+	StorageService_RenameFile_FullMethodName           = "/storage.StorageService/RenameFile"
 	StorageService_GetQuota_FullMethodName             = "/storage.StorageService/GetQuota"
 	StorageService_UploadFile_FullMethodName           = "/storage.StorageService/UploadFile"
 	StorageService_UploadNewFileVersion_FullMethodName = "/storage.StorageService/UploadNewFileVersion"
@@ -50,6 +51,8 @@ type StorageServiceClient interface {
 	BrowseFolder(ctx context.Context, in *BrowseFolderRequest, opts ...grpc.CallOption) (*FolderContentResponse, error)
 	// PATCH or PUT /api/folders/{folder_id}  body: {"name": "..."}
 	RenameFolder(ctx context.Context, in *RenameFolderRequest, opts ...grpc.CallOption) (*FolderResponse, error)
+	// PATCH or PUT /api/files/{file_id}  body: {"name": "..."}
+	RenameFile(ctx context.Context, in *RenameFileRequest, opts ...grpc.CallOption) (*FileResponse, error)
 	// GET /api/files/quota - the caller's storage quota and current usage
 	// (answered by asking users-service).
 	GetQuota(ctx context.Context, in *GetQuotaRequest, opts ...grpc.CallOption) (*StorageQuota, error)
@@ -113,6 +116,16 @@ func (c *storageServiceClient) RenameFolder(ctx context.Context, in *RenameFolde
 	return out, nil
 }
 
+func (c *storageServiceClient) RenameFile(ctx context.Context, in *RenameFileRequest, opts ...grpc.CallOption) (*FileResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FileResponse)
+	err := c.cc.Invoke(ctx, StorageService_RenameFile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *storageServiceClient) GetQuota(ctx context.Context, in *GetQuotaRequest, opts ...grpc.CallOption) (*StorageQuota, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(StorageQuota)
@@ -160,6 +173,8 @@ type StorageServiceServer interface {
 	BrowseFolder(context.Context, *BrowseFolderRequest) (*FolderContentResponse, error)
 	// PATCH or PUT /api/folders/{folder_id}  body: {"name": "..."}
 	RenameFolder(context.Context, *RenameFolderRequest) (*FolderResponse, error)
+	// PATCH or PUT /api/files/{file_id}  body: {"name": "..."}
+	RenameFile(context.Context, *RenameFileRequest) (*FileResponse, error)
 	// GET /api/files/quota - the caller's storage quota and current usage
 	// (answered by asking users-service).
 	GetQuota(context.Context, *GetQuotaRequest) (*StorageQuota, error)
@@ -201,6 +216,9 @@ func (UnimplementedStorageServiceServer) BrowseFolder(context.Context, *BrowseFo
 }
 func (UnimplementedStorageServiceServer) RenameFolder(context.Context, *RenameFolderRequest) (*FolderResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RenameFolder not implemented")
+}
+func (UnimplementedStorageServiceServer) RenameFile(context.Context, *RenameFileRequest) (*FileResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RenameFile not implemented")
 }
 func (UnimplementedStorageServiceServer) GetQuota(context.Context, *GetQuotaRequest) (*StorageQuota, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetQuota not implemented")
@@ -286,6 +304,24 @@ func _StorageService_RenameFolder_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _StorageService_RenameFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RenameFileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StorageServiceServer).RenameFile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: StorageService_RenameFile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StorageServiceServer).RenameFile(ctx, req.(*RenameFileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _StorageService_GetQuota_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetQuotaRequest)
 	if err := dec(in); err != nil {
@@ -336,6 +372,10 @@ var StorageService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RenameFolder",
 			Handler:    _StorageService_RenameFolder_Handler,
+		},
+		{
+			MethodName: "RenameFile",
+			Handler:    _StorageService_RenameFile_Handler,
 		},
 		{
 			MethodName: "GetQuota",

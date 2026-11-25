@@ -580,6 +580,46 @@
               <span class="field-error" id="renameFolderNameError"></span>
             </form>
 
+            <!-- Inline Rename File Form -->
+            <form
+              id="renameFileForm"
+              class="create-folder-box rename-box hidden"
+              novalidate
+            >
+              <div class="rename-form-label" id="renameFileLabel">
+                Rename file
+              </div>
+              <div class="create-folder-row">
+                <input
+                  type="text"
+                  id="renameFileNameInput"
+                  class="form-input"
+                  placeholder="Enter new file name"
+                  maxlength="255"
+                  required
+                />
+                <button
+                  type="submit"
+                  id="renameFileSubmitBtn"
+                  class="btn-primary-sm"
+                >
+                  <span class="btn-text">Save</span>
+                  <span
+                    class="btn-spinner hidden"
+                    id="renameFileSpinner"
+                  ></span>
+                </button>
+                <button
+                  type="button"
+                  id="cancelRenameFileBtn"
+                  class="btn-outline-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+              <span class="field-error" id="renameFileNameError"></span>
+            </form>
+
             <!-- Folder & File Contents -->
             <div id="folderLoadingState" class="folder-loading hidden">
               Loading directory contents...

@@ -33,7 +33,7 @@ type FileItem struct {
 	// SHA-256 (hex) of the stored content, for the integrity check on download.
 	SHA256    string    `bson:"sha256" json:"-"`
 	CreatedAt time.Time `bson:"createdAt" json:"createdAt"`
-	UpdatedAt time.Time `bson: "updatedAt,omitempty"`
+	UpdatedAt time.Time `bson:"updatedAt,omitempty"`
 }
 
 type FolderContentResponse struct {

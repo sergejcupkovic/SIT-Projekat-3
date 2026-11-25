@@ -68,6 +68,20 @@ const Validation = (() => {
     return "";
   }
 
+  function renameFileName(value, originalName) {
+    const baseErr = fileName(value, 1);
+    if (baseErr) return baseErr;
+
+    if (originalName) {
+      const origExt = originalName.slice(originalName.lastIndexOf(".")).toLowerCase();
+      const nextExt = value.slice(value.lastIndexOf(".")).toLowerCase();
+      if (originalName.includes(".") && origExt !== nextExt) {
+        return `File name must keep the original extension (${origExt})`;
+      }
+    }
+    return "";
+  }
+
   // for the few places where a value has to go through innerHTML
   function escapeHtml(value) {
     return String(value).replace(
@@ -79,5 +93,5 @@ const Validation = (() => {
     );
   }
 
-  return { name, email, password, otp, folderName, fileName, escapeHtml };
+  return { name, email, password, otp, folderName, fileName, renameFileName, escapeHtml };
 })();

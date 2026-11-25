@@ -37,6 +37,7 @@ type (
 		FindByFolder(ctx context.Context, ownerID string, folderID *primitive.ObjectID) ([]domain.FileItem, error)
 		FindByID(ctx context.Context, id primitive.ObjectID) (*domain.FileItem, error)
 		UpdateVersion(ctx context.Context, file *domain.FileItem) error
+		Rename(ctx context.Context, id primitive.ObjectID, ownerID, newName string, updatedAt time.Time) error
 	}
 	folderLookup interface {
 		FindByID(ctx context.Context, id primitive.ObjectID) (*domain.Folder, error)
@@ -483,6 +484,73 @@ func (h *FileHandler) UploadNewFileVersion(stream storagepb.StorageService_Uploa
 		File:    toProtoFile(updatedFile),
 		Quota:   toProtoQuota(latestQuota),
 	})
+}
+
+// RenameFile  <-  PATCH|PUT /api/files/{file_id}  body {"name": "..."}
+func (h *FileHandler) RenameFile(ctx context.Context, req *storagepb.RenameFileRequest) (*storagepb.FileResponse, error) {
+	userID := userIDFrom(ctx)
+
+	oid, err := primitive.ObjectIDFromHex(strings.TrimSpace(req.GetFileId()))
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "Invalid file ID")
+	}
+
+	cleanName := strings.TrimSpace(req.GetName())
+	if err := filecheck.ValidateFileName(cleanName); err != nil {
+		return nil, status.Error(codes.InvalidArgument, uploadRejectedMessage(err))
+	}
+
+	existing, err := h.files.FindByID(ctx, oid)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, status.Error(codes.NotFound, "File not found")
+		}
+		return nil, status.Error(codes.Internal, "Error loading file")
+	}
+
+	if existing.OwnerID != userID {
+		return nil, status.Error(codes.PermissionDenied, "You do not have permission to rename this file")
+	}
+
+	origExt := filepath.Ext(existing.Name)
+	if !strings.EqualFold(filepath.Ext(cleanName), origExt) {
+		return nil, status.Errorf(codes.InvalidArgument, "File name must keep the original extension (%s)", origExt)
+	}
+
+	if existing.Name == cleanName {
+		return &storagepb.FileResponse{
+			Message: "File renamed successfully",
+			File:    toProtoFile(existing),
+		}, nil
+	}
+
+	exists, err := h.files.ExistsByNameInFolder(ctx, userID, existing.FolderID, cleanName)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "Error checking file uniqueness")
+	}
+	if exists {
+		return nil, status.Error(codes.AlreadyExists, duplicateFileMsg)
+	}
+
+	now := time.Now().UTC()
+	if err := h.files.Rename(ctx, oid, userID, cleanName, now); err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, status.Error(codes.NotFound, "File not found")
+		}
+		if mongo.IsDuplicateKeyError(err) {
+			return nil, status.Error(codes.AlreadyExists, duplicateFileMsg)
+		}
+		return nil, status.Error(codes.Internal, "Failed to rename file")
+	}
+
+	updated := *existing
+	updated.Name = cleanName
+	updated.UpdatedAt = now
+
+	return &storagepb.FileResponse{
+		Message: "File renamed successfully",
+		File:    toProtoFile(&updated),
+	}, nil
 }
 
 // #region helperi
