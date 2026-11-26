@@ -1,19 +1,34 @@
+# Durations: 30s, 15m, 24h. Sizes are in bytes.
+
 public_host: localhost
 mongo_db_name: users_db
 smtp_host: mailpit
 smtp_from: noreply@cloudstorage.local
-default_quota_bytes: 104857600
-
-password_min_age: 1m
-password_max_age: 2m
-reset_token_ttl: 30m
-reset_rate_limit_max: 3
-reset_rate_limit_window: 15m
-magic_link_token_ttl: 15m
-otp_ttl: 5m
-otp_max_attempts: 3
-jwt_ttl: 24h
-account_lock_duration: 1m
-verification_token_ttl: 24h
-restricted_token_ttl: 15m
 bcrypt_cost: 12
+
+# storage
+default_quota_bytes: 104857600      # 100 MB
+min_quota_bytes: 104857600          # 100 MB
+max_quota_bytes: 2199023255552      # 2 TB
+max_upload_bytes: 209715200         # 200 MB (keep nginx.conf above this)
+
+# passwords and lockout
+password_min_length: 8
+password_min_age: 1m
+password_max_age: 1h
+account_lock_duration: 30s
+
+# token and code lifetimes
+jwt_ttl: 24h
+restricted_token_ttl: 15m
+verification_token_ttl: 24h
+magic_link_token_ttl: 15m
+reset_token_ttl: 30m
+otp_ttl: 5m
+
+# attempt and rate limits
+reset_rate_limit_max: 3             # also used for OTP resend and magic link
+reset_rate_limit_window: 15m
+otp_max_attempts: 3
+rate_limit_per_second: 1
+rate_limit_burst: 20

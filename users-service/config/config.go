@@ -12,7 +12,6 @@ type Config struct {
 	// env only
 	Port          string `yaml:"-"`
 	SMTPPort      string `yaml:"-"`
-	GatewayPort   string `yaml:"-"`
 	FrontendPort  string `yaml:"-"`
 	MongoURI      string `yaml:"-"`
 	JWTSecret     string `yaml:"-"`
@@ -25,6 +24,9 @@ type Config struct {
 	SMTPHost             string        `yaml:"smtp_host"`
 	SMTPFrom             string        `yaml:"smtp_from"`
 	DefaultQuotaBytes    int64         `yaml:"default_quota_bytes"`
+	MinQuotaBytes        int64         `yaml:"min_quota_bytes"`
+	MaxQuotaBytes        int64         `yaml:"max_quota_bytes"`
+	PasswordMinLength    int           `yaml:"password_min_length"`
 	PasswordMinAge       time.Duration `yaml:"password_min_age"`
 	PasswordMaxAge       time.Duration `yaml:"password_max_age"`
 	ResetTokenTTL        time.Duration `yaml:"reset_token_ttl"`
@@ -51,7 +53,6 @@ func LoadConfig() *Config {
 	cfg := &Config{
 		Port:         env("USERS_GRPC_PORT", "50051"),
 		SMTPPort:     env("SMTP_PORT", "1025"),
-		GatewayPort:  env("GATEWAY_PORT", "8443"),
 		FrontendPort: env("FRONTEND_PORT", "3000"),
 		MongoURI:     env("MONGO_URI", "mongodb://mongodb:27017"),
 		JWTSecret:    os.Getenv("JWT_SECRET"),
@@ -63,7 +64,10 @@ func LoadConfig() *Config {
 		MongoDBName:          "users_db",
 		SMTPHost:             "mailpit",
 		SMTPFrom:             "noreply@stashr.com",
-		DefaultQuotaBytes:    104857600,
+		DefaultQuotaBytes:    100 << 20, // 100 MB
+		MinQuotaBytes:        100 << 20,
+		MaxQuotaBytes:        2 << 40, // 2 TB
+		PasswordMinLength:    8,
 		PasswordMinAge:       1 * time.Minute,
 		PasswordMaxAge:       2 * time.Minute,
 		ResetTokenTTL:        30 * time.Minute,
@@ -93,8 +97,11 @@ func LoadConfig() *Config {
 	if cfg.BcryptCost < 4 || cfg.BcryptCost > 31 {
 		log.Fatal("bcrypt_cost must be 4..31")
 	}
-	if cfg.DefaultQuotaBytes <= 0 {
-		log.Fatal("default_quota_bytes must be a positive number")
+	if cfg.MinQuotaBytes <= 0 || cfg.DefaultQuotaBytes < cfg.MinQuotaBytes || cfg.DefaultQuotaBytes > cfg.MaxQuotaBytes {
+		log.Fatal("quota settings must satisfy 0 < min <= default <= max")
+	}
+	if cfg.PasswordMinLength < 1 || cfg.PasswordMinLength > 72 {
+		log.Fatal("password_min_length must be 1..72")
 	}
 	return cfg
 }

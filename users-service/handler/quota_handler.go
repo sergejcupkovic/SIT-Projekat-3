@@ -6,6 +6,7 @@ import (
 	"log"
 
 	"users-service/domain"
+	"users-service/repository"
 	"users-service/service"
 
 	userspb "stashr/proto/users"
@@ -16,35 +17,19 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// quotaStore is the part of repository.UserRepository the quota rpcs need.
-type quotaStore interface {
-	FindByID(ctx context.Context, id primitive.ObjectID) (*domain.User, error)
-	ReserveStorageQuota(ctx context.Context, userID primitive.ObjectID, sizeBytes int64) (*domain.User, bool, error)
-	ReleaseStorageQuota(ctx context.Context, userID primitive.ObjectID, sizeBytes int64) (*domain.User, error)
-}
-
-// QuotaHandler implements userspb.QuotaServiceServer: the internal rpcs that
-// storage-service calls synchronously before it stores an uploaded file
-// (US-2.2, acceptance criterion 2.2.2).
-//
-// These rpcs have no REST binding, so the api-gateway never exposes them.
-// Each call must still carry the caller's session JWT in the "authorization"
-// metadata (storage-service forwards the one it received from the user), and
-// operates only on the quota of the user that JWT was issued for. A caller
-// can therefore never read, reserve or release another user's quota.
+// Internal rpcs for storage-service; they only touch the quota of the user in the token.
 type QuotaHandler struct {
 	userspb.UnimplementedQuotaServiceServer
 
-	store quotaStore
+	store *repository.UserRepository
 }
 
 var _ userspb.QuotaServiceServer = (*QuotaHandler)(nil)
 
-func NewQuotaHandler(store quotaStore) *QuotaHandler {
+func NewQuotaHandler(store *repository.UserRepository) *QuotaHandler {
 	return &QuotaHandler{store: store}
 }
 
-// GetQuota returns the caller's quota and usage.
 func (h *QuotaHandler) GetQuota(ctx context.Context, _ *userspb.GetQuotaRequest) (*userspb.QuotaResponse, error) {
 	userID, err := callerID(ctx)
 	if err != nil {
@@ -58,9 +43,6 @@ func (h *QuotaHandler) GetQuota(ctx context.Context, _ *userspb.GetQuotaRequest)
 	return quotaResponse(user, true), nil
 }
 
-// ReserveQuota atomically checks that size_bytes fit into the caller's free
-// space and reserves them. Not enough space is a normal reply (allowed=false),
-// not an error, so storage-service can show the exact numbers.
 func (h *QuotaHandler) ReserveQuota(ctx context.Context, req *userspb.ReserveQuotaRequest) (*userspb.QuotaResponse, error) {
 	userID, err := callerID(ctx)
 	if err != nil {
@@ -87,8 +69,6 @@ func (h *QuotaHandler) ReserveQuota(ctx context.Context, req *userspb.ReserveQuo
 	return quotaResponse(user, false), nil
 }
 
-// ReleaseQuota returns a reservation (e.g. the upload failed after the space
-// was reserved). usedStorageBytes never drops below 0.
 func (h *QuotaHandler) ReleaseQuota(ctx context.Context, req *userspb.ReleaseQuotaRequest) (*userspb.QuotaResponse, error) {
 	userID, err := callerID(ctx)
 	if err != nil {
@@ -109,8 +89,6 @@ func (h *QuotaHandler) ReleaseQuota(ctx context.Context, req *userspb.ReleaseQuo
 	return quotaResponse(updated, true), nil
 }
 
-// callerID verifies the session JWT in the metadata and returns the user it
-// belongs to.
 func callerID(ctx context.Context) (primitive.ObjectID, error) {
 	tokenStr, ok := bearerFromMetadata(ctx)
 	if !ok {

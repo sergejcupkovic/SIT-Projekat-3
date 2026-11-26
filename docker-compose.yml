@@ -1,8 +1,6 @@
 name: Stashr
 
-# Request path:
-#   browser ──HTTPS──▶ frontend (nginx) ──HTTPS /api──▶ api-gateway ──gRPC──▶ users-service / storage-service
-# Run `bash certs/generate-certs.sh` once before the first `docker compose up`.
+# browser -> nginx -> api-gateway -> (gRPC) services
 services:
   mongodb:
     image: mongo:7.0
@@ -34,9 +32,7 @@ services:
       - "${MAILPIT_UI_PORT}:${MAILPIT_UI_PORT}"
       - "${SMTP_PORT}:${SMTP_PORT}"
 
-  # S3-compatible object store (SeaweedFS) that holds the CONTENT of uploaded files;
-  # file metadata lives in MongoDB. Credentials come from s3.json (keep in sync with .env).
-  # Ports are published on localhost only, for debugging (S3 API and web UI).
+  # stores file contents (S3 API); file metadata is in MongoDB
   object-store:
     image: chrislusf/seaweedfs:4.55
     container_name: stashr_object_store
@@ -86,7 +82,9 @@ services:
       OBJECT_STORE_SECRET_KEY: ${OBJECT_STORE_SECRET_KEY:-stashr-dev-secret-change-me}
       OBJECT_STORE_BUCKET: ${OBJECT_STORE_BUCKET:-stashr-files}
       OBJECT_STORE_USE_SSL: "false"
-      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-209715200}
+      CONFIG_PATH: /app/config.yaml
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
     restart: on-failure
     depends_on:
       - mongodb
@@ -125,10 +123,10 @@ services:
       NOTIFICATIONS_GRPC_ADDR: notifications-service:${NOTIFICATIONS_GRPC_PORT:-50053}
       TLS_CERT_FILE: /certs/server.crt
       TLS_KEY_FILE: /certs/server.key
-      FRONTEND_URL: https://localhost:${FRONTEND_PORT}
-      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-209715200}
+      CONFIG_PATH: /app/config.yaml
     volumes:
       - ./certs:/certs:ro
+      - ./config.yaml:/app/config.yaml:ro
     depends_on:
       - users-service
       - storage-service

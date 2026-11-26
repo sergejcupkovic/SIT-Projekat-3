@@ -1,5 +1,3 @@
-// Client-side input checks. The server repeats every one of them; these only
-// give the user quick feedback.
 const Validation = (() => {
   const NAME_REGEX = /^\p{L}[\p{L} '\-]*$/u;
   const FOLDER_NAME_REGEX = /^[\p{L}\p{N} ._()\-]+$/u;
@@ -38,6 +36,26 @@ const Validation = (() => {
     if (value.length > MAX_PASSWORD_LEN)
       return `Password must not exceed ${MAX_PASSWORD_LEN} characters`;
     return "";
+  }
+
+  // The requirements of a new password (same as the server's ValidatePassword).
+  function passwordRules(value) {
+    const min = appLimits?.passwordMinLength || 8;
+    return [
+      { label: `At least ${min} characters`, met: value.length >= min },
+      { label: "At least one uppercase letter (A-Z)", met: /\p{Lu}/u.test(value) },
+      { label: "At least one lowercase letter (a-z)", met: /\p{Ll}/u.test(value) },
+      { label: "At least one number (0-9)", met: /[0-9]/.test(value) },
+      { label: "At least one special symbol (e.g. !@#$%^&*)", met: /[\p{P}\p{S}]/u.test(value) },
+    ];
+  }
+
+  function newPassword(value) {
+    const problem = password(value);
+    if (problem) return problem;
+    return passwordRules(value).every((rule) => rule.met)
+      ? ""
+      : "Password does not meet all security requirements listed below";
   }
 
   function otp(value) {
@@ -93,5 +111,16 @@ const Validation = (() => {
     );
   }
 
-  return { name, email, password, otp, folderName, fileName, renameFileName, escapeHtml };
+  return {
+    name,
+    email,
+    password,
+    passwordRules,
+    newPassword,
+    otp,
+    folderName,
+    fileName,
+    renameFileName,
+    escapeHtml,
+  };
 })();

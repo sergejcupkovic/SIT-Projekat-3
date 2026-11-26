@@ -1,17 +1,4 @@
-// api-gateway is the single public entry point of the system.
-//
-//	client ──HTTPS (REST/JSON)──▶ api-gateway ──gRPC (protobuf, HTTP/2)──▶ users-service / storage-service
-//
-// Its routes come from the google.api.http annotations in proto/*/*.proto:
-// protoc-gen-grpc-gateway generated *.pb.gw.go files with Register<Service>Handler
-// functions that add, for every annotated rpc, an HTTP route that
-//  1. decodes the JSON body / path params / query params into the protobuf request,
-//  2. calls the rpc through a gRPC client connection,
-//  3. encodes the protobuf reply (or gRPC status error) back to JSON + HTTP status.
-//
-// The single exception is the multipart file upload (upload.go), which
-// grpc-gateway cannot decode; it is registered by hand and streams into the
-// StorageService.UploadFile rpc.
+// The API gateway takes HTTPS REST requests and calls the services over gRPC.
 package main
 
 import (
@@ -22,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 	"time"
 
@@ -54,30 +40,13 @@ func main() {
 	port := env("GATEWAY_PORT", "8443")
 	certFile := env("TLS_CERT_FILE", "/certs/server.crt")
 	keyFile := env("TLS_KEY_FILE", "/certs/server.key")
-	frontendURL := env("FRONTEND_URL", "https://localhost:3000")
 
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if len(jwtSecret) < 32 {
 		log.Fatal("JWT_SECRET must be set and at least 32 chars")
 	}
-	ratePerSecond, err := strconv.ParseFloat(env("RATE_LIMIT_PER_SECOND", "1"), 64)
-	if err != nil || ratePerSecond <= 0 {
-		log.Fatal("RATE_LIMIT_PER_SECOND must be a positive number")
-	}
-	rateBurst, err := strconv.Atoi(env("RATE_LIMIT_BURST", "20"))
-	if err != nil || rateBurst < 1 {
-		log.Fatal("RATE_LIMIT_BURST must be a positive integer")
-	}
+	cfg := loadConfig()
 
-	maxUploadBytes, err := strconv.ParseInt(env("MAX_UPLOAD_BYTES", "209715200"), 10, 64)
-	if err != nil || maxUploadBytes <= 0 {
-		log.Fatal("MAX_UPLOAD_BYTES must be a positive integer")
-	}
-
-	// ---- gRPC clients (gateway -> services) ----
-	// Plaintext HTTP/2 inside the private Docker network. grpc.NewClient does not
-	// connect immediately; it connects on first use and reconnects automatically,
-	// so the gateway can start before the services are up.
 	usersConn, err := grpc.NewClient(usersAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("Failed to create users-service gRPC client (%s): %v", usersAddr, err)
@@ -96,16 +65,9 @@ func main() {
 	}
 	defer notificationsConn.Close()
 
-	// Upper bound for every backend call made on behalf of an HTTP request.
 	runtime.DefaultContextTimeout = 15 * time.Second
 
-	// ---- REST <-> gRPC translator ----
 	gw := runtime.NewServeMux(
-		// JSON <-> protobuf conversion (protojson):
-		//  * field names in lowerCamelCase (first_name -> "firstName"),
-		//  * EmitUnpopulated: always output fields, e.g. "breadcrumbs": [] and
-		//    "currentFolder": null, instead of omitting them,
-		//  * DiscardUnknown: ignore JSON fields that are not in the .proto.
 		runtime.WithMarshalerOption(runtime.MIMEWildcard, &runtime.JSONPb{
 			MarshalOptions: protojson.MarshalOptions{
 				EmitUnpopulated: true,
@@ -118,9 +80,11 @@ func main() {
 		runtime.WithForwardResponseOption(httpStatusFromMetadata),
 	)
 
-	// Generated in proto/users/users_service.pb.gw.go and proto/storage/storage_service.pb.gw.go.
 	if err := userspb.RegisterUsersServiceHandler(ctx, gw, usersConn); err != nil {
 		log.Fatalf("Failed to register UsersService routes: %v", err)
+	}
+	if err := userspb.RegisterQuotaRequestServiceHandler(ctx, gw, usersConn); err != nil {
+		log.Fatalf("Failed to register QuotaRequestService routes: %v", err)
 	}
 	if err := storagepb.RegisterStorageServiceHandler(ctx, gw, storageConn); err != nil {
 		log.Fatalf("Failed to register StorageService routes: %v", err)
@@ -130,7 +94,7 @@ func main() {
 	}
 
 	// POST /api/files/upload and POST /api/files/{file_id}/version: hand-written routes (multipart -> gRPC stream).
-	up := newUploadHandler(gw, storagepb.NewStorageServiceClient(storageConn), []byte(jwtSecret), maxUploadBytes)
+	up := newUploadHandler(gw, storagepb.NewStorageServiceClient(storageConn), []byte(jwtSecret), cfg.MaxUploadBytes)
 	if err := gw.HandlePath(http.MethodPost, "/api/files/upload", up.handle); err != nil {
 		log.Fatalf("Failed to register the upload route: %v", err)
 	}
@@ -138,12 +102,11 @@ func main() {
 		log.Fatalf("Failed to register the file version upload route: %v", err)
 	}
 
-	limiter := newRateLimiter(rate.Limit(ratePerSecond), rateBurst, []byte(jwtSecret))
+	limiter := newRateLimiter(rate.Limit(cfg.RateLimitPerSecond), cfg.RateLimitBurst, []byte(jwtSecret))
 	limiter.startCleanup()
 
-	handler := securityHeaders(corsMiddleware(limiter.middleware(verifyRedirect(gw, frontendURL))))
+	handler := securityHeaders(corsMiddleware(limiter.middleware(gw)))
 
-	// ---- HTTPS server (client -> gateway) ----
 	srv := &http.Server{
 		Addr:    ":" + port,
 		Handler: handler,

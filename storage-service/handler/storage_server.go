@@ -2,13 +2,7 @@ package handler
 
 import storagepb "stashr/proto/storage"
 
-// StorageServer is the single implementation of storagepb.StorageServiceServer
-// that gets registered with gRPC. The rpcs are split by topic: folder rpcs are
-// answered by FolderHandler, file rpcs (upload, quota) by FileHandler.
-//
-// Only FolderHandler embeds storagepb.UnimplementedStorageServiceServer (it
-// supplies mustEmbedUnimplementedStorageServiceServer); FileHandler deliberately
-// does not, so that no method name is ambiguous between the two.
+// StorageServer joins the folder and file handlers into one gRPC server.
 type StorageServer struct {
 	*FolderHandler
 	*FileHandler

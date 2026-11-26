@@ -18,6 +18,7 @@ package users;
 option go_package = "stashr/proto/users;userspb";
 
 import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
 
 service UsersService {
   // POST /api/users/register -> 201 Created (signalled via x-http-code metadata)
@@ -100,6 +101,24 @@ service UsersService {
     };
   }
 
+  // POST /api/users/change-password - a signed-in user replaces their password.
+  // Requires the session JWT, and the current password has to be supplied again.
+  rpc ChangePassword(ChangePasswordRequest) returns (MessageResponse) {
+    option (google.api.http) = {
+      post: "/api/users/change-password"
+      body: "*"
+    };
+  }
+
+  // GET /api/config/limits - the limits set in config.yaml, so the frontend can
+  // validate and label its inputs with the same values. Public: the
+  // registration form needs them before anyone is signed in.
+  rpc GetLimits(GetLimitsRequest) returns (LimitsResponse) {
+    option (google.api.http) = {
+      get: "/api/config/limits"
+    };
+  }
+
   // POST /api/users/magic-link-request
   rpc RequestMagicLink(MagicLinkRequest) returns (MessageResponse) {
     option (google.api.http) = {
@@ -127,6 +146,53 @@ service UsersService {
   rpc UpdateUserQuota(UpdateUserQuotaRequest) returns (AdminUserInfo) {
     option (google.api.http) = {
       patch: "/api/admin/users/{user_id}/quota"
+      body: "*"
+    };
+  }
+}
+
+// Requests of regular users for more storage, decided by an administrator.
+service QuotaRequestService {
+  // POST /api/users/quota-requests -> 201 Created (regular users only).
+  // The requested quota must exceed the current one and stay within the
+  // configured maximum. A user can have only one pending request (else 409).
+  rpc CreateQuotaRequest(CreateQuotaRequestRequest) returns (QuotaRequestInfo) {
+    option (google.api.http) = {
+      post: "/api/users/quota-requests"
+      body: "*"
+    };
+  }
+
+  // GET /api/users/quota-requests - the caller's own requests, newest first.
+  rpc ListMyQuotaRequests(ListMyQuotaRequestsRequest) returns (ListQuotaRequestsResponse) {
+    option (google.api.http) = {
+      get: "/api/users/quota-requests"
+    };
+  }
+
+  // GET /api/admin/quota-requests[?status=pending|approved|rejected] (admin only).
+  // Without a status every request is returned, newest first.
+  rpc ListQuotaRequests(ListQuotaRequestsRequest) returns (ListQuotaRequestsResponse) {
+    option (google.api.http) = {
+      get: "/api/admin/quota-requests"
+    };
+  }
+
+  // POST /api/admin/quota-requests/{request_id}/approve (admin only):
+  // sets the user's quota to the requested size. 409 if the request is already
+  // resolved or the user's quota is no longer below the requested size.
+  rpc ApproveQuotaRequest(ResolveQuotaRequestRequest) returns (QuotaRequestInfo) {
+    option (google.api.http) = {
+      post: "/api/admin/quota-requests/{request_id}/approve"
+      body: "*"
+    };
+  }
+
+  // POST /api/admin/quota-requests/{request_id}/reject (admin only):
+  // the user's quota stays as it is.
+  rpc RejectQuotaRequest(ResolveQuotaRequestRequest) returns (QuotaRequestInfo) {
+    option (google.api.http) = {
+      post: "/api/admin/quota-requests/{request_id}/reject"
       body: "*"
     };
   }
@@ -217,6 +283,28 @@ message ChangeExpiredPasswordRequest {
   string confirm_password = 2;
 }
 
+message ChangePasswordRequest {
+  string current_password = 1;
+  string new_password = 2;
+  string confirm_password = 3;
+}
+
+message GetLimitsRequest {}
+
+message CreateQuotaRequestRequest {
+  int64 requested_quota_bytes = 1;
+}
+
+message ListMyQuotaRequestsRequest {}
+
+message ListQuotaRequestsRequest {
+  string status = 1;
+}
+
+message ResolveQuotaRequestRequest {
+  string request_id = 1;
+}
+
 message MagicLinkRequest {
   string email = 1;
 }
@@ -260,6 +348,37 @@ message AdminUserInfo {
 
 message ListUsersResponse {
   repeated AdminUserInfo users = 1;
+}
+
+// The config.yaml limits the frontend mirrors.
+message LimitsResponse {
+  int64 min_quota_bytes = 1;
+  int64 max_quota_bytes = 2;
+  int64 default_quota_bytes = 3;
+  int32 password_min_length = 4;
+}
+
+message QuotaRequestInfo {
+  string id = 1;
+  string user_id = 2;
+  string email = 3;
+  string first_name = 4;
+  string last_name = 5;
+  // The user's quota and usage right now.
+  int64 current_quota_bytes = 6;
+  int64 used_storage_bytes = 7;
+  // The user's quota at the time the request was made.
+  int64 quota_at_request_bytes = 8;
+  int64 requested_quota_bytes = 9;
+  // "pending", "approved" or "rejected".
+  string status = 10;
+  google.protobuf.Timestamp created_at = 11;
+  // Unset while the request is pending.
+  google.protobuf.Timestamp resolved_at = 12;
+}
+
+message ListQuotaRequestsResponse {
+  repeated QuotaRequestInfo requests = 1;
 }
 
 // Reply of every QuotaService rpc.

@@ -24,8 +24,6 @@ func ValidateEmail(email string) error {
 	return nil
 }
 
-// ValidateCredentials bounds the input of the login-like endpoints before any
-// database lookup or bcrypt comparison happens. 72 bytes is the bcrypt limit.
 func ValidateCredentials(email, password string) error {
 	if err := ValidateEmail(email); err != nil {
 		return err
@@ -46,8 +44,6 @@ func ValidateOTP(otp string) error {
 	return nil
 }
 
-// ValidateToken accepts only what GenerateSecureToken produces: 32 random
-// bytes, hex encoded.
 func ValidateToken(token string) error {
 	if !tokenRegex.MatchString(token) {
 		return errors.New("malformed token")

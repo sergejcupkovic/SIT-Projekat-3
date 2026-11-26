@@ -22,18 +22,9 @@ const (
 	RoleKey   contextKey = "role"
 )
 
-// storageMethodPrefix is the gRPC full-method prefix of every StorageService
-// rpc, e.g. "/storage.StorageService/CreateFolder". Only those require a JWT;
-// infrastructure services (health checks, reflection) stay open.
 var storageMethodPrefix = "/" + storagepb.StorageService_ServiceDesc.ServiceName + "/"
 
-// AuthUnaryInterceptor is the gRPC equivalent of the old HTTP AuthMiddleware.
-//
-// A unary interceptor wraps every unary rpc call: it runs before the handler,
-// can reject the call with a status error, or enrich ctx and call handler().
-//
-// The JWT arrives as gRPC metadata "authorization": grpc-gateway copies the
-// HTTP "Authorization: Bearer <jwt>" header into it when translating REST to gRPC.
+// Checks the JWT before every StorageService call.
 func AuthUnaryInterceptor(jwtSecret []byte) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		if !strings.HasPrefix(info.FullMethod, storageMethodPrefix) {
@@ -48,9 +39,6 @@ func AuthUnaryInterceptor(jwtSecret []byte) grpc.UnaryServerInterceptor {
 	}
 }
 
-// AuthStreamInterceptor does the same for streaming rpcs (the file upload is
-// client-streaming). The JWT is checked once, before the handler runs and
-// before a single byte of the stream is read.
 func AuthStreamInterceptor(jwtSecret []byte) grpc.StreamServerInterceptor {
 	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		if !strings.HasPrefix(info.FullMethod, storageMethodPrefix) {
@@ -73,8 +61,6 @@ type authedStream struct {
 
 func (s *authedStream) Context() context.Context { return s.ctx }
 
-// authenticate validates the session JWT in ctx's metadata and returns ctx
-// extended with the user's ID, e-mail and role.
 func authenticate(ctx context.Context, jwtSecret []byte) (context.Context, error) {
 	tokenStr, ok := bearerToken(ctx)
 	if !ok {

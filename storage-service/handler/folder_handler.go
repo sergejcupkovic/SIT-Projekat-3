@@ -1,11 +1,3 @@
-// Package handler is the transport layer of storage-service.
-//
-// FolderHandler implements storagepb.StorageServiceServer, generated from
-// proto/storage/storage_service.proto. Authentication has already been done
-// by middleware.AuthUnaryInterceptor, which put the caller's user ID in ctx.
-// Errors are gRPC status codes; the api-gateway maps them back to HTTP
-// (InvalidArgument 400, NotFound 404, PermissionDenied 403, AlreadyExists 409,
-// Internal 500).
 package handler
 
 import (
@@ -37,15 +29,10 @@ type FolderHandler struct {
 	storagepb.UnimplementedStorageServiceServer
 
 	repo  *repository.FolderRepository
-	files fileLister
+	files *repository.FileRepository
 }
 
-// fileLister is what BrowseFolder needs to show the files of a folder.
-type fileLister interface {
-	FindByFolder(ctx context.Context, ownerID string, folderID *primitive.ObjectID) ([]domain.FileItem, error)
-}
-
-func NewFolderHandler(repo *repository.FolderRepository, files fileLister) *FolderHandler {
+func NewFolderHandler(repo *repository.FolderRepository, files *repository.FileRepository) *FolderHandler {
 	return &FolderHandler{repo: repo, files: files}
 }
 
@@ -300,7 +287,6 @@ func validateFolderName(name string) error {
 	return nil
 }
 
-// toProtoFolder maps the MongoDB model to the protobuf message.
 func toProtoFolder(f *domain.Folder) *storagepb.Folder {
 	pf := &storagepb.Folder{
 		Id:        f.ID.Hex(),
@@ -320,8 +306,6 @@ func userIDFrom(ctx context.Context) string {
 	return userID
 }
 
-// setHTTPStatus sends response-header metadata "x-http-code" that the
-// api-gateway turns into the HTTP status code (e.g. 201 Created).
 func setHTTPStatus(ctx context.Context, code int) {
 	if err := grpc.SetHeader(ctx, metadata.Pairs("x-http-code", strconv.Itoa(code))); err != nil {
 		log.Printf("failed to set x-http-code header: %v", err)

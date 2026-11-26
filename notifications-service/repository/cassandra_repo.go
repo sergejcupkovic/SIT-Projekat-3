@@ -99,7 +99,7 @@ func (r *CassandraNotificationRepository) seedIfEmpty(ctx context.Context) error
 		{
 			ID:        "seed-1",
 			Title:     "Welcome to Stashr Cloud Storage",
-			Message:   "Your personal 100 MB storage vault is active. Upload files, organize folders, and manage file versions anytime.",
+			Message:   "Your personal storage vault is active. Upload files, organize folders, and manage file versions anytime.",
 			Type:      "success",
 			IsRead:    false,
 			CreatedAt: now.Add(-2 * time.Hour),
@@ -115,7 +115,7 @@ func (r *CassandraNotificationRepository) seedIfEmpty(ctx context.Context) error
 		{
 			ID:        "seed-3",
 			Title:     "Supported File Types & Limits",
-			Message:   "You can store .txt, .md, .csv, .json, .pdf, .png, .jpg, and .gif files. Need more space? Contact an administrator.",
+			Message:   "You can store .txt, .md, .csv, .json, .pdf, .png, .jpg, and .gif files. Need more space? Use \"Request More Storage\".",
 			Type:      "warning",
 			IsRead:    false,
 			CreatedAt: now.Add(-10 * time.Minute),

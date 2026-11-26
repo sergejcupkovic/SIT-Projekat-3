@@ -18,8 +18,6 @@ type visitor struct {
 	lastSeen time.Time
 }
 
-// rateLimiter keeps one token bucket per caller. Authenticated callers are
-// keyed by the user ID from their JWT, everybody else by IP address.
 type rateLimiter struct {
 	mu        sync.Mutex
 	visitors  map[string]*visitor
@@ -65,9 +63,7 @@ func (rl *rateLimiter) startCleanup() {
 	}()
 }
 
-// key returns "user:<id>" for a request carrying a valid session token and
-// "ip:<addr>" otherwise. The signature is verified so that a forged "sub"
-// claim cannot be used to get a fresh bucket on every request.
+// A caller is identified by user ID only if the token signature is valid, else by IP.
 func (rl *rateLimiter) key(r *http.Request) string {
 	if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
 		token, err := jwt.Parse(strings.TrimPrefix(h, "Bearer "), func(t *jwt.Token) (any, error) {
@@ -96,8 +92,6 @@ func (rl *rateLimiter) middleware(next http.Handler) http.Handler {
 	})
 }
 
-// clientIP prefers the last X-Forwarded-For entry, the one appended by our own
-// nginx; the leftmost entries are supplied by the client and can be spoofed.
 func clientIP(r *http.Request) string {
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		parts := strings.Split(xff, ",")

@@ -2,6 +2,9 @@
 
 ## Architecture
 
+The data model of each service and how the services communicate are described in
+[`docs/system-design.md`](docs/system-design.md).
+
 ```
 Browser ──HTTPS──▶ frontend (nginx) :3000 ──HTTPS /api──▶ api-gateway :8443
 Postman ──HTTPS──────────────────────────────────────────▶     │  REST/JSON ⇄ protobuf (grpc-gateway)
@@ -29,7 +32,7 @@ Postman ──HTTPS────────────────────�
 | `Unauthenticated` | 401 |
 | `PermissionDenied` | 403 |
 | `NotFound` | 404 |
-| `AlreadyExists` | 409 |
+| `AlreadyExists`, `Aborted` | 409 |
 | `ResourceExhausted` | 429 (the file upload maps it to **413**: storage quota exceeded) |
 | `Internal` | 500 |
 
@@ -90,6 +93,8 @@ docker compose ps
 - `mailpit` (Mailpit SMTP server on 1025, Web UI on 8025) 
 - `users_service` (gRPC UsersService on port 50051)
 - `storage_service` (gRPC StorageService on port 50052)
+- `stashr_object_store` (SeaweedFS, file contents)
+- `notifications_service` (gRPC NotificationsService on port 50053) and `stashr_cassandra` (its database)
 - `api_gateway` (HTTPS REST API Gateway on port 8443)
 - `frontend` (Nginx HTTPS frontend on port 3000)
 
@@ -168,50 +173,42 @@ or `*.pb.gw.go` files by hand.
 
 ## Configuration
 
-### `.env` (ports and secrets)
-| Variable | Default | Purpose |
-| :--- | :--- | :--- |
-| `MONGO_PORT` | 27017 | MongoDB |
-| `SMTP_PORT` | 1025 | Mailpit SMTP |
-| `MAILPIT_UI_PORT` | 8025 | Mailpit web UI |
-| `USERS_GRPC_PORT` | 50051 | Users service (gRPC) |
-| `STORAGE_GRPC_PORT` | 50052 | Storage service (gRPC) |
-| `GATEWAY_PORT` | 8443 | API gateway (HTTPS) |
-| `FRONTEND_PORT` | 3000 | Frontend |
-| `OBJECT_STORE_ACCESS_KEY` / `OBJECT_STORE_SECRET_KEY` | stashr-dev / stashr-dev-secret-change-me | Object store credentials. Must match `s3.json`; local development defaults only |
-| `OBJECT_STORE_BUCKET` | stashr-files | Bucket for uploaded files (created on start-up) |
-| `OBJECT_STORE_API_PORT` / `OBJECT_STORE_UI_PORT` | 9000 / 9001 | Object store S3 API / web UI, published on localhost only |
-| `MAX_UPLOAD_BYTES` | 209715200 | Largest single file (200 MiB). nginx allows `201m` (`frontend/nginx.conf`); change both together |
-| `JWT_SECRET` | none | Required, at least 32 chars |
-| `RATE_LIMIT_PER_SECOND` | 1 | Sustained requests per second allowed per user (per IP when not logged in) |
-| `RATE_LIMIT_BURST` | 20 | Burst size of that limit; the next request gets `429` |
+- **`.env`**: secrets (`JWT_SECRET`, the admin account, object store credentials), plus the ports and names
+  Docker Compose needs.
+- **`config.yaml`**: the limits and timers you may want to change, and a few basic settings.
 
-### `config.yaml` (tunable behavior)
-| Key | Default | Meaning |
+Everything else (timeouts, allowed file types, internal sizes) is a constant in the code.
+
+| `config.yaml` key | Default | Meaning |
 | :--- | :--- | :--- |
 | `public_host` | localhost | Host used in links inside emails |
-| `mongo_db_name` | users_db | Database name |
+| `mongo_db_name` | users_db | Database of users-service |
 | `smtp_host` / `smtp_from` | mailpit / noreply@cloudstorage.local | Mail settings |
-| `default_quota_bytes` | 104857600 | Storage quota for new users |
-| `password_min_age` | 1m | Minimum time between password changes (reset flow) |
-| `password_max_age` | 2m | Password expires after this; login locks the account |
-| `account_lock_duration` | 1m | Lock length after password expiry |
-| `reset_token_ttl` | 30m | Password reset link lifetime |
-| `reset_rate_limit_max` / `reset_rate_limit_window` | 3 / 15m | Forgot-password limit |
-| `magic_link_token_ttl` | 15m | Magic link lifetime |
-| `verification_token_ttl` | 24h | Email verification link lifetime |
-| `otp_ttl` | 5m | OTP lifetime |
-| `otp_max_attempts` | 3 | OTP rate limit |
-| `jwt_ttl` | 24h | Session token lifetime |
-| `restricted_token_ttl` | 15m | Token for forced password change |
 | `bcrypt_cost` | 12 | Password hashing cost |
+| `default_quota_bytes` | 104857600 (100 MB) | Storage quota of a new user |
+| `min_quota_bytes` / `max_quota_bytes` | 100 MB / 2 TB, in bytes | Bounds for any quota an admin sets or a user requests |
+| `max_upload_bytes` | 209715200 (200 MB) | Largest single file. nginx allows 201 MB: if you raise this, raise `client_max_body_size` in `frontend/nginx.conf` too |
+| `password_min_length` | 8 | Shortest new password (the longest is 72, the bcrypt limit) |
+| `password_min_age` | 1m | Minimum time between password changes |
+| `password_max_age` | 1h | A password expires after this and the next login locks the account |
+| `account_lock_duration` | 30s | How long that lock lasts |
+| `jwt_ttl` | 24h | Session lifetime |
+| `restricted_token_ttl` | 15m | Token for the forced password change |
+| `verification_token_ttl` | 24h | Email verification link |
+| `magic_link_token_ttl` | 15m | Magic link |
+| `reset_token_ttl` | 30m | Password reset link |
+| `otp_ttl` | 5m | Login code (OTP) |
+| `reset_rate_limit_max` / `reset_rate_limit_window` | 3 / 15m | Forgot-password limit (also OTP resends and magic links) |
+| `otp_max_attempts` | 3 | Wrong OTP attempts allowed |
+| `rate_limit_per_second` / `rate_limit_burst` | 1 / 20 | Gateway request rate per user (per IP when not logged in) |
 
-Durations use Go syntax (`30m`, `2160h`); there is no `d` unit.
+Durations use Go syntax (`30s`, `15m`, `24h`); there is no `d` unit. The frontend reads the quota bounds, the default
+quota and the minimum password length from `GET /api/config/limits`.
 
 ### Applying changes
-- Edited `config.yaml`: `docker compose restart users-service`
+- Edited `config.yaml`: `docker compose restart users-service storage-service api-gateway`, then reload the page
 - Edited `.env`: `docker compose up -d`
-- Edited Go code: `docker compose up -d --build`
+- Edited Go or frontend code: `docker compose up -d --build`
 - Edited a `.proto` file: `bash proto/generate.sh`, then `docker compose up -d --build`
 
 ---
@@ -256,13 +253,47 @@ curl --cacert certs/ca.crt -H "Authorization: Bearer $JWT" https://localhost:844
 | `401` / `403` | No or invalid token; or restricted token, not a regular user, or someone else's folder |
 | `404` | Target folder does not exist |
 | `409` | A file with that name already exists in the folder |
-| `413` | Storage quota exceeded, or the file is larger than `MAX_UPLOAD_BYTES` (the message says which) |
+| `413` | Storage quota exceeded, or the file is larger than `max_upload_bytes` (the message says which) |
 | `503` | Users service unreachable: nothing was uploaded, try again |
 
 `int64` fields (`sizeBytes`, `usedStorageBytes`, ...) are JSON **strings** (protojson); the frontend converts them with `Number()`.
 
 Known limitations: a crash of storage-service between "quota reserved" and "metadata saved" leaves that space
 reserved (there is no reconciliation job); there are no download or delete endpoints yet.
+
+---
+
+## Storage quota management
+
+**Administrators** can raise or lower any quota within `min_quota_bytes` – `max_quota_bytes`
+(`PATCH /api/admin/users/{userId}/quota`). A value outside the bounds is answered with `400`
+`Storage quota must be between 100 MB and 2 TB`. Lowering a quota below the
+current usage is allowed: no files are deleted, but uploads are refused until the usage fits again.
+
+**Increase requests** (`users_db.quota_requests`):
+
+| Endpoint | Who | Result |
+| :--- | :--- | :--- |
+| `POST /api/users/quota-requests` `{"requestedQuotaBytes": n}` | regular user | `201`. `n` must exceed the current quota and not exceed the maximum; `409` while another request is pending |
+| `GET /api/users/quota-requests` | regular user | Own requests, newest first |
+| `GET /api/admin/quota-requests?status=pending` | admin | `pending`, `approved`, `rejected`, or all without `status` |
+| `POST /api/admin/quota-requests/{id}/approve` | admin | Sets the quota to the requested size. `409` if already resolved, or if the quota is no longer below it (an approval never lowers a quota) |
+| `POST /api/admin/quota-requests/{id}/reject` | admin | Marks it rejected; the quota is unchanged |
+
+A partial unique index allows only one pending request per user, also when two arrive at once.
+
+## Accounts
+
+| Action | Endpoint | Notes |
+| :--- | :--- | :--- |
+| Register | `POST /api/users/register` | `409` `An account with this email already exists.`; no email is sent |
+| Forgot password | `POST /api/users/forgot-password` | UI: **Forgot password?** on the sign-in page. The emailed link opens the frontend (`/?resetToken=...`) |
+| Check / use a reset link | `GET` / `POST /api/users/reset-password` | |
+| Change password (signed in) | `POST /api/users/change-password` `{"currentPassword","newPassword","confirmPassword"}` | UI: **Change Password** in the top bar (users and admins). Same strength and `password_min_age` rules as reset; refused while the account is locked |
+
+Session tokens are stateless, so changing or resetting a password does not end other sessions; they expire after
+`jwt_ttl`. Because registration now says whether an address is taken, it can be used to find out which addresses
+have accounts; the gateway rate limit slows that down but does not prevent it.
 
 ---
 
@@ -280,7 +311,7 @@ reserved (there is no reconciliation job); there are no download or delete endpo
 ### Rate limiting (DoS protection)
 The gateway keeps one token bucket per caller: per user ID for requests with a valid JWT (signature verified),
 per IP address otherwise. When the bucket is empty the gateway answers `429` with a `Retry-After` header.
-Limits are set with `RATE_LIMIT_PER_SECOND` and `RATE_LIMIT_BURST` (see [Configuration](#env-ports-and-secrets)).
+Limits are set with `rate_limit_per_second` and `rate_limit_burst` in `config.yaml` (see [Configuration](#configuration)).
 Behind nginx the IP is taken from the last `X-Forwarded-For` entry (the one nginx appends).
 
 ### Input validation
@@ -291,13 +322,13 @@ the browser (`frontend/validation.js`) for quick feedback. The server never trus
 | :--- | :--- |
 | First / last name | Letters, spaces, `'` and `-`; 1–100 characters |
 | Email | Format check, max 254 characters |
-| Password | Strength rules on registration/reset; 8–72 characters (bcrypt limit); login only bounds the length |
+| Password | On registration, reset and change: `password_min_length` (8) to 72 characters, with an uppercase letter, a lowercase letter, a digit and a special character; login only bounds the length to bcrypt's 72 |
 | OTP | Exactly 6 digits |
 | Verification, reset and magic-link tokens | 64 lower-case hex characters |
 | Folder name | Letters, digits, space and `. _ - ( )`; 1–100 characters; not only dots |
 | Folder / parent IDs | Valid MongoDB ObjectID |
-| File name / type | Same character rule as folder names (max 255); extension whitelist; content must match the extension; not empty; at most `MAX_UPLOAD_BYTES` |
-| `default_quota_bytes` | Positive number (checked at startup) |
+| File name / type | Same character rule as folder names (max 255); extension whitelist; content must match the extension; not empty; at most `max_upload_bytes` |
+| Storage quota | Within `min_quota_bytes` – `max_quota_bytes`; `default_quota_bytes` must be too (checked at startup) |
 
 ### Output encoding and injection
 Names are rendered with `textContent`; the few `innerHTML` templates pass values through `escapeHtml`. All MongoDB
@@ -308,14 +339,17 @@ input such as `{"$ne": ""}` from reaching the database.
 `storage-service/filecheck` is applied to every upload (US-2.2): filename and extension whitelist
 (`txt, md, csv, json, pdf, png, jpg, jpeg, gif`), content sniffing so a renamed executable is rejected, and the
 content type is taken from the sniffed bytes, never from the client's `Content-Type`. The SHA-256 of every stored file
-is saved in its metadata; `filecheck.Verify` is meant for the download endpoint, which does not exist yet.
+is saved in its metadata. The **Verify** button on a file (`GET /api/files/{fileId}/integrity`, owner only) reads the stored
+content again, calculates its SHA-256 and compares the two, so a damaged or altered file is reported.
 
-### Running the security tests
+### Running the tests
 ```bash
 cd api-gateway && go test ./...
 cd storage-service && go test ./...
 cd users-service && go test ./...
 ```
+These are plain unit tests of the validation rules, tokens, file checks, the auth check and the rate limiter. They
+need no running database or other service.
 
 ---
 
@@ -400,12 +434,12 @@ docker exec -it users_mongodb mongosh users_db --eval "db.users.deleteMany({})"
 
 ## Password reset (Postman)
 
-There is no login UI. Import [`postman/Stashr.postman_collection.json`](postman/Stashr.postman_collection.json) in Postman. `baseUrl` is already set on the collection to `https://localhost:8443` (add `certs/ca.crt` under Postman → Settings → Certificates → CA Certificates). Also set/paste collection variables `email` (`mail@mail.com`), `resetToken`, and `otp`. Use Mailpit at http://localhost:8025 for verification, reset, and OTP emails.
+The frontend covers this flow (**Forgot password?** on the sign-in page). To drive the API directly instead, import [`postman/Stashr.postman_collection.json`](postman/Stashr.postman_collection.json) in Postman. `baseUrl` is already set on the collection to `https://localhost:8443` (add `certs/ca.crt` under Postman → Settings → Certificates → CA Certificates). Also set/paste collection variables `email` (`mail@mail.com`), `resetToken`, and `otp`. Use Mailpit at http://localhost:8025 for verification, reset, and OTP emails.
 
 ### Flow
 
 1. **Register user** — `POST /api/users/register`. Confirm the account with **Verify account** using the Mailpit verification token.
-2. **Forgot password** — `POST /api/users/forgot-password` with `{"email":"{{email}}"}`. Always `200`: `If an account with that email exists, a password reset link has been sent.` Copy `token` from the Mailpit reset link into `resetToken`. A new forgot request invalidates the previous link.
+2. **Forgot password** — `POST /api/users/forgot-password` with `{"email":"{{email}}"}`. Always `200`: `If an account with that email exists, a password reset link has been sent.` Copy the `resetToken` value from the Mailpit reset link into the `resetToken` variable. A new forgot request invalidates the previous link.
 3. **24h rule** — a brand-new password cannot be changed yet. GET/POST reset then returns `403` whose `message` contains the retry time. To test a successful change, backdate Mongo first:
 
 ```bash

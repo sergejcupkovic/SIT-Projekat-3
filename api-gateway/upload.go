@@ -21,29 +21,14 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// File upload is the one route that is NOT generated from a google.api.http
-// annotation: grpc-gateway cannot decode multipart/form-data. This handler is
-// registered on the same mux (gw.HandlePath), so it still sits behind CORS,
-// security headers and the rate limiter, and answers in the same JSON shape.
-//
-//	POST /api/files/upload   multipart/form-data
-//	     file      the file (required)
-//	     folderId  target folder; omit for the root "My Drive"
-//
-// It turns the request into the client-streaming rpc StorageService.UploadFile:
-// one message with name, size and folder, then the content in 64 KiB chunks.
-// The size sent up front is the REAL size of the received file, which is what
-// lets storage-service check the quota before it stores a single byte.
-
+// Uploads are handled by hand because grpc-gateway cannot decode multipart forms.
 const (
 	uploadChunkSize = 64 << 10
 	// Room for the multipart framing and the folderId field on top of the file itself.
 	multipartOverhead = 1 << 20
 	// Parts bigger than this are spooled to temporary files instead of RAM.
 	multipartMemory = 8 << 20
-	// A big upload over a slow link may legitimately take a while; this replaces
-	// the server-wide 30 s read/write timeouts for this one route.
-	uploadTimeout = 10 * time.Minute
+	uploadTimeout   = 10 * time.Minute
 )
 
 type uploadHandler struct {
@@ -183,7 +168,6 @@ func (u *uploadHandler) writeProtoResponse(w http.ResponseWriter, r *http.Reques
 	_, _ = w.Write(body)
 }
 
-// stream sends the metadata and then the content of file to storage-service.
 func (u *uploadHandler) stream(ctx context.Context, meta *storagepb.UploadFileMetadata, file multipart.File) (*storagepb.UploadFileResponse, error) {
 	stream, err := u.storage.UploadFile(ctx)
 	if err != nil {
@@ -212,8 +196,6 @@ func (u *uploadHandler) stream(ctx context.Context, meta *storagepb.UploadFileMe
 		}
 	}
 
-	// A failed Send only says "the stream is over"; the real reason (quota
-	// exceeded, bad file type, ...) is the status that CloseAndRecv returns.
 	return stream.CloseAndRecv()
 }
 
@@ -258,11 +240,6 @@ func (u *uploadHandler) validToken(authHeader string) bool {
 	return err == nil && token.Valid
 }
 
-// writeGRPCError maps a gRPC status to HTTP exactly like grpc-gateway does for
-// the generated routes, with one deliberate exception: ResourceExhausted from
-// the upload means "storage quota exceeded" and is answered with 413 Payload
-// Too Large, not with 429, which the frontend (and the rate limiter) use for
-// "too many requests".
 func writeGRPCError(w http.ResponseWriter, err error) {
 	st := status.Convert(err)
 	httpCode := runtime.HTTPStatusFromCode(st.Code())
@@ -272,8 +249,6 @@ func writeGRPCError(w http.ResponseWriter, err error) {
 	writeError(w, httpCode, st.Code(), st.Message())
 }
 
-// writeError writes the same body shape grpc-gateway uses for errors:
-// {"code": <grpc code>, "message": "...", "details": []}.
 func writeError(w http.ResponseWriter, httpCode int, code codes.Code, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(httpCode)
@@ -284,7 +259,6 @@ func writeError(w http.ResponseWriter, httpCode int, code codes.Code, message st
 	})
 }
 
-// humanSize renders 1572864 as "1.5 MB".
 func humanSize(n int64) string {
 	const unit = 1024
 	if n < unit {

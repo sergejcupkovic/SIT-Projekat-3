@@ -20,13 +20,10 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/health"
-	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
 )
 
 func main() {
-
 	cfg := config.LoadConfig()
 	service.Init(cfg)
 
@@ -48,6 +45,10 @@ func main() {
 	userRepo, err := repository.NewUserRepository(db)
 	if err != nil {
 		log.Fatalf("Failed to initialize repository: %v", err)
+	}
+	quotaRequestRepo, err := repository.NewQuotaRequestRepository(db)
+	if err != nil {
+		log.Fatalf("Failed to initialize quota request repository: %v", err)
 	}
 
 	userHandler := handler.NewUserHandler(
@@ -81,8 +82,6 @@ func main() {
 		log.Printf("Admin user seeded/verified: %s", cfg.AdminEmail)
 	}
 
-	// gRPC server: users-service is no longer an HTTP server. The api-gateway
-	// is the only HTTP(S) entry point and talks to us over gRPC (HTTP/2).
 	lis, err := net.Listen("tcp", ":"+cfg.Port)
 	if err != nil {
 		log.Fatalf("Failed to listen on :%s: %v", cfg.Port, err)
@@ -91,17 +90,11 @@ func main() {
 	srv := grpc.NewServer()
 	userspb.RegisterUsersServiceServer(srv, userHandler) // generated in users_service_grpc.pb.go
 
+	userspb.RegisterQuotaRequestServiceServer(srv, handler.NewQuotaRequestHandler(quotaRequestRepo, userRepo))
+
 	// Internal quota rpcs for storage-service (no REST binding, see users_service.proto).
 	userspb.RegisterQuotaServiceServer(srv, handler.NewQuotaHandler(userRepo))
 
-	// Standard gRPC health service (replaces the old /ping endpoint).
-	healthSrv := health.NewServer()
-	healthpb.RegisterHealthServer(srv, healthSrv)
-	healthSrv.SetServingStatus(userspb.UsersService_ServiceDesc.ServiceName, healthpb.HealthCheckResponse_SERVING)
-	healthSrv.SetServingStatus(userspb.QuotaService_ServiceDesc.ServiceName, healthpb.HealthCheckResponse_SERVING)
-
-	// Server reflection lets tools like grpcurl list and call services
-	// without having the .proto files locally.
 	reflection.Register(srv)
 
 	go func() {

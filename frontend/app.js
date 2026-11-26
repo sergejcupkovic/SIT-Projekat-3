@@ -1,4 +1,5 @@
 const MAILPIT_URL = "http://localhost:8025";
+const MAILPIT_BUTTON = `<a href="${MAILPIT_URL}" target="_blank" rel="noopener noreferrer" class="btn-mailpit">Open Mailpit Inbox (:8025) ↗</a>`;
 
 const tabLogin = document.getElementById("tabLogin");
 const tabRegister = document.getElementById("tabRegister");
@@ -10,6 +11,9 @@ const registerSection = document.getElementById("registerSection");
 const forceChangePasswordSection = document.getElementById(
   "forceChangePasswordSection",
 );
+const forgotPasswordSection = document.getElementById("forgotPasswordSection");
+const resetPasswordSection = document.getElementById("resetPasswordSection");
+const changePasswordSection = document.getElementById("changePasswordSection");
 
 const forceChangePasswordForm = document.getElementById(
   "forceChangePasswordForm",
@@ -30,15 +34,7 @@ const toggleForceNewPasswordBtn = document.getElementById(
 const toggleForceConfirmPasswordBtn = document.getElementById(
   "toggleForceConfirmPasswordBtn",
 );
-const forceStrengthBarFill = document.getElementById("forceStrengthBarFill");
-const forceStrengthLabelText = document.getElementById(
-  "forceStrengthLabelText",
-);
-const forceRuleLength = document.getElementById("force-rule-length");
-const forceRuleUppercase = document.getElementById("force-rule-uppercase");
-const forceRuleLowercase = document.getElementById("force-rule-lowercase");
-const forceRuleNumber = document.getElementById("force-rule-number");
-const forceRuleSpecial = document.getElementById("force-rule-special");
+let forceStrengthMeter = null; // created in init()
 const forcePasswordMatchStatus = document.getElementById(
   "forcePasswordMatchStatus",
 );
@@ -66,14 +62,11 @@ const resendOtpBtn = document.getElementById("resendOtpBtn");
 const backToLoginBtn = document.getElementById("backToLoginBtn");
 
 const userEmailDisplay = document.getElementById("userEmailDisplay");
-const jwtTokenDisplay = document.getElementById("jwtTokenDisplay");
 const logoutBtn = document.getElementById("logoutBtn");
 const logoutSpinner = document.getElementById("logoutSpinner");
 
 const authCard = document.querySelector(".auth-card");
 const authTabs = document.querySelector(".auth-tabs");
-const toggleTokenDrawerBtn = document.getElementById("toggleTokenDrawerBtn");
-const jwtDrawer = document.getElementById("jwtDrawer");
 const navigateUpBtn = document.getElementById("navigateUpBtn");
 const breadcrumbsContainer = document.getElementById("breadcrumbsContainer");
 const currentFolderTitle = document.getElementById("currentFolderTitle");
@@ -137,13 +130,7 @@ const alertMessage = document.getElementById("alertMessage");
 const alertAction = document.getElementById("alertAction");
 const alertCloseBtn = document.getElementById("alertCloseBtn");
 
-const strengthBarFill = document.getElementById("strengthBarFill");
-const strengthLabelText = document.getElementById("strengthLabelText");
-const ruleLength = document.getElementById("rule-length");
-const ruleUppercase = document.getElementById("rule-uppercase");
-const ruleLowercase = document.getElementById("rule-lowercase");
-const ruleNumber = document.getElementById("rule-number");
-const ruleSpecial = document.getElementById("rule-special");
+let registerStrengthMeter = null; // created in init()
 
 const togglePasswordBtn = document.getElementById("togglePasswordBtn");
 const toggleConfirmPasswordBtn = document.getElementById(
@@ -151,7 +138,6 @@ const toggleConfirmPasswordBtn = document.getElementById(
 );
 
 const EMAIL_REGEX = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
-const SPECIAL_CHAR_REGEX = /[!@#~$%^&*()+|_.,<>?/{}\-]/;
 
 const renameFileForm = document.getElementById("renameFileForm");
 const renameFileLabel = document.getElementById("renameFileLabel");
@@ -170,54 +156,28 @@ const notificationsPopover = document.getElementById("notificationsPopover");
 const notificationsCountLabel = document.getElementById("notificationsCountLabel");
 const notificationsList = document.getElementById("notificationsList");
 
-function getCandidateEndpoints(path) {
-  const endpoints = [];
-
-  if (
-    window.location.protocol === "http:" ||
-    window.location.protocol === "https:"
-  ) {
-    endpoints.push(path);
-  }
-
-  const hostname = window.location.hostname || "localhost";
-  // Fallback: call the API gateway directly over HTTPS.
-  if (hostname === "127.0.0.1") {
-    endpoints.push(`https://127.0.0.1:8443${path}`);
-    endpoints.push(`https://localhost:8443${path}`);
-  } else {
-    endpoints.push(`https://localhost:8443${path}`);
-    endpoints.push(`https://127.0.0.1:8443${path}`);
-  }
-
-  return [...new Set(endpoints)];
-}
-
-async function fetchWithFallback(path, options) {
-  const endpoints = getCandidateEndpoints(path);
-  let lastError = null;
-
-  for (const url of endpoints) {
-    try {
-      const response = await fetch(url, options);
-      if (response.status === 429) {
-        showAlert("warning", "Too Many Requests", "You are sending requests too fast. Please slow down and try again.");
-        return { response, url };
-      }
-      if (response.status === 404 && url === path && endpoints.length > 1) {
-        continue;
-      }
-      return { response, url };
-    } catch (err) {
-      lastError = err;
-    }
-  }
-
-  throw lastError;
+function showLimits(limits) {
+  if (!limits) return;
+  document.getElementById("registerSubtitle").textContent =
+    `Sign up to get ${formatBytes(limits.defaultQuotaBytes)} of secure cloud storage`;
+  strengthMeters.forEach((meter) => meter.refresh());
 }
 
 async function init() {
+  // Read it first: handling the link removes the token from the address bar.
+  const openedFromResetLink = Boolean(readResetTokenFromUrl());
+
   await session.load();
+
+  registerStrengthMeter = createStrengthMeter(
+    document.getElementById("strengthContainer"),
+  );
+  forceStrengthMeter = createStrengthMeter(
+    document.getElementById("forceStrengthContainer"),
+  );
+  initAccountFeatures();
+  initQuotaRequestFeatures();
+  loadLimits().then(showLimits);
 
   firstNameInput.addEventListener("input", () =>
     validateNameField(firstNameInput, firstNameError, "First name"),
@@ -250,7 +210,6 @@ async function init() {
   tabLogin.addEventListener("click", () => switchTab("login"));
   tabRegister.addEventListener("click", () => switchTab("register"));
 
-  // Login, OTPS & Logout Events
   toggleLoginPasswordBtn.addEventListener("click", () =>
     togglePasswordVisibility(loginPasswordInput, toggleLoginPasswordBtn),
   );
@@ -325,7 +284,12 @@ async function init() {
     });
   }
 
-  checkExistingSession();
+  // A reset link must not be replaced by the dashboard of a saved session.
+  if (openedFromResetLink) {
+    checkResetTokenInUrl();
+  } else {
+    checkExistingSession();
+  }
 }
 
 function togglePasswordVisibility(inputEl, btnEl) {
@@ -375,28 +339,9 @@ function handleEmailInput() {
   return true;
 }
 
-function checkPasswordRules(password) {
-  return {
-    length: password.length >= 8,
-    uppercase: /[A-Z]/.test(password),
-    lowercase: /[a-z]/.test(password),
-    number: /[0-9]/.test(password),
-    special: SPECIAL_CHAR_REGEX.test(password),
-  };
-}
-
 function evaluatePasswordInput(pwInput, pwError, confirmInput, ui) {
   const password = pwInput.value;
-  const rules = checkPasswordRules(password);
-
-  updateRuleItem(ui.length, rules.length);
-  updateRuleItem(ui.uppercase, rules.uppercase);
-  updateRuleItem(ui.lowercase, rules.lowercase);
-  updateRuleItem(ui.number, rules.number);
-  updateRuleItem(ui.special, rules.special);
-
-  const score = Object.values(rules).filter(Boolean).length;
-  updateStrengthMeterUI(ui.barFill, ui.labelText, score, password.length === 0);
+  const meetsRules = ui.meter.update(password);
 
   if (confirmInput.value.length > 0) {
     evaluateConfirmPasswordInput(
@@ -413,7 +358,7 @@ function evaluatePasswordInput(pwInput, pwError, confirmInput, ui) {
     return false;
   }
 
-  if (score === 5) {
+  if (meetsRules) {
     pwInput.classList.remove("is-invalid");
     pwInput.classList.add("is-valid");
     pwError.textContent = "";
@@ -460,13 +405,7 @@ function evaluateConfirmPasswordInput(
 
 function handlePasswordInput() {
   return evaluatePasswordInput(passwordInput, passwordError, confirmPasswordInput, {
-    barFill: strengthBarFill,
-    labelText: strengthLabelText,
-    length: ruleLength,
-    uppercase: ruleUppercase,
-    lowercase: ruleLowercase,
-    number: ruleNumber,
-    special: ruleSpecial,
+    meter: registerStrengthMeter,
     confirmError: confirmPasswordError,
     matchStatus: passwordMatchStatus,
   });
@@ -478,13 +417,7 @@ function handleForcePasswordInput() {
     forceNewPasswordError,
     forceConfirmPasswordInput,
     {
-      barFill: forceStrengthBarFill,
-      labelText: forceStrengthLabelText,
-      length: forceRuleLength,
-      uppercase: forceRuleUppercase,
-      lowercase: forceRuleLowercase,
-      number: forceRuleNumber,
-      special: forceRuleSpecial,
+      meter: forceStrengthMeter,
       confirmError: forceConfirmPasswordError,
       matchStatus: forcePasswordMatchStatus,
     },
@@ -498,58 +431,6 @@ function handleForceConfirmPasswordInput() {
     forceConfirmPasswordError,
     forcePasswordMatchStatus,
   );
-}
-
-function updateRuleItem(element, isValid) {
-  if (isValid) {
-    element.classList.add("valid");
-    element.classList.remove("invalid-touched");
-  } else {
-    element.classList.remove("valid");
-  }
-}
-
-function updateStrengthMeterUI(barFill, labelText, score, isEmpty) {
-  barFill.className = "strength-meter-fill";
-
-  if (isEmpty) {
-    barFill.style.width = "0%";
-    labelText.textContent = "None";
-    labelText.style.color = "var(--text-subtle)";
-    return;
-  }
-
-  switch (score) {
-    case 1:
-    case 2:
-      barFill.classList.add("strength-weak");
-      labelText.textContent = "Weak";
-      labelText.style.color = "var(--danger)";
-      break;
-    case 3:
-      barFill.classList.add("strength-fair");
-      labelText.textContent = "Fair";
-      labelText.style.color = "var(--warning)";
-      break;
-    case 4:
-      barFill.classList.add("strength-good");
-      labelText.textContent = "Good";
-      labelText.style.color = "#3b82f6";
-      break;
-    case 5:
-      barFill.classList.add("strength-strong");
-      labelText.textContent = "Strong (Ready)";
-      labelText.style.color = "var(--success)";
-      break;
-    default:
-      barFill.classList.add("strength-weak");
-      labelText.textContent = "Very Weak";
-      labelText.style.color = "var(--danger)";
-  }
-}
-
-function updateStrengthMeter(score, isEmpty) {
-  updateStrengthMeterUI(strengthBarFill, strengthLabelText, score, isEmpty);
 }
 
 function handleConfirmPasswordInput() {
@@ -601,18 +482,10 @@ function validateFullForm() {
   }
 
   const password = passwordInput.value;
-  const rules = checkPasswordRules(password);
-  const isPasswordValid = Object.values(rules).every(Boolean);
-
-  if (Validation.password(password)) {
+  const passwordProblem = Validation.newPassword(password);
+  if (passwordProblem) {
     passwordInput.classList.add("is-invalid");
-    passwordError.textContent = Validation.password(password);
-    isValid = false;
-    if (!firstInvalidEl) firstInvalidEl = passwordInput;
-  } else if (!isPasswordValid) {
-    passwordInput.classList.add("is-invalid");
-    passwordError.textContent =
-      "Password does not meet all security requirements listed below";
+    passwordError.textContent = passwordProblem;
     isValid = false;
     if (!firstInvalidEl) firstInvalidEl = passwordInput;
   }
@@ -661,22 +534,8 @@ async function handleFormSubmit(event) {
   setSubmitting(true);
 
   try {
-    const { response } = await fetchWithFallback("/api/users/register", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
-
-    let data = {};
-    const textData = await response.text();
-    try {
-      data = JSON.parse(textData);
-    } catch {
-      data = { message: textData.trim() };
-    }
+    const response = await apiJson("/api/users/register", { method: "POST", body: payload });
+    const { data } = response;
 
     if (response.status === 201) {
       const successMsg =
@@ -686,9 +545,7 @@ async function handleFormSubmit(event) {
         "success",
         "Registration Successful!",
         successMsg,
-        `<a href="${MAILPIT_URL}" target="_blank" rel="noopener noreferrer" class="btn-mailpit">
-          Open Mailpit Inbox (:8025) ↗
-        </a>`,
+        MAILPIT_BUTTON,
       );
 
       form.reset();
@@ -737,23 +594,8 @@ async function checkVerificationTokenInUrl() {
   );
 
   try {
-    const { response } = await fetchWithFallback(
-      `/api/users/verify?token=${encodeURIComponent(token)}`,
-      {
-        method: "GET",
-        headers: {
-          Accept: "application/json",
-        },
-      },
-    );
-
-    let data = {};
-    const text = await response.text();
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { message: text.trim() };
-    }
+    const response = await apiJson(`/api/users/verify?token=${encodeURIComponent(token)}`);
+    const { data } = response;
 
     if (response.ok) {
       showAlert(
@@ -791,28 +633,17 @@ async function handleMagicLinkRequest() {
   showAlert("warning", "Sending...", "Requesting magic login link...");
 
   try {
-    const { response } = await fetchWithFallback(
-      "/api/users/magic-link-request",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      },
-    );
-
-    const text = await response.text();
-    let data = {};
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { message: text.trim() };
-    }
+    const response = await apiJson("/api/users/magic-link-request", {
+      method: "POST",
+      body: { email },
+    });
+    const { data } = response;
 
     if (response.ok) {
       showAlert(
         "success",
         "Magic Link Sent!",
-        data.message || "Check Mailpit (:8025) for your direct login link.",
+        data.message || "Check your email for your direct login link.",
       );
     } else {
       showAlert(
@@ -841,22 +672,11 @@ async function checkMagicLinkTokenInUrl() {
   );
 
   try {
-    const { response } = await fetchWithFallback(
-      "/api/users/magic-link-login",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: magicToken }),
-      },
-    );
-
-    const text = await response.text();
-    let data = {};
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { message: text.trim() };
-    }
+    const response = await apiJson("/api/users/magic-link-login", {
+      method: "POST",
+      body: { token: magicToken },
+    });
+    const { data } = response;
 
     if (response.ok && data.token) {
       if (data.restricted) {
@@ -874,7 +694,7 @@ async function checkMagicLinkTokenInUrl() {
           email: data.user?.email || "user",
           role: data.user?.role,
         });
-        showAuthenticatedView(data.user?.email || "user", data.token);
+        showAuthenticatedView(data.user?.email || "user");
         showAlert(
           "success",
           "Welcome!",
@@ -978,13 +798,7 @@ function resetFormValidationVisuals() {
   passwordMatchStatus.textContent = "";
   passwordMatchStatus.className = "password-match-status";
 
-  updateStrengthMeter(0, true);
-
-  [ruleLength, ruleUppercase, ruleLowercase, ruleNumber, ruleSpecial].forEach(
-    (rule) => {
-      rule.classList.remove("valid", "invalid-touched");
-    },
-  );
+  registerStrengthMeter.reset();
 }
 
 document.addEventListener("DOMContentLoaded", init);
@@ -1021,6 +835,9 @@ function switchSection(sectionToDisplay) {
   if (sectionToDisplay === adminSection && !canOpenAdminPanel()) {
     sectionToDisplay = loginSection;
   }
+  if (sectionToDisplay === changePasswordSection && !session.token) {
+    sectionToDisplay = loginSection;
+  }
   [
     loginSection,
     otpSection,
@@ -1028,6 +845,9 @@ function switchSection(sectionToDisplay) {
     adminSection,
     registerSection,
     forceChangePasswordSection,
+    forgotPasswordSection,
+    resetPasswordSection,
+    changePasswordSection,
   ].forEach((sec) => {
     if (sec) sec.classList.add("hidden");
   });
@@ -1039,7 +859,23 @@ function switchSection(sectionToDisplay) {
     authCard.classList.toggle("dashboard-wide", isDashboard);
     authCard.classList.toggle("admin-wide", isAdmin);
   }
-  if (authTabs) authTabs.classList.toggle("hidden", isDashboard || isAdmin);
+  const isSignedInView =
+    isDashboard || isAdmin || sectionToDisplay === changePasswordSection;
+  if (authTabs) authTabs.classList.toggle("hidden", isSignedInView);
+}
+
+function clearSessionViews() {
+  closeQuotaRequestPanel();
+  clearChangePasswordForm();
+  clearAdminQuotaRequests();
+  closeAdminQuotaForm();
+}
+
+function handleSessionExpired() {
+  session.end();
+  clearSessionViews();
+  switchSection(loginSection);
+  showAlert("warning", "Session Expired", "Please sign in again.");
 }
 
 async function handleLoginSubmit(event) {
@@ -1068,19 +904,11 @@ async function handleLoginSubmit(event) {
   loginSpinner.classList.remove("hidden");
 
   try {
-    const { response } = await fetchWithFallback("/api/users/login", {
+    const response = await apiJson("/api/users/login", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+      body: { email, password },
     });
-
-    const text = await response.text();
-    let data = {};
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { message: text.trim() };
-    }
+    const { data } = response;
 
     if (response.ok) {
       if (data.restricted) {
@@ -1104,17 +932,9 @@ async function handleLoginSubmit(event) {
         "A 6-digit code has been sent to your email.",
       );
     } else {
-      let displayMessage =
-        data.message || "Invalid credentials or unverified account.";
-
-      // Convert any ISO/RFC3339 timestamp in the message to the user's local timezone
-      const isoRegex =
-        /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})/;
-      const match = displayMessage.match(isoRegex);
-      if (match) {
-        const localTimeStr = new Date(match[0]).toLocaleString();
-        displayMessage = displayMessage.replace(match[0], localTimeStr);
-      }
+      const displayMessage = localizeTimestamps(
+        data.message || "Invalid credentials or unverified account.",
+      );
 
       showAlert("danger", "Login Failed", displayMessage);
     }
@@ -1146,23 +966,11 @@ async function handleOtpSubmit(event) {
   otpSpinner.classList.remove("hidden");
 
   try {
-    const { response } = await fetchWithFallback("/api/users/verify-otp", {
+    const response = await apiJson("/api/users/verify-otp", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: activeLoginEmail,
-        password: activeLoginPassword,
-        otp,
-      }),
+      body: { email: activeLoginEmail, password: activeLoginPassword, otp },
     });
-
-    const text = await response.text();
-    let data = {};
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { message: text.trim() };
-    }
+    const { data } = response;
 
     if (response.ok && data.token) {
       activeLoginPassword = "";
@@ -1182,7 +990,7 @@ async function handleOtpSubmit(event) {
           email: activeLoginEmail,
           role: data.user?.role,
         });
-        showAuthenticatedView(activeLoginEmail, data.token);
+        showAuthenticatedView(activeLoginEmail);
         showAlert("success", "Authenticated!", "2FA verification successful.");
       }
     } else {
@@ -1203,13 +1011,9 @@ async function handleOtpSubmit(event) {
 async function handleResendOtp() {
   hideAlert();
   try {
-    const { response } = await fetchWithFallback("/api/users/resend-otp", {
+    const response = await apiJson("/api/users/resend-otp", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: activeLoginEmail,
-        password: activeLoginPassword,
-      }),
+      body: { email: activeLoginEmail, password: activeLoginPassword },
     });
 
     if (response.ok) {
@@ -1255,31 +1059,21 @@ function resetForceChangePasswordUI() {
     forcePasswordMatchStatus.textContent = "";
     forcePasswordMatchStatus.className = "password-match-status";
   }
-  if (forceStrengthBarFill && forceStrengthLabelText) {
-    updateStrengthMeterUI(forceStrengthBarFill, forceStrengthLabelText, 0, true);
-  }
-  [
-    forceRuleLength,
-    forceRuleUppercase,
-    forceRuleLowercase,
-    forceRuleNumber,
-    forceRuleSpecial,
-  ].forEach((rule) => {
-    if (rule) rule.classList.remove("valid", "invalid-touched");
-  });
+  forceStrengthMeter.reset();
 }
 
 async function handleLogout() {
   logoutBtn.disabled = true;
   logoutSpinner.classList.remove("hidden");
   try {
-    await fetchWithFallback("/api/users/logout", { method: "POST" });
+    await apiJson("/api/users/logout", { method: "POST" });
   } catch (err) {
     console.warn("Logout API warning:", err);
   } finally {
     if (notificationsPopover) notificationsPopover.classList.add("hidden");
     if (notificationsBellBtn) notificationsBellBtn.setAttribute("aria-expanded", "false");
     session.end();
+    clearSessionViews();
     resetOtpForm();
     currentFolderId = null;
     currentBreadcrumbs = [];
@@ -1302,16 +1096,10 @@ async function handleForceChangePasswordSubmit(event) {
   const newPassword = forceNewPasswordInput.value;
   const confirmPassword = forceConfirmPasswordInput.value;
 
-  const newPasswordProblem = Validation.password(newPassword);
+  const newPasswordProblem = Validation.newPassword(newPassword);
   if (newPasswordProblem) {
     forceNewPasswordInput.classList.add("is-invalid");
     forceNewPasswordError.textContent = newPasswordProblem;
-    return;
-  }
-  if (!handleForcePasswordInput()) {
-    forceNewPasswordInput.classList.add("is-invalid");
-    forceNewPasswordError.textContent =
-      "Password does not meet all security requirements";
     return;
   }
   forceNewPasswordInput.classList.remove("is-invalid");
@@ -1329,28 +1117,12 @@ async function handleForceChangePasswordSubmit(event) {
   forceChangeSpinner.classList.remove("hidden");
 
   try {
-    const { response } = await fetchWithFallback(
-      "/api/users/change-expired-password",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${restrictedSessionToken}`,
-        },
-        body: JSON.stringify({
-          password: newPassword,
-          confirmPassword: confirmPassword,
-        }),
-      },
-    );
-
-    const text = await response.text();
-    let data = {};
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { message: text.trim() };
-    }
+    const response = await apiJson("/api/users/change-expired-password", {
+      method: "POST",
+      token: restrictedSessionToken,
+      body: { password: newPassword, confirmPassword },
+    });
+    const { data } = response;
 
     if (response.ok) {
       restrictedSessionToken = null;
@@ -1380,15 +1152,15 @@ async function handleForceChangePasswordSubmit(event) {
   }
 }
 
-function showAuthenticatedView(email, token) {
+function showAuthenticatedView(email) {
   if (canOpenAdminPanel()) {
-    showAdminPanel(email, token);
+    showAdminPanel(email);
     return;
   }
-  showDashboard(email, token);
+  showDashboard(email);
 }
 
-function showDashboard(email, token) {
+function showDashboard(email) {
   activeLoginPassword = "";
   if (!canOpenDashboard()) {
     session.end();
@@ -1401,7 +1173,7 @@ function showDashboard(email, token) {
     return;
   }
   userEmailDisplay.textContent = email;
-  if (jwtTokenDisplay) jwtTokenDisplay.value = token;
+  closeQuotaRequestPanel();
   switchSection(dashboardSection);
   loadUserQuota();
   loadUserNotifications();
@@ -1414,32 +1186,24 @@ async function checkExistingSession() {
   if (!token || !email) return;
 
   if (canOpenAdminPanel()) {
-    showAdminPanel(email, token);
+    showAdminPanel(email);
     return;
   }
 
   try {
-    const { response } = await fetchWithFallback("/api/folders", {
-      method: "GET",
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-    });
+    const response = await apiJson("/api/folders", { token });
 
     if (response.status === 401 || response.status === 403) {
       session.end();
       return; //stay on login if the token is expired
     }
 
-    showDashboard(email, token);
+    showDashboard(email);
   } catch {
-    showDashboard(email, token);
+    showDashboard(email);
   }
 }
 
-if (toggleTokenDrawerBtn) {
-  toggleTokenDrawerBtn.addEventListener("click", () => {
-    jwtDrawer.classList.toggle("hidden");
-  });
-}
 if (openCreateFolderBtn) {
   openCreateFolderBtn.addEventListener("click", () => {
     createFolderForm.classList.remove("hidden");
@@ -1498,26 +1262,11 @@ async function loadFolderContents(folderId) {
     : "/api/folders";
 
   try {
-    const { response } = await fetchWithFallback(endpoint, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
-      },
-    });
-
-    const text = await response.text();
-    let data = {};
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { message: text.trim() };
-    }
+    const response = await apiJson(endpoint, { token });
+    const { data } = response;
 
     if (response.status === 401) {
-      session.end();
-      switchSection(loginSection);
-      showAlert("warning", "Session Expired", "Please sign in again.");
+      handleSessionExpired();
       return;
     }
 
@@ -1710,11 +1459,18 @@ function renderFolderItems(folders, files) {
       </div>
       <div class="item-right">
         <span class="item-meta">${Validation.escapeHtml(formatBytes(file.sizeBytes))} • ${Validation.escapeHtml(dateLabel)}</span>
+        <button type="button" class="btn-rename-sm btn-verify-sm" title="Check that the stored file is unchanged">Verify</button>
         <button type="button" class="btn-rename-sm btn-rename-file-sm" title="Rename file">Rename</button>
         <button type="button" class="btn-rename-sm btn-version-sm" title="Upload a new version of this file">↑ New Version</button>
       </div>
     `;
     row.querySelector(".item-name").textContent = file.name;
+
+    const verifyBtn = row.querySelector(".btn-verify-sm");
+    verifyBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      verifyFileIntegrity(file, verifyBtn);
+    });
 
     const renameFileBtn = row.querySelector(".btn-rename-file-sm");
     renameFileBtn.addEventListener("click", (e) => {
@@ -1730,6 +1486,34 @@ function renderFolderItems(folders, files) {
 
     folderItemsList.appendChild(row);
   });
+}
+
+// The server hashes the stored file again and compares it with the saved SHA-256.
+async function verifyFileIntegrity(file, button) {
+  hideAlert();
+  button.disabled = true;
+
+  try {
+    const { ok, status, data } = await apiJson(
+      `/api/files/${encodeURIComponent(file.id)}/integrity`,
+      { token: session.token },
+    );
+    if (ok) {
+      showAlert(
+        data.intact ? "success" : "danger",
+        data.intact ? "File Is Intact" : "Integrity Check Failed",
+        `"${file.name}": ${data.message}`,
+      );
+    } else if (status === 401) {
+      handleSessionExpired();
+    } else if (status !== 429) {
+      showAlert("danger", "Check Not Completed", data.message || "Could not check the file.");
+    }
+  } catch (err) {
+    showAlert("danger", "Connection Error", "Could not reach Storage Service.");
+  } finally {
+    button.disabled = false;
+  }
 }
 
 async function handleRenameFolderSubmit(event) {
@@ -1758,34 +1542,16 @@ async function handleRenameFolderSubmit(event) {
   renameFolderSpinner.classList.remove("hidden");
 
   try {
-    const { response } = await fetchWithFallback(
-      `/api/folders/${encodeURIComponent(renameFolderTarget.id)}`,
-      {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ name: newName }),
-      },
-    );
-
-    const text = await response.text();
-    let data = {};
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { message: text.trim() };
-    }
+    const response = await apiJson(`/api/folders/${encodeURIComponent(renameFolderTarget.id)}`,
+      { method: "PATCH", token, body: { name: newName } });
+    const { data } = response;
 
     if (response.ok) {
       closeRenameForm();
       showAlert("success", "Folder Renamed", `Folder renamed to "${newName}".`);
       await loadFolderContents(currentFolderId);
     } else if (response.status === 401) {
-      session.end();
-      switchSection(loginSection);
-      showAlert("warning", "Session Expired", "Please sign in again.");
+      handleSessionExpired();
     } else if (response.status === 403) {
       showAlert("danger", "Access Denied", "You do not have permission to rename this folder.");
     } else {
@@ -1825,25 +1591,12 @@ async function handleCreateFolderSubmit(event) {
   createFolderSpinner.classList.remove("hidden");
 
   try {
-    const { response } = await fetchWithFallback("/api/folders", {
+    const response = await apiJson("/api/folders", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        name,
-        parentId: currentFolderId,
-      }),
+      token,
+      body: { name, parentId: currentFolderId },
     });
-
-    const text = await response.text();
-    let data = {};
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { message: text.trim() };
-    }
+    const { data } = response;
 
     if (response.status === 201) {
       createFolderForm.classList.add("hidden");
@@ -1851,9 +1604,7 @@ async function handleCreateFolderSubmit(event) {
       showAlert("success", "Folder Created", `Folder "${name}" was created.`);
       await loadFolderContents(currentFolderId);
     } else if (response.status === 401) {
-      session.end();
-      switchSection(loginSection);
-      showAlert("warning", "Session Expired", "Please sign in again.");
+      handleSessionExpired();
     } else if (response.status === 403) {
       showAlert("danger", "Access Denied", "You do not have permission to create folders here.");
     } else {
@@ -1871,15 +1622,14 @@ async function handleCreateFolderSubmit(event) {
 
 // #region file upload and storage quota (US-2.2)
 
-// The API returns int64 values as JSON strings ("1048576"), so always go
-// through Number() before doing any arithmetic.
 function formatBytes(bytes) {
   const n = Number(bytes);
   if (!n || n <= 0) return "0 B";
   const units = ["B", "KB", "MB", "GB", "TB"];
   const idx = Math.min(Math.floor(Math.log(n) / Math.log(1024)), units.length - 1);
   const value = n / Math.pow(1024, idx);
-  return `${idx === 0 ? value : value.toFixed(1)} ${units[idx]}`;
+  // "100 MB", not "100.0 MB" - the same form the server uses in its messages.
+  return `${idx === 0 ? value : value.toFixed(1).replace(/\.0$/, "")} ${units[idx]}`;
 }
 
 function updateQuotaDisplay(usedBytes, totalBytes) {
@@ -1888,7 +1638,12 @@ function updateQuotaDisplay(usedBytes, totalBytes) {
   const total = Number(totalBytes) || 0;
   if (total <= 0) return;
 
-  quotaUsageText.textContent = `${formatBytes(used)} of ${formatBytes(total)} used`;
+  // Possible after an administrator lowered the quota below the usage.
+  const overQuota = used > total;
+  quotaUsageText.textContent =
+    `${formatBytes(used)} of ${formatBytes(total)} used` +
+    (overQuota ? " — over quota, new uploads are blocked" : "");
+  quotaUsageText.classList.toggle("is-over-quota", overQuota);
   if (quotaBar && quotaBarFill) {
     const pct = Math.min(100, (used / total) * 100);
     quotaBarFill.style.width = `${pct}%`;
@@ -1902,12 +1657,9 @@ async function loadUserQuota() {
   if (!token) return;
 
   try {
-    const { response } = await fetchWithFallback("/api/files/quota", {
-      method: "GET",
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-    });
+    const response = await apiJson("/api/files/quota", { token });
     if (response.ok) {
-      const data = await response.json();
+      const { data } = response;
       updateQuotaDisplay(data.usedStorageBytes, data.storageQuotaBytes);
     }
   } catch (err) {
@@ -1920,17 +1672,11 @@ async function loadUserNotifications() {
   if (!token || !notificationsList) return;
 
   try {
-    const { response } = await fetchWithFallback("/api/notifications", {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
-      },
-    });
+    const response = await apiJson("/api/notifications", { token });
 
     if (!response.ok) return;
 
-    const data = await response.json();
+    const { data } = response;
     const items = Array.isArray(data.notifications) ? data.notifications : [];
     renderNotifications(items);
   } catch (err) {
@@ -2012,19 +1758,12 @@ async function handleFileUploadChange(event) {
 
   try {
     // No Content-Type header: the browser sets multipart/form-data with the boundary.
-    const { response } = await fetchWithFallback("/api/files/upload", {
+    const response = await apiJson("/api/files/upload", {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      token,
       body: formData,
     });
-
-    const text = await response.text();
-    let data = {};
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { message: text.trim() };
-    }
+    const { data } = response;
 
     if (response.status === 201) {
       if (data.quota) {
@@ -2048,11 +1787,9 @@ async function handleFileUploadChange(event) {
     } else if (response.status === 413) {
       showAlert("danger", "File Too Large", data.message || "This file is too large to upload.");
     } else if (response.status === 401) {
-      session.end();
-      switchSection(loginSection);
-      showAlert("warning", "Session Expired", "Please sign in again.");
+      handleSessionExpired();
     } else if (response.status === 429) {
-      // fetchWithFallback already showed the "Too Many Requests" alert
+      // apiJson already showed the "Too Many Requests" alert
     } else {
       showAlert("danger", "Upload Failed", data.message || "Could not upload the file.");
     }
@@ -2124,22 +1861,9 @@ async function handleFileVersionUploadChange(event) {
   }
 
   try {
-    const { response } = await fetchWithFallback(
-      `/api/files/${encodeURIComponent(targetFile.id)}/version`,
-      {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-        body: formData,
-      },
-    );
-
-    const text = await response.text();
-    let data = {};
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { message: text.trim() };
-    }
+    const response = await apiJson(`/api/files/${encodeURIComponent(targetFile.id)}/version`,
+      { method: "POST", token, body: formData });
+    const { data } = response;
 
     if (response.ok) {
       if (data.quota && Number(data.quota.storageQuotaBytes) > 0) {
@@ -2164,11 +1888,9 @@ async function handleFileVersionUploadChange(event) {
     } else if (response.status === 413) {
       showAlert("danger", "File Too Large", data.message || "This file is too large to upload.");
     } else if (response.status === 401) {
-      session.end();
-      switchSection(loginSection);
-      showAlert("warning", "Session Expired", "Please sign in again.");
+      handleSessionExpired();
     } else if (response.status === 429) {
-      // fetchWithFallback već prikazuje upozorenje za previše zahtjeva
+      // apiJson already showed the "Too Many Requests" alert
     } else {
       showAlert(
         "danger",
@@ -2194,18 +1916,24 @@ async function handleFileVersionUploadChange(event) {
 // #region Admin Panel
 
 const adminEmailDisplay = document.getElementById("adminEmailDisplay");
-const adminToggleTokenBtn = document.getElementById("adminToggleTokenBtn");
-const adminJwtDrawer = document.getElementById("adminJwtDrawer");
-const adminJwtTokenDisplay = document.getElementById("adminJwtTokenDisplay");
 const adminLogoutBtn = document.getElementById("adminLogoutBtn");
 const adminLogoutSpinner = document.getElementById("adminLogoutSpinner");
 
-const adminTabUsers = document.getElementById("adminTabUsers");
-const adminTabNotifications = document.getElementById("adminTabNotifications");
-const adminUsersPanel = document.getElementById("adminUsersPanel");
-const adminNotificationsPanel = document.getElementById("adminNotificationsPanel");
+const adminTabs = {
+  users: {
+    button: document.getElementById("adminTabUsers"),
+    panel: document.getElementById("adminUsersPanel"),
+  },
+  quotaRequests: {
+    button: document.getElementById("adminTabQuotaRequests"),
+    panel: document.getElementById("adminQuotaRequestsPanel"),
+  },
+  notifications: {
+    button: document.getElementById("adminTabNotifications"),
+    panel: document.getElementById("adminNotificationsPanel"),
+  },
+};
 
-const adminPreviewBanner = document.getElementById("adminPreviewBanner");
 const adminStatUsers = document.getElementById("adminStatUsers");
 const adminStatUsed = document.getElementById("adminStatUsed");
 const adminStatQuota = document.getElementById("adminStatQuota");
@@ -2217,8 +1945,9 @@ const adminQuotaTargetTitle = document.getElementById("adminQuotaTargetTitle");
 const adminQuotaTargetMeta = document.getElementById("adminQuotaTargetMeta");
 const adminNewQuotaMbInput = document.getElementById("adminNewQuotaMbInput");
 const adminQuotaSubmitBtn = document.getElementById("adminQuotaSubmitBtn");
-const adminQuotaSpinner = document.getElementById("adminQuotaSpinner");
 const adminQuotaCancelBtn = document.getElementById("adminQuotaCancelBtn");
+const adminQuotaHint = document.getElementById("adminQuotaHint");
+const adminQuotaWarning = document.getElementById("adminQuotaWarning");
 const adminQuotaError = document.getElementById("adminQuotaError");
 const adminPresetBtns = document.querySelectorAll(".admin-preset-btn");
 
@@ -2226,47 +1955,10 @@ const adminUsersLoading = document.getElementById("adminUsersLoading");
 const adminUsersEmpty = document.getElementById("adminUsersEmpty");
 const adminUsersList = document.getElementById("adminUsersList");
 
-const MB_BYTES = 1024 * 1024;
 let adminUsers = [];
-let adminPreviewMode = false;
 let adminQuotaTargetUser = null;
 
-function createPreviewAdminUsers() {
-  return [
-    {
-      id: "preview-1",
-      firstName: "Petar",
-      lastName: "Petrovic",
-      email: "petar@example.com",
-      role: "RK",
-      isVerified: true,
-      usedStorageBytes: 72 * MB_BYTES,
-      storageQuotaBytes: 100 * MB_BYTES,
-    },
-    {
-      id: "preview-2",
-      firstName: "Milica",
-      lastName: "Jovanovic",
-      email: "milica@example.com",
-      role: "RK",
-      isVerified: true,
-      usedStorageBytes: 94 * MB_BYTES,
-      storageQuotaBytes: 100 * MB_BYTES,
-    },
-    {
-      id: "preview-3",
-      firstName: "Marko",
-      lastName: "Nikolic",
-      email: "marko@example.com",
-      role: "RK",
-      isVerified: false,
-      usedStorageBytes: 0,
-      storageQuotaBytes: 100 * MB_BYTES,
-    },
-  ];
-}
-
-function showAdminPanel(email, token) {
+function showAdminPanel(email) {
   activeLoginPassword = "";
   if (!canOpenAdminPanel()) {
     session.end();
@@ -2275,26 +1967,20 @@ function showAdminPanel(email, token) {
     return;
   }
   if (adminEmailDisplay) adminEmailDisplay.textContent = email;
-  if (adminJwtTokenDisplay) adminJwtTokenDisplay.value = token;
+  clearAdminQuotaRequests();
   switchSection(adminSection);
   switchAdminTab("users");
   loadAdminUsers();
+  refreshPendingQuotaRequestCount();
 }
 
 function switchAdminTab(tab) {
-  const showUsers = tab === "users";
-  if (adminTabUsers) {
-    adminTabUsers.classList.toggle("active", showUsers);
-    adminTabUsers.setAttribute("aria-selected", String(showUsers));
-  }
-  if (adminTabNotifications) {
-    adminTabNotifications.classList.toggle("active", !showUsers);
-    adminTabNotifications.setAttribute("aria-selected", String(!showUsers));
-  }
-  if (adminUsersPanel) adminUsersPanel.classList.toggle("hidden", !showUsers);
-  if (adminNotificationsPanel) {
-    adminNotificationsPanel.classList.toggle("hidden", showUsers);
-  }
+  Object.entries(adminTabs).forEach(([name, { button, panel }]) => {
+    const active = name === tab;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+    panel.classList.toggle("hidden", !active);
+  });
 }
 
 async function loadAdminUsers() {
@@ -2305,66 +1991,25 @@ async function loadAdminUsers() {
   }
 
   closeAdminQuotaForm();
-  if (adminUsersLoading) adminUsersLoading.classList.remove("hidden");
-  if (adminUsersEmpty) adminUsersEmpty.classList.add("hidden");
-  if (adminUsersList) adminUsersList.innerHTML = "";
+  adminUsersLoading.classList.remove("hidden");
+  adminUsersEmpty.classList.add("hidden");
+  adminUsersList.innerHTML = "";
 
   try {
-    const { response } = await fetchWithFallback("/api/admin/users", {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
-      },
-    });
+    const { ok, status, data } = await apiJson("/api/admin/users", { token });
 
-    if (response.status === 401) {
-      session.end();
-      switchSection(loginSection);
-      showAlert("warning", "Session Expired", "Please sign in again.");
-      return;
-    }
-
-    if (response.status === 404 || response.status === 501) {
-      adminPreviewMode = true;
-      if (adminUsers.length === 0) {
-        adminUsers = createPreviewAdminUsers();
-      }
-      if (adminPreviewBanner) adminPreviewBanner.classList.remove("hidden");
+    if (status === 401) {
+      handleSessionExpired();
+    } else if (!ok) {
+      showAlert("danger", "Error Loading Users", data.message || "Could not load users.");
+    } else {
+      adminUsers = data.users || [];
       renderAdminUsers();
-      return;
     }
-
-    const text = await response.text();
-    let data = {};
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { message: text.trim() };
-    }
-
-    if (!response.ok) {
-      showAlert(
-        "danger",
-        "Error Loading Users",
-        data.message || "Could not load users.",
-      );
-      return;
-    }
-
-    adminPreviewMode = false;
-    if (adminPreviewBanner) adminPreviewBanner.classList.add("hidden");
-    adminUsers = Array.isArray(data) ? data : data.users || [];
-    renderAdminUsers();
   } catch (err) {
-    adminPreviewMode = true;
-    if (adminUsers.length === 0) {
-      adminUsers = createPreviewAdminUsers();
-    }
-    if (adminPreviewBanner) adminPreviewBanner.classList.remove("hidden");
-    renderAdminUsers();
+    showAlert("danger", "Connection Error", "Could not load users.");
   } finally {
-    if (adminUsersLoading) adminUsersLoading.classList.add("hidden");
+    adminUsersLoading.classList.add("hidden");
   }
 }
 
@@ -2425,6 +2070,7 @@ function renderAdminUsers() {
           <span class="status-pill ${user.isVerified ? "verified" : "unverified"}">
             ${user.isVerified ? "Verified" : "Unverified"}
           </span>
+          ${used > quota ? '<span class="status-pill request-rejected">Over quota</span>' : ""}
         </div>
         <div class="admin-user-email"></div>
       </div>
@@ -2437,8 +2083,8 @@ function renderAdminUsers() {
         </div>
       </div>
       <div class="admin-user-actions">
-        <button type="button" class="btn-outline-sm admin-increase-quota-btn">
-          + Increase Storage
+        <button type="button" class="btn-outline-sm admin-edit-quota-btn">
+          Edit Quota
         </button>
       </div>
     `;
@@ -2446,192 +2092,140 @@ function renderAdminUsers() {
     row.querySelector(".admin-user-name").textContent = fullName;
     row.querySelector(".admin-user-email").textContent = user.email || "";
 
-    const increaseBtn = row.querySelector(".admin-increase-quota-btn");
-    increaseBtn.addEventListener("click", () => openAdminQuotaForm(user));
+    row
+      .querySelector(".admin-edit-quota-btn")
+      .addEventListener("click", () => openAdminQuotaForm(user));
 
     adminUsersList.appendChild(row);
   });
 }
 
-function openAdminQuotaForm(user) {
+async function openAdminQuotaForm(user) {
   hideAlert();
   adminQuotaTargetUser = user;
-  const currentMb = Math.round((Number(user.storageQuotaBytes) || 0) / MB_BYTES);
-  const usedStr = formatBytes(user.usedStorageBytes);
-  const quotaStr = formatBytes(user.storageQuotaBytes);
   const fullName =
     `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email;
 
-  if (adminQuotaTargetTitle) {
-    adminQuotaTargetTitle.textContent = `Increase Storage for ${fullName}`;
-  }
-  if (adminQuotaTargetMeta) {
-    adminQuotaTargetMeta.textContent = `${user.email} • Current usage: ${usedStr} / ${quotaStr}`;
-  }
-  if (adminNewQuotaMbInput) {
-    adminNewQuotaMbInput.min = String(currentMb + 1);
-    adminNewQuotaMbInput.value = String(currentMb + 100);
-    adminNewQuotaMbInput.classList.remove("is-invalid");
-    adminNewQuotaMbInput.focus();
-  }
-  if (adminQuotaError) adminQuotaError.textContent = "";
-  if (adminQuotaForm) adminQuotaForm.classList.remove("hidden");
+  adminQuotaTargetTitle.textContent = `Edit Storage Quota for ${fullName}`;
+  adminQuotaTargetMeta.textContent =
+    `${user.email} • Current usage: ${formatBytes(user.usedStorageBytes)} / ${formatBytes(user.storageQuotaBytes)}`;
+  adminNewQuotaMbInput.value = String(toMb(user.storageQuotaBytes));
+  setFieldError(adminNewQuotaMbInput, adminQuotaError, "");
+  adminQuotaWarning.classList.add("hidden");
+  adminQuotaForm.classList.remove("hidden");
+  adminNewQuotaMbInput.focus();
+
+  const limits = await loadLimits();
+  adminQuotaHint.textContent = limits ? quotaRangeHint(limits) : "";
 }
 
 function closeAdminQuotaForm() {
   adminQuotaTargetUser = null;
-  if (adminQuotaForm) adminQuotaForm.classList.add("hidden");
-  if (adminNewQuotaMbInput) {
-    adminNewQuotaMbInput.value = "";
-    adminNewQuotaMbInput.classList.remove("is-invalid");
-  }
-  if (adminQuotaError) adminQuotaError.textContent = "";
+  adminQuotaForm.classList.add("hidden");
+  adminNewQuotaMbInput.value = "";
+  setFieldError(adminNewQuotaMbInput, adminQuotaError, "");
+  adminQuotaWarning.classList.add("hidden");
+}
+
+// The entered quota in bytes (0 when the field holds no number).
+function enteredQuotaBytes(input) {
+  return Math.round(Number(input.value) * BYTES_PER_MB) || 0;
+}
+
+// Live feedback: out of range, or below what the user already stores.
+function checkAdminQuotaInput() {
+  if (!adminQuotaTargetUser || !appLimits) return;
+  const bytes = enteredQuotaBytes(adminNewQuotaMbInput);
+  const problem = quotaRangeProblem(bytes, appLimits);
+  setFieldError(adminNewQuotaMbInput, adminQuotaError, problem);
+
+  const used = Number(adminQuotaTargetUser.usedStorageBytes) || 0;
+  const belowUsage = !problem && bytes < used;
+  adminQuotaWarning.textContent = belowUsage
+    ? `This is below the current usage of ${formatBytes(used)}. No files are deleted, but the user cannot upload until the usage fits.`
+    : "";
+  adminQuotaWarning.classList.toggle("hidden", !belowUsage);
 }
 
 async function handleAdminQuotaSubmit(event) {
   event.preventDefault();
   hideAlert();
-  if (!adminQuotaTargetUser) return;
+  const user = adminQuotaTargetUser;
+  if (!user) return;
 
-  const currentQuotaBytes = Number(adminQuotaTargetUser.storageQuotaBytes) || 0;
-  const currentMb = Math.round(currentQuotaBytes / MB_BYTES);
-  const newMb = Number(adminNewQuotaMbInput.value);
-
-  if (!Number.isFinite(newMb) || newMb <= currentMb) {
-    adminNewQuotaMbInput.classList.add("is-invalid");
-    adminQuotaError.textContent = `New quota must be greater than current ${currentMb} MB.`;
+  const limits = await loadLimits();
+  if (!limits) {
+    setFieldError(adminNewQuotaMbInput, adminQuotaError, "Could not load the quota limits. Try again.");
     return;
   }
 
-  adminNewQuotaMbInput.classList.remove("is-invalid");
-  adminQuotaError.textContent = "";
+  const bytes = enteredQuotaBytes(adminNewQuotaMbInput);
+  const unchanged = Number(adminNewQuotaMbInput.value) === toMb(user.storageQuotaBytes);
+  const problem =
+    quotaRangeProblem(bytes, limits) ||
+    (unchanged ? "That is already the current quota" : "");
+  setFieldError(adminNewQuotaMbInput, adminQuotaError, problem);
+  if (problem) return;
 
-  const newQuotaBytes = Math.round(newMb * MB_BYTES);
-  const token = session.token;
-  if (!token) {
-    switchSection(loginSection);
-    return;
-  }
-
-  adminQuotaSubmitBtn.disabled = true;
-  adminQuotaSpinner.classList.remove("hidden");
-
+  setButtonBusy(adminQuotaSubmitBtn, true);
   try {
-    if (!adminPreviewMode) {
-      const { response } = await fetchWithFallback(
-        `/api/admin/users/${encodeURIComponent(adminQuotaTargetUser.id)}/quota`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ storageQuotaBytes: newQuotaBytes }),
-        },
+    const { ok, status, data } = await apiJson(
+      `/api/admin/users/${encodeURIComponent(user.id)}/quota`,
+      { method: "PATCH", token: session.token, body: { storageQuotaBytes: bytes } },
+    );
+
+    if (status === 401) {
+      handleSessionExpired();
+    } else if (!ok) {
+      setFieldError(adminNewQuotaMbInput, adminQuotaError, data.message || "Failed to update storage quota.");
+    } else {
+      adminUsers = adminUsers.map((u) => (u.id === user.id ? data : u));
+      closeAdminQuotaForm();
+      renderAdminUsers();
+      showAlert(
+        "success",
+        "Storage Quota Updated",
+        `Storage quota for ${user.email} is now ${formatBytes(bytes)}.`,
       );
-
-      if (response.status === 401) {
-        session.end();
-        switchSection(loginSection);
-        showAlert("warning", "Session Expired", "Please sign in again.");
-        return;
-      }
-
-      if (response.status !== 404 && response.status !== 501 && !response.ok) {
-        const text = await response.text();
-        let data = {};
-        try {
-          data = JSON.parse(text);
-        } catch {
-          data = { message: text.trim() };
-        }
-        adminNewQuotaMbInput.classList.add("is-invalid");
-        adminQuotaError.textContent =
-          data.message || "Failed to update storage quota.";
-        return;
-      }
     }
-
-    const updatedEmail = adminQuotaTargetUser.email;
-    adminUsers = adminUsers.map((u) =>
-      u.id === adminQuotaTargetUser.id
-        ? { ...u, storageQuotaBytes: newQuotaBytes }
-        : u,
-    );
-    closeAdminQuotaForm();
-    renderAdminUsers();
-    showAlert(
-      "success",
-      "Storage Quota Updated",
-      `Storage quota for ${updatedEmail} increased to ${formatBytes(newQuotaBytes)}.`,
-    );
   } catch (err) {
-    const updatedEmail = adminQuotaTargetUser.email;
-    adminUsers = adminUsers.map((u) =>
-      u.id === adminQuotaTargetUser.id
-        ? { ...u, storageQuotaBytes: newQuotaBytes }
-        : u,
-    );
-    closeAdminQuotaForm();
-    renderAdminUsers();
-    showAlert(
-      "success",
-      "Storage Quota Updated (Preview)",
-      `Storage quota for ${updatedEmail} increased to ${formatBytes(newQuotaBytes)}.`,
-    );
+    showAlert("danger", "Connection Error", "Could not reach the server. The quota may not have changed.");
   } finally {
-    adminQuotaSubmitBtn.disabled = false;
-    adminQuotaSpinner.classList.add("hidden");
+    setButtonBusy(adminQuotaSubmitBtn, false);
   }
 }
 
-if (adminToggleTokenBtn) {
-  adminToggleTokenBtn.addEventListener("click", () => {
-    if (adminJwtDrawer) adminJwtDrawer.classList.toggle("hidden");
-  });
-}
 if (adminLogoutBtn) {
   adminLogoutBtn.addEventListener("click", async () => {
     adminLogoutBtn.disabled = true;
     if (adminLogoutSpinner) adminLogoutSpinner.classList.remove("hidden");
     await handleLogout();
     adminUsers = [];
-    closeAdminQuotaForm();
     adminLogoutBtn.disabled = false;
     if (adminLogoutSpinner) adminLogoutSpinner.classList.add("hidden");
   });
 }
-if (adminTabUsers) {
-  adminTabUsers.addEventListener("click", () => switchAdminTab("users"));
-}
-if (adminTabNotifications) {
-  adminTabNotifications.addEventListener("click", () =>
-    switchAdminTab("notifications"),
-  );
-}
+Object.entries(adminTabs).forEach(([name, { button }]) => {
+  button.addEventListener("click", () => {
+    hideAlert();
+    switchAdminTab(name);
+    if (name === "quotaRequests") loadAdminQuotaRequests();
+  });
+});
 if (adminUserSearchInput) {
   adminUserSearchInput.addEventListener("input", renderAdminUsers);
 }
 if (adminRefreshUsersBtn) {
   adminRefreshUsersBtn.addEventListener("click", loadAdminUsers);
 }
-if (adminQuotaCancelBtn) {
-  adminQuotaCancelBtn.addEventListener("click", closeAdminQuotaForm);
-}
-if (adminQuotaForm) {
-  adminQuotaForm.addEventListener("submit", handleAdminQuotaSubmit);
-}
+adminQuotaCancelBtn.addEventListener("click", closeAdminQuotaForm);
+adminQuotaForm.addEventListener("submit", handleAdminQuotaSubmit);
+adminNewQuotaMbInput.addEventListener("input", checkAdminQuotaInput);
 adminPresetBtns.forEach((btn) => {
   btn.addEventListener("click", () => {
-    if (!adminQuotaTargetUser || !adminNewQuotaMbInput) return;
-    const addMb = Number(btn.dataset.addMb) || 0;
-    const currentMb = Math.round(
-      (Number(adminQuotaTargetUser.storageQuotaBytes) || 0) / MB_BYTES,
-    );
-    const baseMb = Math.max(currentMb, Number(adminNewQuotaMbInput.value) || 0);
-    adminNewQuotaMbInput.value = String(baseMb + addMb);
-    adminNewQuotaMbInput.classList.remove("is-invalid");
-    if (adminQuotaError) adminQuotaError.textContent = "";
+    const next = (Number(adminNewQuotaMbInput.value) || 0) + Number(btn.dataset.addMb);
+    adminNewQuotaMbInput.value = String(Math.max(next, 0));
+    checkAdminQuotaInput();
   });
 });
 
@@ -2661,34 +2255,16 @@ async function handleRenameFileSubmit(event) {
   renameFileSpinner.classList.remove("hidden");
 
   try {
-    const { response } = await fetchWithFallback(
-      `/api/files/${encodeURIComponent(renameFileTarget.id)}`,
-      {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ name: newName }),
-      },
-    );
-
-    const text = await response.text();
-    let data = {};
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { message: text.trim() };
-    }
+    const response = await apiJson(`/api/files/${encodeURIComponent(renameFileTarget.id)}`,
+      { method: "PATCH", token, body: { name: newName } });
+    const { data } = response;
 
     if (response.ok) {
       closeRenameFileForm();
       showAlert("success", "File Renamed", `File renamed to "${newName}".`);
       await loadFolderContents(currentFolderId);
     } else if (response.status === 401) {
-      session.end();
-      switchSection(loginSection);
-      showAlert("warning", "Session Expired", "Please sign in again.");
+      handleSessionExpired();
     } else if (response.status === 403) {
       showAlert("danger", "Access Denied", "You do not have permission to rename this file.");
     } else {

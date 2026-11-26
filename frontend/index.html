@@ -153,6 +153,13 @@
                   </button>
                 </div>
                 <span class="field-error" id="loginPasswordError"></span>
+                <button
+                  type="button"
+                  id="forgotPasswordLink"
+                  class="btn-link forgot-password-link"
+                >
+                  Forgot password?
+                </button>
               </div>
 
               <button type="submit" id="loginSubmitBtn" class="btn-submit">
@@ -180,6 +187,206 @@
             </form>
           </div>
 
+          <!-- FORGOT PASSWORD: request a reset link -->
+          <div id="forgotPasswordSection" class="auth-section hidden">
+            <div class="card-header">
+              <h1 class="card-title">Forgot Password</h1>
+              <p class="card-subtitle">
+                Enter your email address and we will send you a reset link
+              </p>
+            </div>
+
+            <form id="forgotPasswordForm" class="auth-form" novalidate>
+              <div class="form-group">
+                <label for="forgotEmail" class="form-label"
+                  >Email Address <span class="required">*</span></label
+                >
+                <div class="input-wrapper">
+                  <input
+                    type="email"
+                    id="forgotEmail"
+                    maxlength="254"
+                    class="form-input"
+                    placeholder="petar@example.com"
+                    autocomplete="email"
+                    required
+                  />
+                </div>
+                <span class="field-error" id="forgotEmailError"></span>
+              </div>
+
+              <button type="submit" id="forgotSubmitBtn" class="btn-submit">
+                <span class="btn-text">Send Reset Link</span>
+                <span class="btn-spinner hidden"></span>
+              </button>
+
+              <div class="form-back-row">
+                <button type="button" id="forgotBackBtn" class="btn-link text-subtle">
+                  ← Back to Login
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- RESET PASSWORD: opened from the emailed link (/?resetToken=...) -->
+          <div id="resetPasswordSection" class="auth-section hidden">
+            <div class="card-header">
+              <h1 class="card-title">Set a New Password</h1>
+              <p class="card-subtitle">Choose a new password for your account</p>
+            </div>
+
+            <form id="resetPasswordForm" class="auth-form" novalidate>
+              <div class="form-group">
+                <label for="resetNewPassword" class="form-label"
+                  >New Password <span class="required">*</span></label
+                >
+                <div class="input-wrapper">
+                  <input
+                    type="password"
+                    id="resetNewPassword"
+                    class="form-input"
+                    placeholder="Enter a new password"
+                    autocomplete="new-password"
+                    data-password-toggle
+                    maxlength="72"
+                    required
+                  />
+                </div>
+                <span class="field-error" id="resetNewPasswordError"></span>
+                <div
+                  class="password-strength-container"
+                  id="resetStrengthContainer"
+                ></div>
+              </div>
+
+              <div class="form-group">
+                <label for="resetConfirmPassword" class="form-label"
+                  >Confirm New Password <span class="required">*</span></label
+                >
+                <div class="input-wrapper">
+                  <input
+                    type="password"
+                    id="resetConfirmPassword"
+                    class="form-input"
+                    placeholder="Re-enter your new password"
+                    autocomplete="new-password"
+                    data-password-toggle
+                    maxlength="72"
+                    required
+                  />
+                </div>
+                <span class="field-error" id="resetConfirmPasswordError"></span>
+                <div
+                  class="password-match-status"
+                  id="resetPasswordMatchStatus"
+                ></div>
+              </div>
+
+              <button type="submit" id="resetSubmitBtn" class="btn-submit">
+                <span class="btn-text">Set New Password</span>
+                <span class="btn-spinner hidden"></span>
+              </button>
+            </form>
+
+            <div class="form-back-row">
+              <button type="button" id="resetBackBtn" class="btn-link text-subtle">
+                ← Back to Login
+              </button>
+            </div>
+          </div>
+
+          <!-- ACCOUNT: change password while signed in (users and admins) -->
+          <div id="changePasswordSection" class="auth-section hidden">
+            <div class="card-header">
+              <h1 class="card-title">Change Password</h1>
+              <p class="card-subtitle">
+                Signed in as <strong id="changePasswordAccount"></strong>
+              </p>
+            </div>
+
+            <form id="changePasswordForm" class="auth-form" novalidate>
+              <div class="form-group">
+                <label for="changeCurrentPassword" class="form-label"
+                  >Current Password <span class="required">*</span></label
+                >
+                <div class="input-wrapper">
+                  <input
+                    type="password"
+                    id="changeCurrentPassword"
+                    maxlength="72"
+                    class="form-input"
+                    placeholder="Enter your current password"
+                    autocomplete="current-password"
+                    data-password-toggle
+                    required
+                  />
+                </div>
+                <span class="field-error" id="changeCurrentPasswordError"></span>
+              </div>
+
+              <div class="form-group">
+                <label for="changeNewPassword" class="form-label"
+                  >New Password <span class="required">*</span></label
+                >
+                <div class="input-wrapper">
+                  <input
+                    type="password"
+                    id="changeNewPassword"
+                    class="form-input"
+                    placeholder="Enter a new password"
+                    autocomplete="new-password"
+                    data-password-toggle
+                    maxlength="72"
+                    required
+                  />
+                </div>
+                <span class="field-error" id="changeNewPasswordError"></span>
+                <div
+                  class="password-strength-container"
+                  id="changeStrengthContainer"
+                ></div>
+              </div>
+
+              <div class="form-group">
+                <label for="changeConfirmPassword" class="form-label"
+                  >Confirm New Password <span class="required">*</span></label
+                >
+                <div class="input-wrapper">
+                  <input
+                    type="password"
+                    id="changeConfirmPassword"
+                    class="form-input"
+                    placeholder="Re-enter your new password"
+                    autocomplete="new-password"
+                    data-password-toggle
+                    maxlength="72"
+                    required
+                  />
+                </div>
+                <span class="field-error" id="changeConfirmPasswordError"></span>
+                <div
+                  class="password-match-status"
+                  id="changePasswordMatchStatus"
+                ></div>
+              </div>
+
+              <button type="submit" id="changePasswordSubmitBtn" class="btn-submit">
+                <span class="btn-text">Change Password</span>
+                <span class="btn-spinner hidden"></span>
+              </button>
+
+              <div class="form-back-row">
+                <button
+                  type="button"
+                  id="changePasswordBackBtn"
+                  class="btn-link text-subtle"
+                >
+                  ← Back
+                </button>
+              </div>
+            </form>
+          </div>
+
           <!-- FORCED PASSWORD CHANGE (Task 3) -->
           <div id="forceChangePasswordSection" class="auth-section hidden">
             <div class="card-header">
@@ -199,10 +406,10 @@
                   <input
                     type="password"
                     id="forceNewPassword"
-                    maxlength="72"
                     class="form-input"
-                    placeholder="At least 8 chars with upper, lower, digit & symbol"
+                    placeholder="Enter a strong password"
                     autocomplete="new-password"
+                    maxlength="72"
                     required
                   />
                   <button
@@ -245,39 +452,7 @@
                 <div
                   class="password-strength-container"
                   id="forceStrengthContainer"
-                >
-                  <div class="strength-meter-bar">
-                    <div
-                      class="strength-meter-fill"
-                      id="forceStrengthBarFill"
-                    ></div>
-                  </div>
-                  <div class="strength-label">
-                    Password strength:
-                    <strong id="forceStrengthLabelText">None</strong>
-                  </div>
-
-                  <ul class="strength-checklist" id="forceStrengthChecklist">
-                    <li id="force-rule-length" class="rule-item">
-                      <span class="rule-dot"></span> At least 8 characters
-                    </li>
-                    <li id="force-rule-uppercase" class="rule-item">
-                      <span class="rule-dot"></span> At least one uppercase
-                      letter (A-Z)
-                    </li>
-                    <li id="force-rule-lowercase" class="rule-item">
-                      <span class="rule-dot"></span> At least one lowercase
-                      letter (a-z)
-                    </li>
-                    <li id="force-rule-number" class="rule-item">
-                      <span class="rule-dot"></span> At least one number (0-9)
-                    </li>
-                    <li id="force-rule-special" class="rule-item">
-                      <span class="rule-dot"></span> At least one special symbol
-                      (!@#~$%^&*()+|_.,&lt;&gt;?/{}-)
-                    </li>
-                  </ul>
-                </div>
+                ></div>
               </div>
 
               <div class="form-group">
@@ -288,10 +463,10 @@
                   <input
                     type="password"
                     id="forceConfirmPassword"
-                    maxlength="72"
                     class="form-input"
                     placeholder="Re-enter your new password"
                     autocomplete="new-password"
+                    maxlength="72"
                     required
                   />
                   <button
@@ -412,6 +587,13 @@
                   <div class="quota-bar hidden" id="quotaBar" aria-hidden="true">
                     <div class="quota-bar-fill" id="quotaBarFill"></div>
                   </div>
+                  <button
+                    type="button"
+                    id="quotaRequestOpenBtn"
+                    class="btn-link quota-request-link"
+                  >
+                    Request more storage
+                  </button>
                 </div>
               </div>
               <div class="storage-topbar-actions">
@@ -455,12 +637,51 @@
                   </div>
                 </div>
 
-                
+                <button type="button" class="btn-outline-sm open-change-password-btn">
+                  Change Password
+                </button>
                 <button type="button" id="logoutBtn" class="btn-danger-sm">
                   <span class="btn-text">Logout</span>
                   <span class="btn-spinner hidden" id="logoutSpinner"></span>
                 </button>
               </div>
+            </div>
+
+            <!-- Request a storage quota increase -->
+            <div id="quotaRequestPanel" class="create-folder-box hidden">
+              <div class="admin-quota-header">
+                <div class="admin-quota-title">Request Storage Quota Increase</div>
+                <div class="admin-quota-subtitle" id="quotaRequestSummary"></div>
+              </div>
+              <p class="quota-request-notice" id="quotaRequestNotice"></p>
+              <form id="quotaRequestForm" class="hidden" novalidate>
+                <label for="quotaRequestInput" class="form-label">
+                  New total quota (MB)
+                </label>
+                <div class="create-folder-row">
+                  <input
+                    type="number"
+                    id="quotaRequestInput"
+                    class="form-input"
+                    step="any"
+                    required
+                  />
+                  <button
+                    type="submit"
+                    id="quotaRequestSubmitBtn"
+                    class="btn-primary-sm"
+                  >
+                    <span class="btn-text">Send Request</span>
+                    <span class="btn-spinner hidden"></span>
+                  </button>
+                </div>
+                <div class="quota-input-hint" id="quotaRequestHint"></div>
+                <span class="field-error" id="quotaRequestError"></span>
+              </form>
+              <ul class="quota-history" id="quotaRequestHistory"></ul>
+              <button type="button" id="quotaRequestCloseBtn" class="btn-outline-sm">
+                Close
+              </button>
             </div>
 
             <!-- Breadcrumb & Navigation Bar -->
@@ -679,6 +900,9 @@
                 </div>
               </div>
               <div class="storage-topbar-actions">
+                <button type="button" class="btn-outline-sm open-change-password-btn">
+                  Change Password
+                </button>
                 <button type="button" id="adminLogoutBtn" class="btn-danger-sm">
                   <span class="btn-text">Logout</span>
                   <span
@@ -702,6 +926,16 @@
               </button>
               <button
                 type="button"
+                id="adminTabQuotaRequests"
+                class="admin-tab-btn"
+                role="tab"
+                aria-selected="false"
+              >
+                Quota Requests
+                <span id="adminQuotaRequestsCount" class="bell-badge hidden">0</span>
+              </button>
+              <button
+                type="button"
                 id="adminTabNotifications"
                 class="admin-tab-btn"
                 role="tab"
@@ -713,12 +947,6 @@
 
             <!-- Tab 1: Users & Storage -->
             <div id="adminUsersPanel" class="admin-tab-panel">
-              <div id="adminPreviewBanner" class="admin-preview-banner hidden">
-                Backend admin API is not connected yet — showing preview data.
-                Quota changes apply locally until
-                <code>/api/admin/users</code> is available.
-              </div>
-
               <!-- Summary Stats -->
               <div class="admin-stats-grid">
                 <div class="admin-stat-card">
@@ -752,7 +980,7 @@
                 </button>
               </div>
 
-              <!-- Inline Increase Storage Quota Form -->
+              <!-- Inline Edit Storage Quota Form -->
               <form
                 id="adminQuotaForm"
                 class="create-folder-box admin-quota-box hidden"
@@ -761,16 +989,16 @@
                 <div class="admin-quota-header">
                   <div>
                     <div class="admin-quota-title" id="adminQuotaTargetTitle">
-                      Increase Storage Quota
+                      Edit Storage Quota
                     </div>
                     <div class="admin-quota-subtitle" id="adminQuotaTargetMeta"></div>
                   </div>
                 </div>
                 <div class="admin-quota-presets">
-                  <span class="admin-presets-label">Quick add:</span>
-                  <button type="button" class="btn-outline-sm admin-preset-btn" data-add-mb="50">+50 MB</button>
+                  <span class="admin-presets-label">Quick adjust:</span>
+                  <button type="button" class="btn-outline-sm admin-preset-btn" data-add-mb="-1024">−1 GB</button>
+                  <button type="button" class="btn-outline-sm admin-preset-btn" data-add-mb="-100">−100 MB</button>
                   <button type="button" class="btn-outline-sm admin-preset-btn" data-add-mb="100">+100 MB</button>
-                  <button type="button" class="btn-outline-sm admin-preset-btn" data-add-mb="500">+500 MB</button>
                   <button type="button" class="btn-outline-sm admin-preset-btn" data-add-mb="1024">+1 GB</button>
                 </div>
                 <div class="create-folder-row">
@@ -782,8 +1010,7 @@
                       type="number"
                       id="adminNewQuotaMbInput"
                       class="form-input"
-                      min="1"
-                      step="1"
+                      step="any"
                       required
                     />
                   </div>
@@ -806,6 +1033,8 @@
                     Cancel
                   </button>
                 </div>
+                <div class="quota-input-hint" id="adminQuotaHint"></div>
+                <div class="quota-input-warning hidden" id="adminQuotaWarning"></div>
                 <span class="field-error" id="adminQuotaError"></span>
               </form>
 
@@ -824,7 +1053,40 @@
               <div id="adminUsersList" class="admin-users-list"></div>
             </div>
 
-            <!-- Tab 2: Notifications (Placeholder) -->
+            <!-- Tab 2: Quota Requests -->
+            <div id="adminQuotaRequestsPanel" class="admin-tab-panel hidden">
+              <div class="admin-toolbar">
+                <select
+                  id="adminQuotaRequestFilter"
+                  class="form-input admin-search-input"
+                  aria-label="Filter requests by status"
+                >
+                  <option value="pending">Pending requests</option>
+                  <option value="">All requests (history)</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+                <button
+                  type="button"
+                  id="adminRefreshQuotaRequestsBtn"
+                  class="btn-outline-sm"
+                >
+                  ↻ Refresh
+                </button>
+              </div>
+              <div id="adminQuotaRequestsLoading" class="folder-loading hidden">
+                Loading quota requests...
+              </div>
+              <div id="adminQuotaRequestsEmpty" class="folder-empty hidden">
+                <p class="empty-title">No quota requests to show</p>
+                <p class="empty-subtitle">
+                  Requests from users appear here for you to approve or reject.
+                </p>
+              </div>
+              <div id="adminQuotaRequestsList" class="admin-users-list"></div>
+            </div>
+
+            <!-- Tab 3: Notifications (Placeholder) -->
             <div id="adminNotificationsPanel" class="admin-tab-panel hidden">
               <div class="folder-empty admin-notifications-placeholder">
                 <svg
@@ -841,8 +1103,8 @@
                 </svg>
                 <p class="empty-title">Notifications Coming Soon</p>
                 <p class="empty-subtitle">
-                  System alerts, quota requests, and security notifications will
-                  appear here once implemented.
+                  System alerts and security notifications will appear here once
+                  implemented.
                 </p>
               </div>
             </div>
@@ -852,8 +1114,8 @@
           <div id="registerSection" class="auth-section hidden">
             <div class="card-header">
               <h1 class="card-title">Create Account</h1>
-              <p class="card-subtitle">
-                Sign up to get 100 MB of secure cloud storage
+              <p class="card-subtitle" id="registerSubtitle">
+                Sign up for secure cloud storage
               </p>
             </div>
 
@@ -867,11 +1129,11 @@
                     <input
                       type="text"
                       id="firstName"
-                      maxlength="100"
                       name="firstName"
                       class="form-input"
                       placeholder="e.g. Petar"
                       autocomplete="given-name"
+                      maxlength="100"
                       required
                     />
                   </div>
@@ -886,11 +1148,11 @@
                     <input
                       type="text"
                       id="lastName"
-                      maxlength="100"
                       name="lastName"
                       class="form-input"
                       placeholder="e.g. Petrovic"
                       autocomplete="family-name"
+                      maxlength="100"
                       required
                     />
                   </div>
@@ -925,11 +1187,11 @@
                   <input
                     type="password"
                     id="password"
-                    maxlength="72"
                     name="password"
                     class="form-input"
-                    placeholder="At least 8 chars with upper, lower, digit & symbol"
+                    placeholder="Enter a strong password"
                     autocomplete="new-password"
+                    maxlength="72"
                     required
                   />
                   <button
@@ -969,36 +1231,7 @@
                 </div>
                 <span class="field-error" id="passwordError"></span>
 
-                <div class="password-strength-container" id="strengthContainer">
-                  <div class="strength-meter-bar">
-                    <div class="strength-meter-fill" id="strengthBarFill"></div>
-                  </div>
-                  <div class="strength-label">
-                    Password strength:
-                    <strong id="strengthLabelText">None</strong>
-                  </div>
-
-                  <ul class="strength-checklist" id="strengthChecklist">
-                    <li id="rule-length" class="rule-item">
-                      <span class="rule-dot"></span> At least 8 characters
-                    </li>
-                    <li id="rule-uppercase" class="rule-item">
-                      <span class="rule-dot"></span> At least one uppercase
-                      letter (A-Z)
-                    </li>
-                    <li id="rule-lowercase" class="rule-item">
-                      <span class="rule-dot"></span> At least one lowercase
-                      letter (a-z)
-                    </li>
-                    <li id="rule-number" class="rule-item">
-                      <span class="rule-dot"></span> At least one number (0-9)
-                    </li>
-                    <li id="rule-special" class="rule-item">
-                      <span class="rule-dot"></span> At least one special symbol
-                      (!@#~$%^&*()+|_.,&lt;&gt;?/{}-)
-                    </li>
-                  </ul>
-                </div>
+                <div class="password-strength-container" id="strengthContainer"></div>
               </div>
 
               <div class="form-group">
@@ -1009,11 +1242,11 @@
                   <input
                     type="password"
                     id="confirmPassword"
-                    maxlength="72"
                     name="confirmPassword"
                     class="form-input"
                     placeholder="Re-enter your password"
                     autocomplete="new-password"
+                    maxlength="72"
                     required
                   />
                   <button
@@ -1083,6 +1316,9 @@
 
     <script src="validation.js"></script>
     <script src="secure-session.js"></script>
+    <script src="api.js"></script>
     <script src="app.js"></script>
+    <script src="account.js"></script>
+    <script src="quota-requests.js"></script>
   </body>
 </html>

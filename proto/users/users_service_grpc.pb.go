@@ -43,6 +43,8 @@ const (
 	UsersService_ValidateResetToken_FullMethodName    = "/users.UsersService/ValidateResetToken"
 	UsersService_ResetPassword_FullMethodName         = "/users.UsersService/ResetPassword"
 	UsersService_ChangeExpiredPassword_FullMethodName = "/users.UsersService/ChangeExpiredPassword"
+	UsersService_ChangePassword_FullMethodName        = "/users.UsersService/ChangePassword"
+	UsersService_GetLimits_FullMethodName             = "/users.UsersService/GetLimits"
 	UsersService_RequestMagicLink_FullMethodName      = "/users.UsersService/RequestMagicLink"
 	UsersService_MagicLinkLogin_FullMethodName        = "/users.UsersService/MagicLinkLogin"
 	UsersService_ListUsers_FullMethodName             = "/users.UsersService/ListUsers"
@@ -75,6 +77,13 @@ type UsersServiceClient interface {
 	// The restricted JWT travels in the HTTP "Authorization: Bearer ..." header,
 	// which grpc-gateway forwards as gRPC metadata key "authorization".
 	ChangeExpiredPassword(ctx context.Context, in *ChangeExpiredPasswordRequest, opts ...grpc.CallOption) (*MessageResponse, error)
+	// POST /api/users/change-password - a signed-in user replaces their password.
+	// Requires the session JWT, and the current password has to be supplied again.
+	ChangePassword(ctx context.Context, in *ChangePasswordRequest, opts ...grpc.CallOption) (*MessageResponse, error)
+	// GET /api/config/limits - the limits set in config.yaml, so the frontend can
+	// validate and label its inputs with the same values. Public: the
+	// registration form needs them before anyone is signed in.
+	GetLimits(ctx context.Context, in *GetLimitsRequest, opts ...grpc.CallOption) (*LimitsResponse, error)
 	// POST /api/users/magic-link-request
 	RequestMagicLink(ctx context.Context, in *MagicLinkRequest, opts ...grpc.CallOption) (*MessageResponse, error)
 	// POST /api/users/magic-link-login
@@ -193,6 +202,26 @@ func (c *usersServiceClient) ChangeExpiredPassword(ctx context.Context, in *Chan
 	return out, nil
 }
 
+func (c *usersServiceClient) ChangePassword(ctx context.Context, in *ChangePasswordRequest, opts ...grpc.CallOption) (*MessageResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MessageResponse)
+	err := c.cc.Invoke(ctx, UsersService_ChangePassword_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *usersServiceClient) GetLimits(ctx context.Context, in *GetLimitsRequest, opts ...grpc.CallOption) (*LimitsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LimitsResponse)
+	err := c.cc.Invoke(ctx, UsersService_GetLimits_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *usersServiceClient) RequestMagicLink(ctx context.Context, in *MagicLinkRequest, opts ...grpc.CallOption) (*MessageResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(MessageResponse)
@@ -259,6 +288,13 @@ type UsersServiceServer interface {
 	// The restricted JWT travels in the HTTP "Authorization: Bearer ..." header,
 	// which grpc-gateway forwards as gRPC metadata key "authorization".
 	ChangeExpiredPassword(context.Context, *ChangeExpiredPasswordRequest) (*MessageResponse, error)
+	// POST /api/users/change-password - a signed-in user replaces their password.
+	// Requires the session JWT, and the current password has to be supplied again.
+	ChangePassword(context.Context, *ChangePasswordRequest) (*MessageResponse, error)
+	// GET /api/config/limits - the limits set in config.yaml, so the frontend can
+	// validate and label its inputs with the same values. Public: the
+	// registration form needs them before anyone is signed in.
+	GetLimits(context.Context, *GetLimitsRequest) (*LimitsResponse, error)
 	// POST /api/users/magic-link-request
 	RequestMagicLink(context.Context, *MagicLinkRequest) (*MessageResponse, error)
 	// POST /api/users/magic-link-login
@@ -306,6 +342,12 @@ func (UnimplementedUsersServiceServer) ResetPassword(context.Context, *ResetPass
 }
 func (UnimplementedUsersServiceServer) ChangeExpiredPassword(context.Context, *ChangeExpiredPasswordRequest) (*MessageResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ChangeExpiredPassword not implemented")
+}
+func (UnimplementedUsersServiceServer) ChangePassword(context.Context, *ChangePasswordRequest) (*MessageResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ChangePassword not implemented")
+}
+func (UnimplementedUsersServiceServer) GetLimits(context.Context, *GetLimitsRequest) (*LimitsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetLimits not implemented")
 }
 func (UnimplementedUsersServiceServer) RequestMagicLink(context.Context, *MagicLinkRequest) (*MessageResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RequestMagicLink not implemented")
@@ -520,6 +562,42 @@ func _UsersService_ChangeExpiredPassword_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _UsersService_ChangePassword_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ChangePasswordRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UsersServiceServer).ChangePassword(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UsersService_ChangePassword_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UsersServiceServer).ChangePassword(ctx, req.(*ChangePasswordRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _UsersService_GetLimits_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetLimitsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UsersServiceServer).GetLimits(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UsersService_GetLimits_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UsersServiceServer).GetLimits(ctx, req.(*GetLimitsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _UsersService_RequestMagicLink_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(MagicLinkRequest)
 	if err := dec(in); err != nil {
@@ -640,6 +718,14 @@ var UsersService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _UsersService_ChangeExpiredPassword_Handler,
 		},
 		{
+			MethodName: "ChangePassword",
+			Handler:    _UsersService_ChangePassword_Handler,
+		},
+		{
+			MethodName: "GetLimits",
+			Handler:    _UsersService_GetLimits_Handler,
+		},
+		{
 			MethodName: "RequestMagicLink",
 			Handler:    _UsersService_RequestMagicLink_Handler,
 		},
@@ -654,6 +740,286 @@ var UsersService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateUserQuota",
 			Handler:    _UsersService_UpdateUserQuota_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "users/users_service.proto",
+}
+
+const (
+	QuotaRequestService_CreateQuotaRequest_FullMethodName  = "/users.QuotaRequestService/CreateQuotaRequest"
+	QuotaRequestService_ListMyQuotaRequests_FullMethodName = "/users.QuotaRequestService/ListMyQuotaRequests"
+	QuotaRequestService_ListQuotaRequests_FullMethodName   = "/users.QuotaRequestService/ListQuotaRequests"
+	QuotaRequestService_ApproveQuotaRequest_FullMethodName = "/users.QuotaRequestService/ApproveQuotaRequest"
+	QuotaRequestService_RejectQuotaRequest_FullMethodName  = "/users.QuotaRequestService/RejectQuotaRequest"
+)
+
+// QuotaRequestServiceClient is the client API for QuotaRequestService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// Requests of regular users for more storage, decided by an administrator.
+type QuotaRequestServiceClient interface {
+	// POST /api/users/quota-requests -> 201 Created (regular users only).
+	// The requested quota must exceed the current one and stay within the
+	// configured maximum. A user can have only one pending request (else 409).
+	CreateQuotaRequest(ctx context.Context, in *CreateQuotaRequestRequest, opts ...grpc.CallOption) (*QuotaRequestInfo, error)
+	// GET /api/users/quota-requests - the caller's own requests, newest first.
+	ListMyQuotaRequests(ctx context.Context, in *ListMyQuotaRequestsRequest, opts ...grpc.CallOption) (*ListQuotaRequestsResponse, error)
+	// GET /api/admin/quota-requests[?status=pending|approved|rejected] (admin only).
+	// Without a status every request is returned, newest first.
+	ListQuotaRequests(ctx context.Context, in *ListQuotaRequestsRequest, opts ...grpc.CallOption) (*ListQuotaRequestsResponse, error)
+	// POST /api/admin/quota-requests/{request_id}/approve (admin only):
+	// sets the user's quota to the requested size. 409 if the request is already
+	// resolved or the user's quota is no longer below the requested size.
+	ApproveQuotaRequest(ctx context.Context, in *ResolveQuotaRequestRequest, opts ...grpc.CallOption) (*QuotaRequestInfo, error)
+	// POST /api/admin/quota-requests/{request_id}/reject (admin only):
+	// the user's quota stays as it is.
+	RejectQuotaRequest(ctx context.Context, in *ResolveQuotaRequestRequest, opts ...grpc.CallOption) (*QuotaRequestInfo, error)
+}
+
+type quotaRequestServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewQuotaRequestServiceClient(cc grpc.ClientConnInterface) QuotaRequestServiceClient {
+	return &quotaRequestServiceClient{cc}
+}
+
+func (c *quotaRequestServiceClient) CreateQuotaRequest(ctx context.Context, in *CreateQuotaRequestRequest, opts ...grpc.CallOption) (*QuotaRequestInfo, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(QuotaRequestInfo)
+	err := c.cc.Invoke(ctx, QuotaRequestService_CreateQuotaRequest_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *quotaRequestServiceClient) ListMyQuotaRequests(ctx context.Context, in *ListMyQuotaRequestsRequest, opts ...grpc.CallOption) (*ListQuotaRequestsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListQuotaRequestsResponse)
+	err := c.cc.Invoke(ctx, QuotaRequestService_ListMyQuotaRequests_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *quotaRequestServiceClient) ListQuotaRequests(ctx context.Context, in *ListQuotaRequestsRequest, opts ...grpc.CallOption) (*ListQuotaRequestsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListQuotaRequestsResponse)
+	err := c.cc.Invoke(ctx, QuotaRequestService_ListQuotaRequests_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *quotaRequestServiceClient) ApproveQuotaRequest(ctx context.Context, in *ResolveQuotaRequestRequest, opts ...grpc.CallOption) (*QuotaRequestInfo, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(QuotaRequestInfo)
+	err := c.cc.Invoke(ctx, QuotaRequestService_ApproveQuotaRequest_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *quotaRequestServiceClient) RejectQuotaRequest(ctx context.Context, in *ResolveQuotaRequestRequest, opts ...grpc.CallOption) (*QuotaRequestInfo, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(QuotaRequestInfo)
+	err := c.cc.Invoke(ctx, QuotaRequestService_RejectQuotaRequest_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// QuotaRequestServiceServer is the server API for QuotaRequestService service.
+// All implementations must embed UnimplementedQuotaRequestServiceServer
+// for forward compatibility.
+//
+// Requests of regular users for more storage, decided by an administrator.
+type QuotaRequestServiceServer interface {
+	// POST /api/users/quota-requests -> 201 Created (regular users only).
+	// The requested quota must exceed the current one and stay within the
+	// configured maximum. A user can have only one pending request (else 409).
+	CreateQuotaRequest(context.Context, *CreateQuotaRequestRequest) (*QuotaRequestInfo, error)
+	// GET /api/users/quota-requests - the caller's own requests, newest first.
+	ListMyQuotaRequests(context.Context, *ListMyQuotaRequestsRequest) (*ListQuotaRequestsResponse, error)
+	// GET /api/admin/quota-requests[?status=pending|approved|rejected] (admin only).
+	// Without a status every request is returned, newest first.
+	ListQuotaRequests(context.Context, *ListQuotaRequestsRequest) (*ListQuotaRequestsResponse, error)
+	// POST /api/admin/quota-requests/{request_id}/approve (admin only):
+	// sets the user's quota to the requested size. 409 if the request is already
+	// resolved or the user's quota is no longer below the requested size.
+	ApproveQuotaRequest(context.Context, *ResolveQuotaRequestRequest) (*QuotaRequestInfo, error)
+	// POST /api/admin/quota-requests/{request_id}/reject (admin only):
+	// the user's quota stays as it is.
+	RejectQuotaRequest(context.Context, *ResolveQuotaRequestRequest) (*QuotaRequestInfo, error)
+	mustEmbedUnimplementedQuotaRequestServiceServer()
+}
+
+// UnimplementedQuotaRequestServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedQuotaRequestServiceServer struct{}
+
+func (UnimplementedQuotaRequestServiceServer) CreateQuotaRequest(context.Context, *CreateQuotaRequestRequest) (*QuotaRequestInfo, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateQuotaRequest not implemented")
+}
+func (UnimplementedQuotaRequestServiceServer) ListMyQuotaRequests(context.Context, *ListMyQuotaRequestsRequest) (*ListQuotaRequestsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListMyQuotaRequests not implemented")
+}
+func (UnimplementedQuotaRequestServiceServer) ListQuotaRequests(context.Context, *ListQuotaRequestsRequest) (*ListQuotaRequestsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListQuotaRequests not implemented")
+}
+func (UnimplementedQuotaRequestServiceServer) ApproveQuotaRequest(context.Context, *ResolveQuotaRequestRequest) (*QuotaRequestInfo, error) {
+	return nil, status.Error(codes.Unimplemented, "method ApproveQuotaRequest not implemented")
+}
+func (UnimplementedQuotaRequestServiceServer) RejectQuotaRequest(context.Context, *ResolveQuotaRequestRequest) (*QuotaRequestInfo, error) {
+	return nil, status.Error(codes.Unimplemented, "method RejectQuotaRequest not implemented")
+}
+func (UnimplementedQuotaRequestServiceServer) mustEmbedUnimplementedQuotaRequestServiceServer() {}
+func (UnimplementedQuotaRequestServiceServer) testEmbeddedByValue()                             {}
+
+// UnsafeQuotaRequestServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to QuotaRequestServiceServer will
+// result in compilation errors.
+type UnsafeQuotaRequestServiceServer interface {
+	mustEmbedUnimplementedQuotaRequestServiceServer()
+}
+
+func RegisterQuotaRequestServiceServer(s grpc.ServiceRegistrar, srv QuotaRequestServiceServer) {
+	// If the following call panics, it indicates UnimplementedQuotaRequestServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&QuotaRequestService_ServiceDesc, srv)
+}
+
+func _QuotaRequestService_CreateQuotaRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateQuotaRequestRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QuotaRequestServiceServer).CreateQuotaRequest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: QuotaRequestService_CreateQuotaRequest_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QuotaRequestServiceServer).CreateQuotaRequest(ctx, req.(*CreateQuotaRequestRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _QuotaRequestService_ListMyQuotaRequests_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListMyQuotaRequestsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QuotaRequestServiceServer).ListMyQuotaRequests(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: QuotaRequestService_ListMyQuotaRequests_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QuotaRequestServiceServer).ListMyQuotaRequests(ctx, req.(*ListMyQuotaRequestsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _QuotaRequestService_ListQuotaRequests_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListQuotaRequestsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QuotaRequestServiceServer).ListQuotaRequests(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: QuotaRequestService_ListQuotaRequests_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QuotaRequestServiceServer).ListQuotaRequests(ctx, req.(*ListQuotaRequestsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _QuotaRequestService_ApproveQuotaRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveQuotaRequestRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QuotaRequestServiceServer).ApproveQuotaRequest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: QuotaRequestService_ApproveQuotaRequest_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QuotaRequestServiceServer).ApproveQuotaRequest(ctx, req.(*ResolveQuotaRequestRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _QuotaRequestService_RejectQuotaRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveQuotaRequestRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QuotaRequestServiceServer).RejectQuotaRequest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: QuotaRequestService_RejectQuotaRequest_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QuotaRequestServiceServer).RejectQuotaRequest(ctx, req.(*ResolveQuotaRequestRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// QuotaRequestService_ServiceDesc is the grpc.ServiceDesc for QuotaRequestService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var QuotaRequestService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "users.QuotaRequestService",
+	HandlerType: (*QuotaRequestServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "CreateQuotaRequest",
+			Handler:    _QuotaRequestService_CreateQuotaRequest_Handler,
+		},
+		{
+			MethodName: "ListMyQuotaRequests",
+			Handler:    _QuotaRequestService_ListMyQuotaRequests_Handler,
+		},
+		{
+			MethodName: "ListQuotaRequests",
+			Handler:    _QuotaRequestService_ListQuotaRequests_Handler,
+		},
+		{
+			MethodName: "ApproveQuotaRequest",
+			Handler:    _QuotaRequestService_ApproveQuotaRequest_Handler,
+		},
+		{
+			MethodName: "RejectQuotaRequest",
+			Handler:    _QuotaRequestService_RejectQuotaRequest_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

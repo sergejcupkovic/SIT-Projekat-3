@@ -1,6 +1,4 @@
-// Package filecheck holds the checks applied to user supplied files: name and
-// type whitelisting before a file is stored, and SHA-256 integrity hashing
-// when it is stored and read back.
+// Package filecheck checks uploaded files and the integrity of stored ones.
 package filecheck
 
 import (
@@ -41,9 +39,6 @@ var allowedTypes = map[string][]string{
 	".gif":  {"image/gif"},
 }
 
-// ValidateUpload checks the file name against the whitelist of characters and
-// extensions, and that the first bytes of the content really are what the
-// extension claims (a renamed executable is rejected).
 func ValidateUpload(name string, head []byte) error {
 	if err := ValidateFileName(name); err != nil {
 		return err
@@ -69,18 +64,7 @@ func ValidateUpload(name string, head []byte) error {
 	return ErrContentMismatch
 }
 
-// Checksum reads r to the end and returns its SHA-256 (hex) and size in bytes.
-func Checksum(r io.Reader) (string, int64, error) {
-	h := sha256.New()
-	n, err := io.Copy(h, r)
-	if err != nil {
-		return "", 0, err
-	}
-	return hex.EncodeToString(h.Sum(nil)), n, nil
-}
-
-// Verify recomputes the SHA-256 of r and compares it with the hash that was
-// stored at upload time.
+// Verify compares the SHA-256 of r with the hash saved at upload time.
 func Verify(r io.Reader, expectedHex string) error {
 	expected, err := hex.DecodeString(expectedHex)
 	if err != nil || len(expected) != sha256.Size {
@@ -97,9 +81,6 @@ func Verify(r io.Reader, expectedHex string) error {
 	return nil
 }
 
-// DetectType returns the content type of a file as seen by the SERVER (from
-// its first bytes), without parameters, e.g. "image/png" or "text/plain".
-// Use it instead of the Content-Type the client claims.
 func DetectType(head []byte) string {
 	if len(head) > 512 {
 		head = head[:512]
@@ -111,7 +92,6 @@ func DetectType(head []byte) string {
 	return got
 }
 
-// AllowedExtensions lists the whitelisted file extensions (with the dot), sorted.
 func AllowedExtensions() []string {
 	exts := make([]string, 0, len(allowedTypes))
 	for ext := range allowedTypes {
@@ -121,8 +101,6 @@ func AllowedExtensions() []string {
 	return exts
 }
 
-// ValidateFileName checks that name is non-empty, within maxFileNameLen runes,
-// uses only whitelisted characters, and is not made solely of dots/spaces.
 func ValidateFileName(name string) error {
 	if name == "" || utf8.RuneCountInString(name) > maxFileNameLen ||
 		!fileNameRegex.MatchString(name) || strings.Trim(name, ". ") == "" {

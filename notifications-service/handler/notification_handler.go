@@ -3,7 +3,7 @@ package handler
 import (
 	"context"
 
-	"notifications-service/domain"
+	"notifications-service/repository"
 
 	notificationspb "stashr/proto/notifications"
 
@@ -12,16 +12,12 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-type notificationRepository interface {
-	ListForAllUsers(ctx context.Context) ([]domain.Notification, error)
-}
-
 type NotificationHandler struct {
 	notificationspb.UnimplementedNotificationServiceServer
-	repo notificationRepository
+	repo *repository.CassandraNotificationRepository
 }
 
-func NewNotificationHandler(repo notificationRepository) *NotificationHandler {
+func NewNotificationHandler(repo *repository.CassandraNotificationRepository) *NotificationHandler {
 	return &NotificationHandler{repo: repo}
 }
 

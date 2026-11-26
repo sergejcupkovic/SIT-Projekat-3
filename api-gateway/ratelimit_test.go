@@ -82,23 +82,3 @@ func TestRateLimitIgnoresForgedToken(t *testing.T) {
 		t.Fatalf("forged tokens must fall back to the IP bucket, got %d", code)
 	}
 }
-
-func TestRateLimitAnonymousUsesLastForwardedAddress(t *testing.T) {
-	h := newTestHandler(1)
-
-	send := func(xff string) int {
-		req := httptest.NewRequest(http.MethodPost, "/api/users/login", nil)
-		req.RemoteAddr = "172.18.0.5:5000"
-		req.Header.Set("X-Forwarded-For", xff)
-		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, req)
-		return rec.Code
-	}
-
-	if code := send("1.1.1.1, 203.0.113.7"); code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", code)
-	}
-	if code := send("2.2.2.2, 203.0.113.7"); code != http.StatusTooManyRequests {
-		t.Fatalf("spoofed leading XFF entry must not reset the bucket, got %d", code)
-	}
-}

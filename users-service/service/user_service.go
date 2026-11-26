@@ -21,10 +21,11 @@ import (
 )
 
 const (
-	maxNameLen    = 100
-	maxEmailLen   = 254
-	smtpTimeout   = 10 * time.Second
-	dummyPassword = "dummy-password-not-a-real-user"
+	maxNameLen     = 100
+	maxEmailLen    = 254
+	maxPasswordLen = 72 // bcrypt ignores anything longer
+	smtpTimeout    = 10 * time.Second
+	dummyPassword  = "dummy-password-not-a-real-user"
 )
 
 var (
@@ -46,11 +47,7 @@ func Init(c *config.Config) {
 }
 
 // #region url-ovi
-// Links in emails point at the public HTTPS endpoints (gateway / frontend).
-func gatewayURL() string {
-	return fmt.Sprintf("https://%s:%s", Cfg.PublicHost, Cfg.GatewayPort)
-}
-
+// Links in emails point at the public HTTPS frontend.
 func frontendURL() string {
 	return fmt.Sprintf("https://%s:%s", Cfg.PublicHost, Cfg.FrontendPort)
 }
@@ -75,26 +72,6 @@ type RegisterRequest struct {
 	Email           string `json:"email"`
 	Password        string `json:"password"`
 	ConfirmPassword string `json:"confirmPassword"`
-}
-
-type LoginRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-}
-
-type VerifyOTPRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-	OTP      string `json:"otp"`
-}
-
-type ResendOTPRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-}
-
-type ForgotPasswordRequest struct {
-	Email string `json:"email"`
 }
 
 type ResetPasswordRequest struct {
@@ -136,8 +113,8 @@ func ValidateRegistration(req *RegisterRequest) error {
 }
 
 func ValidatePassword(p string) error {
-	if len(p) < 8 || len(p) > 72 {
-		return errors.New("password must be 8-72 characters long")
+	if len(p) < Cfg.PasswordMinLength || len(p) > maxPasswordLen {
+		return fmt.Errorf("password must be %d-%d characters long", Cfg.PasswordMinLength, maxPasswordLen)
 	}
 	var up, low, digit, special bool
 	for _, r := range p {
@@ -156,6 +133,22 @@ func ValidatePassword(p string) error {
 		return errors.New("password must contain an uppercase letter, a lowercase letter, a digit, and a special character")
 	}
 	return nil
+}
+
+func ValidateChangePassword(currentPassword, newPassword, confirmPassword string) error {
+	if currentPassword == "" {
+		return errors.New("current password is required")
+	}
+	if newPassword == "" {
+		return errors.New("new password is required")
+	}
+	if newPassword != confirmPassword {
+		return errors.New("passwords do not match")
+	}
+	if newPassword == currentPassword {
+		return errors.New("new password must be different from your current password")
+	}
+	return ValidatePassword(newPassword)
 }
 
 func ValidateChangeExpiredPassword(newPassword, confirmPassword string) error {
@@ -279,8 +272,6 @@ func VerifyRestrictedToken(tokenString string) (string, error) {
 	return email, nil
 }
 
-// parseSessionToken validates a full session JWT (HS256, not expired, not the
-// restricted password-change token) and returns its user ID and role.
 func parseSessionToken(tokenString string) (userID string, role string, err error) {
 	token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -307,10 +298,7 @@ func parseSessionToken(tokenString string) (userID string, role string, err erro
 	return userID, role, nil
 }
 
-// VerifySessionToken validates a full session JWT (HS256, not expired, not the
-// restricted password-change token, role RK) and returns the user ID it was
-// issued for. Used by the internal quota rpcs so a caller can only ever touch
-// the quota of the user its token belongs to.
+// Accepts only a full session token of a regular user.
 func VerifySessionToken(tokenString string) (string, error) {
 	userID, role, err := parseSessionToken(tokenString)
 	if err != nil {
@@ -322,9 +310,13 @@ func VerifySessionToken(tokenString string) (string, error) {
 	return userID, nil
 }
 
+func VerifyAccountToken(tokenString string) (string, error) {
+	userID, _, err := parseSessionToken(tokenString)
+	return userID, err
+}
+
 var ErrAdminRequired = errors.New("administrator privileges required")
 
-// VerifyAdminToken validates a full session JWT and checks that its role is "A".
 func VerifyAdminToken(tokenString string) (string, error) {
 	userID, role, err := parseSessionToken(tokenString)
 	if err != nil {
@@ -380,7 +372,7 @@ func sendMail(host, port, from, to, subject, body string) error {
 }
 
 func SendPasswordResetEmail(host, port, from, to, rawToken string) error {
-	link := fmt.Sprintf("%s/api/users/reset-password?token=%s", gatewayURL(), rawToken)
+	link := fmt.Sprintf("%s/?resetToken=%s", frontendURL(), rawToken)
 	body := fmt.Sprintf("Click the link to reset your password: %s\r\nThis link will expire in %s and can be used only once.", link, HumanDur(Cfg.ResetTokenTTL))
 	return sendMail(host, port, from, to, "Password Reset Request", body)
 }

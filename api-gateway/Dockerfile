@@ -1,5 +1,3 @@
-# Build context: repository root (docker-compose sets context: .), because
-# go.mod has `replace stashr/proto => ../proto` and the build needs that folder.
 FROM golang:1.27-alpine AS build
 WORKDIR /src
 COPY proto/ ./proto/

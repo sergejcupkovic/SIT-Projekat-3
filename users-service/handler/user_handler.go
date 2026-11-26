@@ -1,18 +1,4 @@
-// Package handler is the transport layer of users-service.
-//
-// UserHandler implements userspb.UsersServiceServer, the interface generated
-// from proto/users/users_service.proto by protoc-gen-go-grpc. Each method
-// receives an already-decoded protobuf request (the api-gateway turned the
-// REST/JSON call into gRPC) and returns either a protobuf reply or a gRPC
-// status error. The gateway maps status codes back to HTTP:
-//
-//	codes.InvalidArgument   -> 400
-//	codes.Unauthenticated   -> 401
-//	codes.PermissionDenied  -> 403
-//	codes.NotFound          -> 404
-//	codes.AlreadyExists     -> 409
-//	codes.ResourceExhausted -> 429
-//	codes.Internal          -> 500
+// Package handler implements the gRPC services; the gateway maps status codes to HTTP.
 package handler
 
 import (
@@ -38,8 +24,6 @@ import (
 )
 
 type UserHandler struct {
-	// Embedding the generated Unimplemented server keeps this type compiling
-	// (returning codes.Unimplemented) if new rpcs are added to the .proto.
 	userspb.UnimplementedUsersServiceServer
 
 	repo              *repository.UserRepository
@@ -64,9 +48,6 @@ func NewUserHandler(repo *repository.UserRepository, smtpHost, smtpPort, smtpFro
 
 // #region GET
 
-// VerifyEmail  <-  GET /api/users/verify?token=xyz
-// (The old "Accept: text/html -> redirect to frontend" behaviour is an HTTP
-// concern and now lives in the api-gateway.)
 func (h *UserHandler) VerifyEmail(ctx context.Context, req *userspb.VerifyEmailRequest) (*userspb.MessageResponse, error) {
 	token := req.GetToken()
 	if token == "" {
@@ -128,6 +109,14 @@ func (h *UserHandler) Register(ctx context.Context, in *userspb.RegisterRequest)
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
+	switch _, err := h.repo.FindByEmail(ctx, req.Email); {
+	case err == nil:
+		return nil, emailTakenError()
+	case !errors.Is(err, mongo.ErrNoDocuments):
+		log.Printf("register: email lookup: %v", err)
+		return nil, status.Error(codes.Internal, "Error creating account in database")
+	}
+
 	passwordHash, err := service.HashPassword(req.Password)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "Error processing password")
@@ -155,9 +144,9 @@ func (h *UserHandler) Register(ctx context.Context, in *userspb.RegisterRequest)
 	}
 
 	if err := h.repo.Create(ctx, newUser); err != nil {
+		// Another registration of the same address won the race since the lookup.
 		if mongo.IsDuplicateKeyError(err) {
-			// Same reply as success so the endpoint can't be used to enumerate emails.
-			return registerSuccess(ctx), nil
+			return nil, emailTakenError()
 		}
 		return nil, status.Error(codes.Internal, "Error creating account in database")
 	}
@@ -291,8 +280,6 @@ func (h *UserHandler) VerifyOTP(ctx context.Context, in *userspb.VerifyOTPReques
 	}, nil
 }
 
-// Logout  <-  POST /api/users/logout (T-1.2.7)
-// JWTs are stateless; the client discards its token.
 func (h *UserHandler) Logout(ctx context.Context, _ *userspb.LogoutRequest) (*userspb.MessageResponse, error) {
 	return &userspb.MessageResponse{Message: "Logout successful"}, nil
 }
@@ -438,9 +425,6 @@ func (h *UserHandler) ResetPassword(ctx context.Context, in *userspb.ResetPasswo
 	return &userspb.MessageResponse{Message: "Password updated. You can now log in."}, nil
 }
 
-// ChangeExpiredPassword  <-  POST /api/users/change-expired-password
-// Requires the restricted JWT in the "authorization" metadata
-// (forwarded by grpc-gateway from the HTTP Authorization header).
 func (h *UserHandler) ChangeExpiredPassword(ctx context.Context, in *userspb.ChangeExpiredPasswordRequest) (*userspb.MessageResponse, error) {
 	tokenStr, ok := bearerFromMetadata(ctx)
 	if !ok {
@@ -476,6 +460,61 @@ func (h *UserHandler) ChangeExpiredPassword(ctx context.Context, in *userspb.Cha
 
 	return &userspb.MessageResponse{
 		Message: "Password successfully updated. You can now sign in with your new password.",
+	}, nil
+}
+
+func (h *UserHandler) ChangePassword(ctx context.Context, in *userspb.ChangePasswordRequest) (*userspb.MessageResponse, error) {
+	tokenStr, ok := bearerFromMetadata(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "Missing or invalid authorization token")
+	}
+	userID, err := service.VerifyAccountToken(tokenStr)
+	if err != nil {
+		return nil, status.Error(codes.Unauthenticated, err.Error())
+	}
+	oid, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return nil, status.Error(codes.Unauthenticated, "Invalid user identity in token")
+	}
+
+	newPassword := in.GetNewPassword()
+	if err := service.ValidateChangePassword(in.GetCurrentPassword(), newPassword, in.GetConfirmPassword()); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	user, err := h.repo.FindByID(ctx, oid)
+	if err != nil {
+		return nil, userLookupError(err)
+	}
+	if time.Now().Before(user.AccountLockedUntil) {
+		return nil, accountLockedError(user.AccountLockedUntil)
+	}
+	// Not Unauthenticated: the session is fine, only this input is wrong.
+	if !service.CheckPasswordHash(in.GetCurrentPassword(), user.PasswordHash) {
+		return nil, status.Error(codes.InvalidArgument, "Current password is incorrect")
+	}
+	if ok, retryAt := service.PasswordChangeAllowed(user.PasswordLastChanged); !ok {
+		return nil, passwordTooYoungError(retryAt)
+	}
+
+	newHash, err := service.HashPassword(newPassword)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "Error processing password")
+	}
+	if err := h.repo.UpdatePassword(ctx, user.Email, newHash, time.Now()); err != nil {
+		return nil, status.Error(codes.Internal, "Error updating password")
+	}
+
+	return &userspb.MessageResponse{Message: "Password changed successfully."}, nil
+}
+
+// GetLimits  <-  GET /api/config/limits (public)
+func (h *UserHandler) GetLimits(_ context.Context, _ *userspb.GetLimitsRequest) (*userspb.LimitsResponse, error) {
+	return &userspb.LimitsResponse{
+		MinQuotaBytes:     service.Cfg.MinQuotaBytes,
+		MaxQuotaBytes:     service.Cfg.MaxQuotaBytes,
+		DefaultQuotaBytes: service.Cfg.DefaultQuotaBytes,
+		PasswordMinLength: int32(service.Cfg.PasswordMinLength),
 	}, nil
 }
 
@@ -580,7 +619,6 @@ func (h *UserHandler) ListUsers(ctx context.Context, _ *userspb.ListUsersRequest
 	return resp, nil
 }
 
-// UpdateUserQuota  <-  PATCH /api/admin/users/{user_id}/quota
 func (h *UserHandler) UpdateUserQuota(ctx context.Context, in *userspb.UpdateUserQuotaRequest) (*userspb.AdminUserInfo, error) {
 	if err := requireAdmin(ctx); err != nil {
 		return nil, err
@@ -592,16 +630,8 @@ func (h *UserHandler) UpdateUserQuota(ctx context.Context, in *userspb.UpdateUse
 	}
 
 	newQuota := in.GetStorageQuotaBytes()
-	if newQuota <= 0 {
-		return nil, status.Error(codes.InvalidArgument, "Storage quota must be greater than 0")
-	}
-
-	existing, err := h.repo.FindByID(ctx, oid)
-	if err != nil {
-		return nil, userLookupError(err)
-	}
-	if newQuota <= existing.StorageQuotaBytes {
-		return nil, status.Error(codes.InvalidArgument, "New storage quota must be greater than current quota")
+	if !service.QuotaInRange(newQuota) {
+		return nil, status.Error(codes.InvalidArgument, service.QuotaRangeMessage())
 	}
 
 	updated, err := h.repo.UpdateStorageQuota(ctx, oid, newQuota)
@@ -612,17 +642,23 @@ func (h *UserHandler) UpdateUserQuota(ctx context.Context, in *userspb.UpdateUse
 }
 
 func requireAdmin(ctx context.Context) error {
+	_, err := adminCallerID(ctx)
+	return err
+}
+
+func adminCallerID(ctx context.Context) (string, error) {
 	tokenStr, ok := bearerFromMetadata(ctx)
 	if !ok {
-		return status.Error(codes.Unauthenticated, "Missing or invalid authorization token")
+		return "", status.Error(codes.Unauthenticated, "Missing or invalid authorization token")
 	}
-	if _, err := service.VerifyAdminToken(tokenStr); err != nil {
+	id, err := service.VerifyAdminToken(tokenStr)
+	if err != nil {
 		if errors.Is(err, service.ErrAdminRequired) {
-			return status.Error(codes.PermissionDenied, err.Error())
+			return "", status.Error(codes.PermissionDenied, err.Error())
 		}
-		return status.Error(codes.Unauthenticated, err.Error())
+		return "", status.Error(codes.Unauthenticated, err.Error())
 	}
-	return nil
+	return id, nil
 }
 
 func toAdminUserInfo(u *domain.User) *userspb.AdminUserInfo {
@@ -642,18 +678,12 @@ func toAdminUserInfo(u *domain.User) *userspb.AdminUserInfo {
 
 // #region helperi
 
-// setHTTPStatus attaches gRPC response-header metadata "x-http-code".
-// A pure gRPC client ignores it; the api-gateway reads it (see
-// api-gateway/response.go) and uses it as the HTTP status code, which is how
-// a gRPC call can still produce "201 Created" on the REST side.
 func setHTTPStatus(ctx context.Context, code int) {
 	if err := grpc.SetHeader(ctx, metadata.Pairs("x-http-code", strconv.Itoa(code))); err != nil {
 		log.Printf("failed to set x-http-code header: %v", err)
 	}
 }
 
-// bearerFromMetadata extracts the JWT from the "authorization" metadata,
-// which grpc-gateway fills from the HTTP "Authorization: Bearer ..." header.
 func bearerFromMetadata(ctx context.Context) (string, bool) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
@@ -674,8 +704,10 @@ func registerSuccess(ctx context.Context) *userspb.MessageResponse {
 	}
 }
 
-// restrictedLogin issues a short-lived token that only allows changing the
-// expired password (ban period over, password must be changed).
+func emailTakenError() error {
+	return status.Error(codes.AlreadyExists, "An account with this email already exists.")
+}
+
 func (h *UserHandler) restrictedLogin(user *domain.User) (*userspb.AuthResponse, error) {
 	token, err := service.GenerateRestrictedJWTToken(user.ID.Hex(), user.Email, string(user.Role))
 	if err != nil {

@@ -11,7 +11,6 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-// Quota is a user's storage quota and usage, as kept by users-service.
 type Quota struct {
 	// Only meaningful for Reserve: false = the file does not fit, nothing was reserved.
 	Allowed        bool
@@ -20,12 +19,6 @@ type Quota struct {
 	RemainingBytes int64
 }
 
-// QuotaClient is the synchronous gRPC client of users-service's internal
-// QuotaService (US-2.2, acceptance criterion 2.2.2).
-//
-// Every call forwards the "authorization" metadata of the request being
-// served, i.e. the user's own session JWT. users-service verifies it again and
-// only touches the quota of the user it belongs to.
 type QuotaClient struct {
 	client  userspb.QuotaServiceClient
 	timeout time.Duration
@@ -46,8 +39,6 @@ func (c *QuotaClient) Get(ctx context.Context) (Quota, error) {
 	return fromProto(resp), nil
 }
 
-// Reserve asks users-service whether sizeBytes still fit into the caller's
-// quota and, if they do, reserves them in the same atomic step.
 func (c *QuotaClient) Reserve(ctx context.Context, sizeBytes int64) (Quota, error) {
 	ctx, cancel := c.call(ctx)
 	defer cancel()
@@ -59,10 +50,7 @@ func (c *QuotaClient) Reserve(ctx context.Context, sizeBytes int64) (Quota, erro
 	return fromProto(resp), nil
 }
 
-// Release gives a reservation back after the upload failed. It is best effort:
-// there is nobody left to report to, so a failure is only logged. It must keep
-// working when the request context is already cancelled (client disconnected),
-// which is exactly when most rollbacks happen.
+// Must also work when the request was cancelled, which is when rollbacks happen.
 func (c *QuotaClient) Release(ctx context.Context, sizeBytes int64) {
 	ctx, cancel := c.call(context.WithoutCancel(ctx))
 	defer cancel()

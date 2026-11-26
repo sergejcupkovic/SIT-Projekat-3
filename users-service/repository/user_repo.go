@@ -46,9 +46,6 @@ func (r *UserRepository) Create(ctx context.Context, user *domain.User) error {
 	return err
 }
 
-// verifikacija usera u bazi, postavi flag isverified na true i obrise token da ne moze ponovo da se iskoristi
-// bson.M je za unordered map, a bson.D je za ordered map
-// $set je promena $unset kompletno obrise polje jer nije vise needed
 func (r *UserRepository) VerifyToken(ctx context.Context, token string) (*mongo.UpdateResult, error) {
 	filter := bson.M{
 		"verificationToken":        token,
@@ -192,17 +189,6 @@ func (r *UserRepository) LockAccount(ctx context.Context, email string, until ti
 	return err
 }
 
-func (r *UserRepository) UnlockAccount(ctx context.Context, email string) error {
-	filter := bson.M{"email": email}
-	update := bson.M{
-		"$unset": bson.M{
-			"accountLockedUntil": "",
-		},
-	}
-	_, err := r.collection.UpdateOne(ctx, filter, update)
-	return err
-}
-
 // #endregion
 
 // #region magic link
@@ -216,15 +202,6 @@ func (r *UserRepository) SaveMagicLinkToken(ctx context.Context, email, tokenHas
 	}
 	_, err := r.collection.UpdateOne(ctx, filter, update)
 	return err
-}
-
-func (r *UserRepository) FindByMagicLinkToken(ctx context.Context, tokenHash string) (*domain.User, error) {
-	var user domain.User
-	err := r.collection.FindOne(ctx, bson.M{"magicLinkTokenHash": tokenHash, "magicLinkTokenExpires": bson.M{"$gt": time.Now()}}).Decode(&user)
-	if err != nil {
-		return nil, err
-	}
-	return &user, nil
 }
 
 func (r *UserRepository) ConsumeMagicLinkToken(ctx context.Context, tokenHash string) (*domain.User, error) {
@@ -244,15 +221,6 @@ func (r *UserRepository) ConsumeMagicLinkToken(ctx context.Context, tokenHash st
 	return &user, nil
 }
 
-func (r *UserRepository) ClearMagicLinkToken(ctx context.Context, email string) error {
-	filter := bson.M{"email": email}
-	update := bson.M{
-		"$unset": bson.M{"magicLinkTokenHash": "", "magicLinkTokenExpires": ""},
-	}
-	_, err := r.collection.UpdateOne(ctx, filter, update)
-	return err
-}
-
 // #endregion
 
 // #region storage quota
@@ -266,12 +234,7 @@ func (r *UserRepository) FindByID(ctx context.Context, id primitive.ObjectID) (*
 	return &user, nil
 }
 
-// ReserveStorageQuota checks and reserves in ONE atomic update: the filter only
-// matches while usedStorageBytes + sizeBytes still fits into storageQuotaBytes,
-// and the same operation then increments usedStorageBytes. Two concurrent
-// uploads therefore cannot both take the last free bytes (no read-then-write
-// race). Returns (nil, false, nil) when the file does not fit or the user does
-// not exist; the caller tells the two apart with FindByID.
+// Checks and reserves in one atomic update, so two uploads cannot both take the last space.
 func (r *UserRepository) ReserveStorageQuota(ctx context.Context, userID primitive.ObjectID, sizeBytes int64) (*domain.User, bool, error) {
 	filter := bson.M{
 		"_id": userID,
@@ -296,9 +259,7 @@ func (r *UserRepository) ReserveStorageQuota(ctx context.Context, userID primiti
 	return &updated, true, nil
 }
 
-// ReleaseStorageQuota gives a reservation back. It is an aggregation-pipeline
-// update so usedStorageBytes is clamped at 0 and can never go negative, even if
-// a release is repeated.
+// The $max keeps the used space from going below 0.
 func (r *UserRepository) ReleaseStorageQuota(ctx context.Context, userID primitive.ObjectID, sizeBytes int64) (*domain.User, error) {
 	update := mongo.Pipeline{
 		{{Key: "$set", Value: bson.D{

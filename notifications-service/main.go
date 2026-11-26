@@ -16,8 +16,6 @@ import (
 	notificationspb "stashr/proto/notifications"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/health"
-	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
 )
 
@@ -58,9 +56,6 @@ func main() {
 	)
 	notificationspb.RegisterNotificationServiceServer(srv, handler.NewNotificationHandler(repo))
 
-	healthSrv := health.NewServer()
-	healthpb.RegisterHealthServer(srv, healthSrv)
-	healthSrv.SetServingStatus(notificationspb.NotificationService_ServiceDesc.ServiceName, healthpb.HealthCheckResponse_SERVING)
 	reflection.Register(srv)
 
 	go func() {
