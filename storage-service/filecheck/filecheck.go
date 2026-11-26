@@ -1,8 +1,12 @@
-// Package filecheck checks the name and content type of uploaded files.
+// Package filecheck checks uploaded files and the integrity of stored ones.
 package filecheck
 
 import (
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/hex"
 	"errors"
+	"io"
 	"net/http"
 	"path/filepath"
 	"regexp"
@@ -17,6 +21,7 @@ var (
 	ErrBadName         = errors.New("file name contains invalid characters")
 	ErrTypeNotAllowed  = errors.New("file type is not allowed")
 	ErrContentMismatch = errors.New("file content does not match its extension")
+	ErrIntegrity       = errors.New("file integrity check failed")
 )
 
 var fileNameRegex = regexp.MustCompile(`^[\p{L}\p{N} ._()\-]+$`)
@@ -57,6 +62,23 @@ func ValidateUpload(name string, head []byte) error {
 		}
 	}
 	return ErrContentMismatch
+}
+
+// Verify compares the SHA-256 of r with the hash saved at upload time.
+func Verify(r io.Reader, expectedHex string) error {
+	expected, err := hex.DecodeString(expectedHex)
+	if err != nil || len(expected) != sha256.Size {
+		return ErrIntegrity
+	}
+
+	h := sha256.New()
+	if _, err := io.Copy(h, r); err != nil {
+		return err
+	}
+	if subtle.ConstantTimeCompare(h.Sum(nil), expected) != 1 {
+		return ErrIntegrity
+	}
+	return nil
 }
 
 func DetectType(head []byte) string {

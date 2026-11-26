@@ -2,6 +2,9 @@
 
 ## Architecture
 
+The data model of each service and how the services communicate are described in
+[`docs/system-design.md`](docs/system-design.md).
+
 ```
 Browser ──HTTPS──▶ frontend (nginx) :3000 ──HTTPS /api──▶ api-gateway :8443
 Postman ──HTTPS──────────────────────────────────────────▶     │  REST/JSON ⇄ protobuf (grpc-gateway)
@@ -336,7 +339,8 @@ input such as `{"$ne": ""}` from reaching the database.
 `storage-service/filecheck` is applied to every upload (US-2.2): filename and extension whitelist
 (`txt, md, csv, json, pdf, png, jpg, jpeg, gif`), content sniffing so a renamed executable is rejected, and the
 content type is taken from the sniffed bytes, never from the client's `Content-Type`. The SHA-256 of every stored file
-is saved in its metadata.
+is saved in its metadata. The **Verify** button on a file (`GET /api/files/{fileId}/integrity`, owner only) reads the stored
+content again, calculates its SHA-256 and compares the two, so a damaged or altered file is reported.
 
 ### Running the tests
 ```bash

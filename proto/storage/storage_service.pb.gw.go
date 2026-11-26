@@ -392,6 +392,45 @@ func local_request_StorageService_RenameFile_1(ctx context.Context, marshaler ru
 	return msg, metadata, err
 }
 
+func request_StorageService_VerifyFileIntegrity_0(ctx context.Context, marshaler runtime.Marshaler, client StorageServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq VerifyFileIntegrityRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	val, ok := pathParams["file_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "file_id")
+	}
+	protoReq.FileId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "file_id", err)
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	msg, err := client.VerifyFileIntegrity(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_StorageService_VerifyFileIntegrity_0(ctx context.Context, marshaler runtime.Marshaler, server StorageServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq VerifyFileIntegrityRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	val, ok := pathParams["file_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "file_id")
+	}
+	protoReq.FileId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "file_id", err)
+	}
+	msg, err := server.VerifyFileIntegrity(ctx, &protoReq)
+	return msg, metadata, err
+}
+
 func request_StorageService_GetQuota_0(ctx context.Context, marshaler runtime.Marshaler, client StorageServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
 		protoReq GetQuotaRequest
@@ -558,6 +597,26 @@ func RegisterStorageServiceHandlerServer(ctx context.Context, mux *runtime.Serve
 			return
 		}
 		forward_StorageService_RenameFile_1(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_StorageService_VerifyFileIntegrity_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/storage.StorageService/VerifyFileIntegrity", runtime.WithHTTPPathPattern("/api/files/{file_id}/integrity"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_StorageService_VerifyFileIntegrity_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_StorageService_VerifyFileIntegrity_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 	mux.Handle(http.MethodGet, pattern_StorageService_GetQuota_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
@@ -738,6 +797,23 @@ func RegisterStorageServiceHandlerClient(ctx context.Context, mux *runtime.Serve
 		}
 		forward_StorageService_RenameFile_1(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodGet, pattern_StorageService_VerifyFileIntegrity_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/storage.StorageService/VerifyFileIntegrity", runtime.WithHTTPPathPattern("/api/files/{file_id}/integrity"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_StorageService_VerifyFileIntegrity_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_StorageService_VerifyFileIntegrity_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	mux.Handle(http.MethodGet, pattern_StorageService_GetQuota_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
@@ -759,23 +835,25 @@ func RegisterStorageServiceHandlerClient(ctx context.Context, mux *runtime.Serve
 }
 
 var (
-	pattern_StorageService_CreateFolder_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "folders"}, ""))
-	pattern_StorageService_BrowseFolder_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"api", "folders", "folder_id"}, ""))
-	pattern_StorageService_BrowseFolder_1 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "folders"}, ""))
-	pattern_StorageService_RenameFolder_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"api", "folders", "folder_id"}, ""))
-	pattern_StorageService_RenameFolder_1 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"api", "folders", "folder_id"}, ""))
-	pattern_StorageService_RenameFile_0   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"api", "files", "file_id"}, ""))
-	pattern_StorageService_RenameFile_1   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"api", "files", "file_id"}, ""))
-	pattern_StorageService_GetQuota_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "files", "quota"}, ""))
+	pattern_StorageService_CreateFolder_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "folders"}, ""))
+	pattern_StorageService_BrowseFolder_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"api", "folders", "folder_id"}, ""))
+	pattern_StorageService_BrowseFolder_1        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "folders"}, ""))
+	pattern_StorageService_RenameFolder_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"api", "folders", "folder_id"}, ""))
+	pattern_StorageService_RenameFolder_1        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"api", "folders", "folder_id"}, ""))
+	pattern_StorageService_RenameFile_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"api", "files", "file_id"}, ""))
+	pattern_StorageService_RenameFile_1          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"api", "files", "file_id"}, ""))
+	pattern_StorageService_VerifyFileIntegrity_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"api", "files", "file_id", "integrity"}, ""))
+	pattern_StorageService_GetQuota_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "files", "quota"}, ""))
 )
 
 var (
-	forward_StorageService_CreateFolder_0 = runtime.ForwardResponseMessage
-	forward_StorageService_BrowseFolder_0 = runtime.ForwardResponseMessage
-	forward_StorageService_BrowseFolder_1 = runtime.ForwardResponseMessage
-	forward_StorageService_RenameFolder_0 = runtime.ForwardResponseMessage
-	forward_StorageService_RenameFolder_1 = runtime.ForwardResponseMessage
-	forward_StorageService_RenameFile_0   = runtime.ForwardResponseMessage
-	forward_StorageService_RenameFile_1   = runtime.ForwardResponseMessage
-	forward_StorageService_GetQuota_0     = runtime.ForwardResponseMessage
+	forward_StorageService_CreateFolder_0        = runtime.ForwardResponseMessage
+	forward_StorageService_BrowseFolder_0        = runtime.ForwardResponseMessage
+	forward_StorageService_BrowseFolder_1        = runtime.ForwardResponseMessage
+	forward_StorageService_RenameFolder_0        = runtime.ForwardResponseMessage
+	forward_StorageService_RenameFolder_1        = runtime.ForwardResponseMessage
+	forward_StorageService_RenameFile_0          = runtime.ForwardResponseMessage
+	forward_StorageService_RenameFile_1          = runtime.ForwardResponseMessage
+	forward_StorageService_VerifyFileIntegrity_0 = runtime.ForwardResponseMessage
+	forward_StorageService_GetQuota_0            = runtime.ForwardResponseMessage
 )

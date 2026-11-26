@@ -27,7 +27,7 @@ type FileItem struct {
 	SizeBytes int64               `bson:"sizeBytes" json:"sizeBytes"`
 	MimeType  string              `bson:"mimeType" json:"mimeType"`
 	ObjectKey string              `bson:"objectKey" json:"-"`
-	// SHA-256 (hex) of the stored content, for the integrity check on download.
+	// SHA-256 (hex) of the stored content, for the integrity check.
 	SHA256    string    `bson:"sha256" json:"-"`
 	CreatedAt time.Time `bson:"createdAt" json:"createdAt"`
 	UpdatedAt time.Time `bson:"updatedAt,omitempty"`

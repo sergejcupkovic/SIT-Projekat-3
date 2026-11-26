@@ -50,6 +50,10 @@ func (s *ObjectStore) Put(ctx context.Context, key string, r io.Reader, size int
 	return err
 }
 
+func (s *ObjectStore) Get(ctx context.Context, key string) (io.ReadCloser, error) {
+	return s.client.GetObject(ctx, s.bucket, key, minio.GetObjectOptions{})
+}
+
 func (s *ObjectStore) Delete(ctx context.Context, key string) error {
 	return s.client.RemoveObject(ctx, s.bucket, key, minio.RemoveObjectOptions{})
 }

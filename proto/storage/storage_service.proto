@@ -62,6 +62,14 @@ service StorageService {
     };
   }
 
+  // GET /api/files/{file_id}/integrity - compares the stored content with the
+  // SHA-256 saved when it was uploaded.
+  rpc VerifyFileIntegrity(VerifyFileIntegrityRequest) returns (FileIntegrityResponse) {
+    option (google.api.http) = {
+      get: "/api/files/{file_id}/integrity"
+    };
+  }
+
   // GET /api/files/quota - the caller's storage quota and current usage
   // (answered by asking users-service).
   rpc GetQuota(GetQuotaRequest) returns (StorageQuota) {
@@ -176,6 +184,10 @@ message RenameFileRequest {
   string name = 2;
 }
 
+message VerifyFileIntegrityRequest {
+  string file_id = 1;
+}
+
 // ---------- Responses ----------
 
 message FolderResponse {
@@ -186,6 +198,11 @@ message FolderResponse {
 message FileResponse {
   string message = 1;
   FileItem file = 2;
+}
+
+message FileIntegrityResponse {
+  bool intact = 1;
+  string message = 2;
 }
 
 message UploadFileResponse {

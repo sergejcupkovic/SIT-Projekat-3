@@ -1459,11 +1459,18 @@ function renderFolderItems(folders, files) {
       </div>
       <div class="item-right">
         <span class="item-meta">${Validation.escapeHtml(formatBytes(file.sizeBytes))} • ${Validation.escapeHtml(dateLabel)}</span>
+        <button type="button" class="btn-rename-sm btn-verify-sm" title="Check that the stored file is unchanged">Verify</button>
         <button type="button" class="btn-rename-sm btn-rename-file-sm" title="Rename file">Rename</button>
         <button type="button" class="btn-rename-sm btn-version-sm" title="Upload a new version of this file">↑ New Version</button>
       </div>
     `;
     row.querySelector(".item-name").textContent = file.name;
+
+    const verifyBtn = row.querySelector(".btn-verify-sm");
+    verifyBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      verifyFileIntegrity(file, verifyBtn);
+    });
 
     const renameFileBtn = row.querySelector(".btn-rename-file-sm");
     renameFileBtn.addEventListener("click", (e) => {
@@ -1479,6 +1486,34 @@ function renderFolderItems(folders, files) {
 
     folderItemsList.appendChild(row);
   });
+}
+
+// The server hashes the stored file again and compares it with the saved SHA-256.
+async function verifyFileIntegrity(file, button) {
+  hideAlert();
+  button.disabled = true;
+
+  try {
+    const { ok, status, data } = await apiJson(
+      `/api/files/${encodeURIComponent(file.id)}/integrity`,
+      { token: session.token },
+    );
+    if (ok) {
+      showAlert(
+        data.intact ? "success" : "danger",
+        data.intact ? "File Is Intact" : "Integrity Check Failed",
+        `"${file.name}": ${data.message}`,
+      );
+    } else if (status === 401) {
+      handleSessionExpired();
+    } else if (status !== 429) {
+      showAlert("danger", "Check Not Completed", data.message || "Could not check the file.");
+    }
+  } catch (err) {
+    showAlert("danger", "Connection Error", "Could not reach Storage Service.");
+  } finally {
+    button.disabled = false;
+  }
 }
 
 async function handleRenameFolderSubmit(event) {

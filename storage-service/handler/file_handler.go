@@ -500,6 +500,53 @@ func (h *FileHandler) RenameFile(ctx context.Context, req *storagepb.RenameFileR
 	}, nil
 }
 
+// VerifyFileIntegrity  <-  GET /api/files/{file_id}/integrity
+func (h *FileHandler) VerifyFileIntegrity(ctx context.Context, req *storagepb.VerifyFileIntegrityRequest) (*storagepb.FileIntegrityResponse, error) {
+	userID := userIDFrom(ctx)
+
+	oid, err := primitive.ObjectIDFromHex(strings.TrimSpace(req.GetFileId()))
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "Invalid file ID")
+	}
+
+	file, err := h.files.FindByID(ctx, oid)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, status.Error(codes.NotFound, "File not found")
+		}
+		return nil, status.Error(codes.Internal, "Error loading file")
+	}
+
+	if file.OwnerID != userID {
+		return nil, status.Error(codes.PermissionDenied, "You do not have permission to check this file")
+	}
+
+	content, err := h.objects.Get(ctx, file.ObjectKey)
+	if err != nil {
+		log.Printf("read object %s: %v", file.ObjectKey, err)
+		return nil, status.Error(codes.Internal, "Could not read the stored file")
+	}
+	defer content.Close()
+
+	err = filecheck.Verify(content, file.SHA256)
+	if errors.Is(err, filecheck.ErrIntegrity) {
+		log.Printf("WARNING: integrity check failed for file %s", file.ID.Hex())
+		return &storagepb.FileIntegrityResponse{
+			Intact:  false,
+			Message: "The stored content does not match the checksum saved at upload",
+		}, nil
+	}
+	if err != nil {
+		log.Printf("read object %s: %v", file.ObjectKey, err)
+		return nil, status.Error(codes.Internal, "Could not read the stored file")
+	}
+
+	return &storagepb.FileIntegrityResponse{
+		Intact:  true,
+		Message: "The file is intact: its SHA-256 matches the one saved at upload",
+	}, nil
+}
+
 // #region helperi
 
 const duplicateFileMsg = "A file with this name already exists in the current folder"

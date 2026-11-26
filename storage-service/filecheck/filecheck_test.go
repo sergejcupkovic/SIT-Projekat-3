@@ -2,6 +2,7 @@ package filecheck
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -29,5 +30,17 @@ func TestValidateUpload(t *testing.T) {
 				t.Errorf("ValidateUpload(%q) = %v, want %v", tc.file, err, tc.want)
 			}
 		})
+	}
+}
+
+func TestVerify(t *testing.T) {
+	// SHA-256 of "hello"
+	const saved = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+
+	if err := Verify(strings.NewReader("hello"), saved); err != nil {
+		t.Errorf("unchanged content: %v", err)
+	}
+	if err := Verify(strings.NewReader("hellO"), saved); !errors.Is(err, ErrIntegrity) {
+		t.Errorf("changed content: got %v, want ErrIntegrity", err)
 	}
 }

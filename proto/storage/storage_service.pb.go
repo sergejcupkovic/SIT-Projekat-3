@@ -709,6 +709,50 @@ func (x *RenameFileRequest) GetName() string {
 	return ""
 }
 
+type VerifyFileIntegrityRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	FileId        string                 `protobuf:"bytes,1,opt,name=file_id,json=fileId,proto3" json:"file_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *VerifyFileIntegrityRequest) Reset() {
+	*x = VerifyFileIntegrityRequest{}
+	mi := &file_storage_storage_service_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *VerifyFileIntegrityRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VerifyFileIntegrityRequest) ProtoMessage() {}
+
+func (x *VerifyFileIntegrityRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_storage_storage_service_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VerifyFileIntegrityRequest.ProtoReflect.Descriptor instead.
+func (*VerifyFileIntegrityRequest) Descriptor() ([]byte, []int) {
+	return file_storage_storage_service_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *VerifyFileIntegrityRequest) GetFileId() string {
+	if x != nil {
+		return x.FileId
+	}
+	return ""
+}
+
 type FolderResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Message       string                 `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
@@ -719,7 +763,7 @@ type FolderResponse struct {
 
 func (x *FolderResponse) Reset() {
 	*x = FolderResponse{}
-	mi := &file_storage_storage_service_proto_msgTypes[11]
+	mi := &file_storage_storage_service_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -731,7 +775,7 @@ func (x *FolderResponse) String() string {
 func (*FolderResponse) ProtoMessage() {}
 
 func (x *FolderResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_storage_storage_service_proto_msgTypes[11]
+	mi := &file_storage_storage_service_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -744,7 +788,7 @@ func (x *FolderResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FolderResponse.ProtoReflect.Descriptor instead.
 func (*FolderResponse) Descriptor() ([]byte, []int) {
-	return file_storage_storage_service_proto_rawDescGZIP(), []int{11}
+	return file_storage_storage_service_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *FolderResponse) GetMessage() string {
@@ -771,7 +815,7 @@ type FileResponse struct {
 
 func (x *FileResponse) Reset() {
 	*x = FileResponse{}
-	mi := &file_storage_storage_service_proto_msgTypes[12]
+	mi := &file_storage_storage_service_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -783,7 +827,7 @@ func (x *FileResponse) String() string {
 func (*FileResponse) ProtoMessage() {}
 
 func (x *FileResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_storage_storage_service_proto_msgTypes[12]
+	mi := &file_storage_storage_service_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -796,7 +840,7 @@ func (x *FileResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FileResponse.ProtoReflect.Descriptor instead.
 func (*FileResponse) Descriptor() ([]byte, []int) {
-	return file_storage_storage_service_proto_rawDescGZIP(), []int{12}
+	return file_storage_storage_service_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *FileResponse) GetMessage() string {
@@ -813,6 +857,58 @@ func (x *FileResponse) GetFile() *FileItem {
 	return nil
 }
 
+type FileIntegrityResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Intact        bool                   `protobuf:"varint,1,opt,name=intact,proto3" json:"intact,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FileIntegrityResponse) Reset() {
+	*x = FileIntegrityResponse{}
+	mi := &file_storage_storage_service_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FileIntegrityResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FileIntegrityResponse) ProtoMessage() {}
+
+func (x *FileIntegrityResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_storage_storage_service_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FileIntegrityResponse.ProtoReflect.Descriptor instead.
+func (*FileIntegrityResponse) Descriptor() ([]byte, []int) {
+	return file_storage_storage_service_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *FileIntegrityResponse) GetIntact() bool {
+	if x != nil {
+		return x.Intact
+	}
+	return false
+}
+
+func (x *FileIntegrityResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
 type UploadFileResponse struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Message string                 `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
@@ -825,7 +921,7 @@ type UploadFileResponse struct {
 
 func (x *UploadFileResponse) Reset() {
 	*x = UploadFileResponse{}
-	mi := &file_storage_storage_service_proto_msgTypes[13]
+	mi := &file_storage_storage_service_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -837,7 +933,7 @@ func (x *UploadFileResponse) String() string {
 func (*UploadFileResponse) ProtoMessage() {}
 
 func (x *UploadFileResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_storage_storage_service_proto_msgTypes[13]
+	mi := &file_storage_storage_service_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -850,7 +946,7 @@ func (x *UploadFileResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UploadFileResponse.ProtoReflect.Descriptor instead.
 func (*UploadFileResponse) Descriptor() ([]byte, []int) {
-	return file_storage_storage_service_proto_rawDescGZIP(), []int{13}
+	return file_storage_storage_service_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *UploadFileResponse) GetMessage() string {
@@ -887,7 +983,7 @@ type FolderContentResponse struct {
 
 func (x *FolderContentResponse) Reset() {
 	*x = FolderContentResponse{}
-	mi := &file_storage_storage_service_proto_msgTypes[14]
+	mi := &file_storage_storage_service_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -899,7 +995,7 @@ func (x *FolderContentResponse) String() string {
 func (*FolderContentResponse) ProtoMessage() {}
 
 func (x *FolderContentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_storage_storage_service_proto_msgTypes[14]
+	mi := &file_storage_storage_service_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -912,7 +1008,7 @@ func (x *FolderContentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FolderContentResponse.ProtoReflect.Descriptor instead.
 func (*FolderContentResponse) Descriptor() ([]byte, []int) {
-	return file_storage_storage_service_proto_rawDescGZIP(), []int{14}
+	return file_storage_storage_service_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *FolderContentResponse) GetCurrentFolder() *Folder {
@@ -956,7 +1052,7 @@ type UploadNewFileVersionRequest struct {
 
 func (x *UploadNewFileVersionRequest) Reset() {
 	*x = UploadNewFileVersionRequest{}
-	mi := &file_storage_storage_service_proto_msgTypes[15]
+	mi := &file_storage_storage_service_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -968,7 +1064,7 @@ func (x *UploadNewFileVersionRequest) String() string {
 func (*UploadNewFileVersionRequest) ProtoMessage() {}
 
 func (x *UploadNewFileVersionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_storage_storage_service_proto_msgTypes[15]
+	mi := &file_storage_storage_service_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -981,7 +1077,7 @@ func (x *UploadNewFileVersionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UploadNewFileVersionRequest.ProtoReflect.Descriptor instead.
 func (*UploadNewFileVersionRequest) Descriptor() ([]byte, []int) {
-	return file_storage_storage_service_proto_rawDescGZIP(), []int{15}
+	return file_storage_storage_service_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *UploadNewFileVersionRequest) GetPayload() isUploadNewFileVersionRequest_Payload {
@@ -1036,7 +1132,7 @@ type UploadNewFileVersionMetadata struct {
 
 func (x *UploadNewFileVersionMetadata) Reset() {
 	*x = UploadNewFileVersionMetadata{}
-	mi := &file_storage_storage_service_proto_msgTypes[16]
+	mi := &file_storage_storage_service_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1048,7 +1144,7 @@ func (x *UploadNewFileVersionMetadata) String() string {
 func (*UploadNewFileVersionMetadata) ProtoMessage() {}
 
 func (x *UploadNewFileVersionMetadata) ProtoReflect() protoreflect.Message {
-	mi := &file_storage_storage_service_proto_msgTypes[16]
+	mi := &file_storage_storage_service_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1061,7 +1157,7 @@ func (x *UploadNewFileVersionMetadata) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UploadNewFileVersionMetadata.ProtoReflect.Descriptor instead.
 func (*UploadNewFileVersionMetadata) Descriptor() ([]byte, []int) {
-	return file_storage_storage_service_proto_rawDescGZIP(), []int{16}
+	return file_storage_storage_service_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *UploadNewFileVersionMetadata) GetFileId() string {
@@ -1141,13 +1237,18 @@ const file_storage_storage_service_proto_rawDesc = "" +
 	"\x04name\x18\x02 \x01(\tR\x04name\"@\n" +
 	"\x11RenameFileRequest\x12\x17\n" +
 	"\afile_id\x18\x01 \x01(\tR\x06fileId\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name\"S\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\"5\n" +
+	"\x1aVerifyFileIntegrityRequest\x12\x17\n" +
+	"\afile_id\x18\x01 \x01(\tR\x06fileId\"S\n" +
 	"\x0eFolderResponse\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x12'\n" +
 	"\x06folder\x18\x02 \x01(\v2\x0f.storage.FolderR\x06folder\"O\n" +
 	"\fFileResponse\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x12%\n" +
-	"\x04file\x18\x02 \x01(\v2\x11.storage.FileItemR\x04file\"\x82\x01\n" +
+	"\x04file\x18\x02 \x01(\v2\x11.storage.FileItemR\x04file\"I\n" +
+	"\x15FileIntegrityResponse\x12\x16\n" +
+	"\x06intact\x18\x01 \x01(\bR\x06intact\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"\x82\x01\n" +
 	"\x12UploadFileResponse\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x12%\n" +
 	"\x04file\x18\x02 \x01(\v2\x11.storage.FileItemR\x04file\x12+\n" +
@@ -1165,13 +1266,14 @@ const file_storage_storage_service_proto_rawDesc = "" +
 	"\afile_id\x18\x01 \x01(\tR\x06fileId\x12\x1b\n" +
 	"\tfile_name\x18\x02 \x01(\tR\bfileName\x12\x1d\n" +
 	"\n" +
-	"size_bytes\x18\x03 \x01(\x03R\tsizeBytes2\xf6\x05\n" +
+	"size_bytes\x18\x03 \x01(\x03R\tsizeBytes2\xfb\x06\n" +
 	"\x0eStorageService\x12^\n" +
 	"\fCreateFolder\x12\x1c.storage.CreateFolderRequest\x1a\x17.storage.FolderResponse\"\x17\x82\xd3\xe4\x93\x02\x11:\x01*\"\f/api/folders\x12~\n" +
 	"\fBrowseFolder\x12\x1c.storage.BrowseFolderRequest\x1a\x1e.storage.FolderContentResponse\"0\x82\xd3\xe4\x93\x02*Z\x0e\x12\f/api/folders\x12\x18/api/folders/{folder_id}\x12\x89\x01\n" +
 	"\fRenameFolder\x12\x1c.storage.RenameFolderRequest\x1a\x17.storage.FolderResponse\"B\x82\xd3\xe4\x93\x02<:\x01*Z\x1d:\x01*\x1a\x18/api/folders/{folder_id}2\x18/api/folders/{folder_id}\x12{\n" +
 	"\n" +
-	"RenameFile\x12\x1a.storage.RenameFileRequest\x1a\x15.storage.FileResponse\":\x82\xd3\xe4\x93\x024:\x01*Z\x19:\x01*\x1a\x14/api/files/{file_id}2\x14/api/files/{file_id}\x12U\n" +
+	"RenameFile\x12\x1a.storage.RenameFileRequest\x1a\x15.storage.FileResponse\":\x82\xd3\xe4\x93\x024:\x01*Z\x19:\x01*\x1a\x14/api/files/{file_id}2\x14/api/files/{file_id}\x12\x82\x01\n" +
+	"\x13VerifyFileIntegrity\x12#.storage.VerifyFileIntegrityRequest\x1a\x1e.storage.FileIntegrityResponse\"&\x82\xd3\xe4\x93\x02 \x12\x1e/api/files/{file_id}/integrity\x12U\n" +
 	"\bGetQuota\x12\x18.storage.GetQuotaRequest\x1a\x15.storage.StorageQuota\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/api/files/quota\x12G\n" +
 	"\n" +
 	"UploadFile\x12\x1a.storage.UploadFileRequest\x1a\x1b.storage.UploadFileResponse(\x01\x12[\n" +
@@ -1189,7 +1291,7 @@ func file_storage_storage_service_proto_rawDescGZIP() []byte {
 	return file_storage_storage_service_proto_rawDescData
 }
 
-var file_storage_storage_service_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_storage_storage_service_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_storage_storage_service_proto_goTypes = []any{
 	(*Folder)(nil),                       // 0: storage.Folder
 	(*BreadcrumbItem)(nil),               // 1: storage.BreadcrumbItem
@@ -1202,18 +1304,20 @@ var file_storage_storage_service_proto_goTypes = []any{
 	(*BrowseFolderRequest)(nil),          // 8: storage.BrowseFolderRequest
 	(*RenameFolderRequest)(nil),          // 9: storage.RenameFolderRequest
 	(*RenameFileRequest)(nil),            // 10: storage.RenameFileRequest
-	(*FolderResponse)(nil),               // 11: storage.FolderResponse
-	(*FileResponse)(nil),                 // 12: storage.FileResponse
-	(*UploadFileResponse)(nil),           // 13: storage.UploadFileResponse
-	(*FolderContentResponse)(nil),        // 14: storage.FolderContentResponse
-	(*UploadNewFileVersionRequest)(nil),  // 15: storage.UploadNewFileVersionRequest
-	(*UploadNewFileVersionMetadata)(nil), // 16: storage.UploadNewFileVersionMetadata
-	(*timestamppb.Timestamp)(nil),        // 17: google.protobuf.Timestamp
+	(*VerifyFileIntegrityRequest)(nil),   // 11: storage.VerifyFileIntegrityRequest
+	(*FolderResponse)(nil),               // 12: storage.FolderResponse
+	(*FileResponse)(nil),                 // 13: storage.FileResponse
+	(*FileIntegrityResponse)(nil),        // 14: storage.FileIntegrityResponse
+	(*UploadFileResponse)(nil),           // 15: storage.UploadFileResponse
+	(*FolderContentResponse)(nil),        // 16: storage.FolderContentResponse
+	(*UploadNewFileVersionRequest)(nil),  // 17: storage.UploadNewFileVersionRequest
+	(*UploadNewFileVersionMetadata)(nil), // 18: storage.UploadNewFileVersionMetadata
+	(*timestamppb.Timestamp)(nil),        // 19: google.protobuf.Timestamp
 }
 var file_storage_storage_service_proto_depIdxs = []int32{
-	17, // 0: storage.Folder.created_at:type_name -> google.protobuf.Timestamp
-	17, // 1: storage.FileItem.created_at:type_name -> google.protobuf.Timestamp
-	17, // 2: storage.FileItem.updated_at:type_name -> google.protobuf.Timestamp
+	19, // 0: storage.Folder.created_at:type_name -> google.protobuf.Timestamp
+	19, // 1: storage.FileItem.created_at:type_name -> google.protobuf.Timestamp
+	19, // 2: storage.FileItem.updated_at:type_name -> google.protobuf.Timestamp
 	6,  // 3: storage.UploadFileRequest.metadata:type_name -> storage.UploadFileMetadata
 	0,  // 4: storage.FolderResponse.folder:type_name -> storage.Folder
 	2,  // 5: storage.FileResponse.file:type_name -> storage.FileItem
@@ -1223,23 +1327,25 @@ var file_storage_storage_service_proto_depIdxs = []int32{
 	1,  // 9: storage.FolderContentResponse.breadcrumbs:type_name -> storage.BreadcrumbItem
 	0,  // 10: storage.FolderContentResponse.folders:type_name -> storage.Folder
 	2,  // 11: storage.FolderContentResponse.files:type_name -> storage.FileItem
-	16, // 12: storage.UploadNewFileVersionRequest.metadata:type_name -> storage.UploadNewFileVersionMetadata
+	18, // 12: storage.UploadNewFileVersionRequest.metadata:type_name -> storage.UploadNewFileVersionMetadata
 	7,  // 13: storage.StorageService.CreateFolder:input_type -> storage.CreateFolderRequest
 	8,  // 14: storage.StorageService.BrowseFolder:input_type -> storage.BrowseFolderRequest
 	9,  // 15: storage.StorageService.RenameFolder:input_type -> storage.RenameFolderRequest
 	10, // 16: storage.StorageService.RenameFile:input_type -> storage.RenameFileRequest
-	4,  // 17: storage.StorageService.GetQuota:input_type -> storage.GetQuotaRequest
-	5,  // 18: storage.StorageService.UploadFile:input_type -> storage.UploadFileRequest
-	15, // 19: storage.StorageService.UploadNewFileVersion:input_type -> storage.UploadNewFileVersionRequest
-	11, // 20: storage.StorageService.CreateFolder:output_type -> storage.FolderResponse
-	14, // 21: storage.StorageService.BrowseFolder:output_type -> storage.FolderContentResponse
-	11, // 22: storage.StorageService.RenameFolder:output_type -> storage.FolderResponse
-	12, // 23: storage.StorageService.RenameFile:output_type -> storage.FileResponse
-	3,  // 24: storage.StorageService.GetQuota:output_type -> storage.StorageQuota
-	13, // 25: storage.StorageService.UploadFile:output_type -> storage.UploadFileResponse
-	13, // 26: storage.StorageService.UploadNewFileVersion:output_type -> storage.UploadFileResponse
-	20, // [20:27] is the sub-list for method output_type
-	13, // [13:20] is the sub-list for method input_type
+	11, // 17: storage.StorageService.VerifyFileIntegrity:input_type -> storage.VerifyFileIntegrityRequest
+	4,  // 18: storage.StorageService.GetQuota:input_type -> storage.GetQuotaRequest
+	5,  // 19: storage.StorageService.UploadFile:input_type -> storage.UploadFileRequest
+	17, // 20: storage.StorageService.UploadNewFileVersion:input_type -> storage.UploadNewFileVersionRequest
+	12, // 21: storage.StorageService.CreateFolder:output_type -> storage.FolderResponse
+	16, // 22: storage.StorageService.BrowseFolder:output_type -> storage.FolderContentResponse
+	12, // 23: storage.StorageService.RenameFolder:output_type -> storage.FolderResponse
+	13, // 24: storage.StorageService.RenameFile:output_type -> storage.FileResponse
+	14, // 25: storage.StorageService.VerifyFileIntegrity:output_type -> storage.FileIntegrityResponse
+	3,  // 26: storage.StorageService.GetQuota:output_type -> storage.StorageQuota
+	15, // 27: storage.StorageService.UploadFile:output_type -> storage.UploadFileResponse
+	15, // 28: storage.StorageService.UploadNewFileVersion:output_type -> storage.UploadFileResponse
+	21, // [21:29] is the sub-list for method output_type
+	13, // [13:21] is the sub-list for method input_type
 	13, // [13:13] is the sub-list for extension type_name
 	13, // [13:13] is the sub-list for extension extendee
 	0,  // [0:13] is the sub-list for field type_name
@@ -1257,7 +1363,7 @@ func file_storage_storage_service_proto_init() {
 	}
 	file_storage_storage_service_proto_msgTypes[6].OneofWrappers = []any{}
 	file_storage_storage_service_proto_msgTypes[7].OneofWrappers = []any{}
-	file_storage_storage_service_proto_msgTypes[15].OneofWrappers = []any{
+	file_storage_storage_service_proto_msgTypes[17].OneofWrappers = []any{
 		(*UploadNewFileVersionRequest_Metadata)(nil),
 		(*UploadNewFileVersionRequest_Chunk)(nil),
 	}
@@ -1267,7 +1373,7 @@ func file_storage_storage_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_storage_storage_service_proto_rawDesc), len(file_storage_storage_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   17,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
