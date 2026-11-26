@@ -1,0 +1,149 @@
+name: Stashr
+
+# browser -> nginx -> api-gateway -> (gRPC) services
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: users_mongodb
+    command: ["mongod", "--port", "${MONGO_PORT}"]
+    ports:
+      - "${MONGO_PORT}:${MONGO_PORT}"
+    volumes:
+      - mongo_data:/data/db
+
+  cassandra:
+    image: cassandra:4.1
+    container_name: stashr_cassandra
+    ports:
+      - "127.0.0.1:${CASSANDRA_PORT:-9042}:9042"
+    environment:
+      MAX_HEAP_SIZE: 512M
+      HEAP_NEWSIZE: 128M
+    volumes:
+      - cassandra_data:/var/lib/cassandra
+
+  mailpit:
+    image: axllent/mailpit:v1.15
+    container_name: mailpit
+    environment:
+      MP_SMTP_BIND_ADDR: 0.0.0.0:${SMTP_PORT}
+      MP_UI_BIND_ADDR: 0.0.0.0:${MAILPIT_UI_PORT}
+    ports:
+      - "${MAILPIT_UI_PORT}:${MAILPIT_UI_PORT}"
+      - "${SMTP_PORT}:${SMTP_PORT}"
+
+  # stores file contents (S3 API); file metadata is in MongoDB
+  object-store:
+    image: chrislusf/seaweedfs:4.55
+    container_name: stashr_object_store
+    command: ["server", "-dir=/data", "-s3", "-s3.port=9000", "-s3.config=/etc/seaweedfs/s3.json"]
+    ports:
+      - "127.0.0.1:${OBJECT_STORE_API_PORT:-9000}:9000"
+      - "127.0.0.1:${OBJECT_STORE_UI_PORT:-9001}:8888"
+    volumes:
+      - object_store_data:/data
+      - ./s3.json:/etc/seaweedfs/s3.json:ro
+
+  # gRPC server (UsersService). Port published only for debugging with grpcurl.
+  users-service:
+    build:
+      context: .
+      dockerfile: users-service/Dockerfile
+    container_name: users_service
+    ports:
+      - "${USERS_GRPC_PORT:-50051}:${USERS_GRPC_PORT:-50051}"
+    env_file: .env
+    environment:
+      CONFIG_PATH: /app/config.yaml
+      MONGO_URI: mongodb://mongodb:${MONGO_PORT}
+      USERS_GRPC_PORT: ${USERS_GRPC_PORT:-50051}
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    depends_on:
+      - mongodb
+      - mailpit
+
+  # gRPC server (StorageService). Port published only for debugging with grpcurl.
+  storage-service:
+    build:
+      context: .
+      dockerfile: storage-service/Dockerfile
+    container_name: storage_service
+    ports:
+      - "${STORAGE_GRPC_PORT:-50052}:${STORAGE_GRPC_PORT:-50052}"
+    env_file: .env
+    environment:
+      STORAGE_GRPC_PORT: ${STORAGE_GRPC_PORT:-50052}
+      MONGO_URI: mongodb://mongodb:${MONGO_PORT}
+      MONGO_DB_NAME: storage_db
+      USERS_GRPC_ADDR: users-service:${USERS_GRPC_PORT:-50051}
+      OBJECT_STORE_ENDPOINT: object-store:9000
+      OBJECT_STORE_ACCESS_KEY: ${OBJECT_STORE_ACCESS_KEY:-stashr-dev}
+      OBJECT_STORE_SECRET_KEY: ${OBJECT_STORE_SECRET_KEY:-stashr-dev-secret-change-me}
+      OBJECT_STORE_BUCKET: ${OBJECT_STORE_BUCKET:-stashr-files}
+      OBJECT_STORE_USE_SSL: "false"
+      CONFIG_PATH: /app/config.yaml
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    restart: on-failure
+    depends_on:
+      - mongodb
+      - object-store
+      - users-service
+
+  notifications-service:
+    build:
+      context: .
+      dockerfile: notifications-service/Dockerfile
+    container_name: notifications_service
+    ports:
+      - "${NOTIFICATIONS_GRPC_PORT:-50053}:${NOTIFICATIONS_GRPC_PORT:-50053}"
+    env_file: .env
+    environment:
+      NOTIFICATIONS_GRPC_PORT: ${NOTIFICATIONS_GRPC_PORT:-50053}
+      CASSANDRA_HOSTS: cassandra
+      CASSANDRA_KEYSPACE: stashr_notifications
+    restart: on-failure
+    depends_on:
+      - cassandra
+
+  # HTTPS REST entry point; translates REST/JSON <-> gRPC.
+  api-gateway:
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile
+    container_name: api_gateway
+    ports:
+      - "${GATEWAY_PORT:-8443}:${GATEWAY_PORT:-8443}"
+    env_file: .env
+    environment:
+      GATEWAY_PORT: ${GATEWAY_PORT:-8443}
+      USERS_GRPC_ADDR: users-service:${USERS_GRPC_PORT:-50051}
+      STORAGE_GRPC_ADDR: storage-service:${STORAGE_GRPC_PORT:-50052}
+      NOTIFICATIONS_GRPC_ADDR: notifications-service:${NOTIFICATIONS_GRPC_PORT:-50053}
+      TLS_CERT_FILE: /certs/server.crt
+      TLS_KEY_FILE: /certs/server.key
+      CONFIG_PATH: /app/config.yaml
+    volumes:
+      - ./certs:/certs:ro
+      - ./config.yaml:/app/config.yaml:ro
+    depends_on:
+      - users-service
+      - storage-service
+      - notifications-service
+
+  # nginx serving the SPA over HTTPS and proxying /api to the gateway over HTTPS.
+  frontend:
+    build: ./frontend
+    container_name: frontend
+    ports:
+      - "${FRONTEND_PORT}:443"
+    volumes:
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - api-gateway
+
+volumes:
+  mongo_data:
+  object_store_data:
+  cassandra_data:

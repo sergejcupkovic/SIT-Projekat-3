@@ -1,0 +1,1324 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>User Authentication - SIT 3. Godina Projekat</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+
+  <body>
+    <div class="page-container">
+      <header class="app-header">
+        <div class="logo">
+          <svg
+            class="logo-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
+          </svg>
+          <span class="logo-text">SIT 3. Godina Projekat</span>
+        </div>
+        <div class="header-badges">
+          <a
+            href="http://localhost:8025"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="badge badge-link"
+            title="Open Mailpit inbox"
+          >
+            Mailpit Web UI :8025 ↗
+          </a>
+        </div>
+      </header>
+
+      <main class="main-content">
+        <div class="auth-card">
+          <div class="auth-tabs">
+            <button type="button" class="tab-btn active" id="tabLogin">
+              Sign In
+            </button>
+            <button type="button" class="tab-btn" id="tabRegister">
+              Register
+            </button>
+          </div>
+
+          <!-- Shared Notification Alert -->
+          <div
+            id="alertContainer"
+            class="alert-container hidden"
+            role="alert"
+            aria-live="polite"
+          >
+            <div class="alert-icon" id="alertIcon"></div>
+            <div class="alert-body">
+              <h4 class="alert-title" id="alertTitle"></h4>
+              <p class="alert-message" id="alertMessage"></p>
+              <div id="alertAction" class="alert-action hidden"></div>
+            </div>
+            <button
+              type="button"
+              class="alert-close"
+              id="alertCloseBtn"
+              aria-label="Close notification"
+            >
+              &times;
+            </button>
+          </div>
+
+          <!-- 1. LOGIN FORM (Step 1) -->
+          <div id="loginSection" class="auth-section">
+            <div class="card-header">
+              <h1 class="card-title">Welcome Back</h1>
+              <p class="card-subtitle">Sign in to access your cloud storage</p>
+            </div>
+
+            <form id="loginForm" class="auth-form" novalidate>
+              <div class="form-group">
+                <label for="loginEmail" class="form-label"
+                  >Email Address <span class="required">*</span></label
+                >
+                <div class="input-wrapper">
+                  <input
+                    type="email"
+                    id="loginEmail"
+                    maxlength="254"
+                    class="form-input"
+                    placeholder="petar@example.com"
+                    autocomplete="email"
+                    required
+                  />
+                </div>
+                <span class="field-error" id="loginEmailError"></span>
+              </div>
+
+              <div class="form-group">
+                <label for="loginPassword" class="form-label"
+                  >Password <span class="required">*</span></label
+                >
+                <div class="input-wrapper">
+                  <input
+                    type="password"
+                    id="loginPassword"
+                    maxlength="72"
+                    class="form-input"
+                    placeholder="Enter your password"
+                    autocomplete="current-password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    class="toggle-password"
+                    id="toggleLoginPasswordBtn"
+                    aria-label="Show password"
+                    tabindex="-1"
+                  >
+                    <svg
+                      class="eye-icon show"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                    <svg
+                      class="eye-icon hide"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+                      <path
+                        d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"
+                      />
+                      <path
+                        d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"
+                      />
+                      <line x1="2" y1="2" x2="22" y2="22" />
+                    </svg>
+                  </button>
+                </div>
+                <span class="field-error" id="loginPasswordError"></span>
+                <button
+                  type="button"
+                  id="forgotPasswordLink"
+                  class="btn-link forgot-password-link"
+                >
+                  Forgot password?
+                </button>
+              </div>
+
+              <button type="submit" id="loginSubmitBtn" class="btn-submit">
+                <span class="btn-text">Continue with 2FA</span>
+                <span class="btn-spinner hidden" id="loginSpinner"></span>
+              </button>
+
+              <div style="text-align: center; margin-top: 1rem">
+                <button
+                  type="button"
+                  id="requestMagicLinkBtn"
+                  class="btn-link"
+                  style="
+                    background: none;
+                    border: none;
+                    color: #6366f1;
+                    cursor: pointer;
+                    font-size: 0.9rem;
+                    text-decoration: underline;
+                  "
+                >
+                  Email me a Magic Login Link instead
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- FORGOT PASSWORD: request a reset link -->
+          <div id="forgotPasswordSection" class="auth-section hidden">
+            <div class="card-header">
+              <h1 class="card-title">Forgot Password</h1>
+              <p class="card-subtitle">
+                Enter your email address and we will send you a reset link
+              </p>
+            </div>
+
+            <form id="forgotPasswordForm" class="auth-form" novalidate>
+              <div class="form-group">
+                <label for="forgotEmail" class="form-label"
+                  >Email Address <span class="required">*</span></label
+                >
+                <div class="input-wrapper">
+                  <input
+                    type="email"
+                    id="forgotEmail"
+                    maxlength="254"
+                    class="form-input"
+                    placeholder="petar@example.com"
+                    autocomplete="email"
+                    required
+                  />
+                </div>
+                <span class="field-error" id="forgotEmailError"></span>
+              </div>
+
+              <button type="submit" id="forgotSubmitBtn" class="btn-submit">
+                <span class="btn-text">Send Reset Link</span>
+                <span class="btn-spinner hidden"></span>
+              </button>
+
+              <div class="form-back-row">
+                <button type="button" id="forgotBackBtn" class="btn-link text-subtle">
+                  ← Back to Login
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- RESET PASSWORD: opened from the emailed link (/?resetToken=...) -->
+          <div id="resetPasswordSection" class="auth-section hidden">
+            <div class="card-header">
+              <h1 class="card-title">Set a New Password</h1>
+              <p class="card-subtitle">Choose a new password for your account</p>
+            </div>
+
+            <form id="resetPasswordForm" class="auth-form" novalidate>
+              <div class="form-group">
+                <label for="resetNewPassword" class="form-label"
+                  >New Password <span class="required">*</span></label
+                >
+                <div class="input-wrapper">
+                  <input
+                    type="password"
+                    id="resetNewPassword"
+                    class="form-input"
+                    placeholder="Enter a new password"
+                    autocomplete="new-password"
+                    data-password-toggle
+                    maxlength="72"
+                    required
+                  />
+                </div>
+                <span class="field-error" id="resetNewPasswordError"></span>
+                <div
+                  class="password-strength-container"
+                  id="resetStrengthContainer"
+                ></div>
+              </div>
+
+              <div class="form-group">
+                <label for="resetConfirmPassword" class="form-label"
+                  >Confirm New Password <span class="required">*</span></label
+                >
+                <div class="input-wrapper">
+                  <input
+                    type="password"
+                    id="resetConfirmPassword"
+                    class="form-input"
+                    placeholder="Re-enter your new password"
+                    autocomplete="new-password"
+                    data-password-toggle
+                    maxlength="72"
+                    required
+                  />
+                </div>
+                <span class="field-error" id="resetConfirmPasswordError"></span>
+                <div
+                  class="password-match-status"
+                  id="resetPasswordMatchStatus"
+                ></div>
+              </div>
+
+              <button type="submit" id="resetSubmitBtn" class="btn-submit">
+                <span class="btn-text">Set New Password</span>
+                <span class="btn-spinner hidden"></span>
+              </button>
+            </form>
+
+            <div class="form-back-row">
+              <button type="button" id="resetBackBtn" class="btn-link text-subtle">
+                ← Back to Login
+              </button>
+            </div>
+          </div>
+
+          <!-- ACCOUNT: change password while signed in (users and admins) -->
+          <div id="changePasswordSection" class="auth-section hidden">
+            <div class="card-header">
+              <h1 class="card-title">Change Password</h1>
+              <p class="card-subtitle">
+                Signed in as <strong id="changePasswordAccount"></strong>
+              </p>
+            </div>
+
+            <form id="changePasswordForm" class="auth-form" novalidate>
+              <div class="form-group">
+                <label for="changeCurrentPassword" class="form-label"
+                  >Current Password <span class="required">*</span></label
+                >
+                <div class="input-wrapper">
+                  <input
+                    type="password"
+                    id="changeCurrentPassword"
+                    maxlength="72"
+                    class="form-input"
+                    placeholder="Enter your current password"
+                    autocomplete="current-password"
+                    data-password-toggle
+                    required
+                  />
+                </div>
+                <span class="field-error" id="changeCurrentPasswordError"></span>
+              </div>
+
+              <div class="form-group">
+                <label for="changeNewPassword" class="form-label"
+                  >New Password <span class="required">*</span></label
+                >
+                <div class="input-wrapper">
+                  <input
+                    type="password"
+                    id="changeNewPassword"
+                    class="form-input"
+                    placeholder="Enter a new password"
+                    autocomplete="new-password"
+                    data-password-toggle
+                    maxlength="72"
+                    required
+                  />
+                </div>
+                <span class="field-error" id="changeNewPasswordError"></span>
+                <div
+                  class="password-strength-container"
+                  id="changeStrengthContainer"
+                ></div>
+              </div>
+
+              <div class="form-group">
+                <label for="changeConfirmPassword" class="form-label"
+                  >Confirm New Password <span class="required">*</span></label
+                >
+                <div class="input-wrapper">
+                  <input
+                    type="password"
+                    id="changeConfirmPassword"
+                    class="form-input"
+                    placeholder="Re-enter your new password"
+                    autocomplete="new-password"
+                    data-password-toggle
+                    maxlength="72"
+                    required
+                  />
+                </div>
+                <span class="field-error" id="changeConfirmPasswordError"></span>
+                <div
+                  class="password-match-status"
+                  id="changePasswordMatchStatus"
+                ></div>
+              </div>
+
+              <button type="submit" id="changePasswordSubmitBtn" class="btn-submit">
+                <span class="btn-text">Change Password</span>
+                <span class="btn-spinner hidden"></span>
+              </button>
+
+              <div class="form-back-row">
+                <button
+                  type="button"
+                  id="changePasswordBackBtn"
+                  class="btn-link text-subtle"
+                >
+                  ← Back
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- FORCED PASSWORD CHANGE (Task 3) -->
+          <div id="forceChangePasswordSection" class="auth-section hidden">
+            <div class="card-header">
+              <h1 class="card-title">Change Expired Password</h1>
+              <p class="card-subtitle">
+                Your ban has expired. Please choose a new password to restore
+                access.
+              </p>
+            </div>
+
+            <form id="forceChangePasswordForm" class="auth-form" novalidate>
+              <div class="form-group">
+                <label for="forceNewPassword" class="form-label"
+                  >New Password <span class="required">*</span></label
+                >
+                <div class="input-wrapper">
+                  <input
+                    type="password"
+                    id="forceNewPassword"
+                    class="form-input"
+                    placeholder="Enter a strong password"
+                    autocomplete="new-password"
+                    maxlength="72"
+                    required
+                  />
+                  <button
+                    type="button"
+                    class="toggle-password"
+                    id="toggleForceNewPasswordBtn"
+                    aria-label="Show password"
+                    tabindex="-1"
+                  >
+                    <svg
+                      class="eye-icon show"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                    <svg
+                      class="eye-icon hide"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+                      <path
+                        d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"
+                      />
+                      <path
+                        d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"
+                      />
+                      <line x1="2" y1="2" x2="22" y2="22" />
+                    </svg>
+                  </button>
+                </div>
+                <span class="field-error" id="forceNewPasswordError"></span>
+
+                <div
+                  class="password-strength-container"
+                  id="forceStrengthContainer"
+                ></div>
+              </div>
+
+              <div class="form-group">
+                <label for="forceConfirmPassword" class="form-label"
+                  >Confirm New Password <span class="required">*</span></label
+                >
+                <div class="input-wrapper">
+                  <input
+                    type="password"
+                    id="forceConfirmPassword"
+                    class="form-input"
+                    placeholder="Re-enter your new password"
+                    autocomplete="new-password"
+                    maxlength="72"
+                    required
+                  />
+                  <button
+                    type="button"
+                    class="toggle-password"
+                    id="toggleForceConfirmPasswordBtn"
+                    aria-label="Show password"
+                    tabindex="-1"
+                  >
+                    <svg
+                      class="eye-icon show"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                    <svg
+                      class="eye-icon hide"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+                      <path
+                        d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"
+                      />
+                      <path
+                        d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"
+                      />
+                      <line x1="2" y1="2" x2="22" y2="22" />
+                    </svg>
+                  </button>
+                </div>
+                <span class="field-error" id="forceConfirmPasswordError"></span>
+                <div
+                  class="password-match-status"
+                  id="forcePasswordMatchStatus"
+                ></div>
+              </div>
+
+              <button
+                type="submit"
+                id="forceChangeSubmitBtn"
+                class="btn-submit"
+              >
+                <span class="btn-text">Update Password</span>
+                <span class="btn-spinner hidden" id="forceChangeSpinner"></span>
+              </button>
+            </form>
+          </div>
+
+          <!-- 2. OTPS VERIFICATION FORM (Step 2) -->
+          <div id="otpSection" class="auth-section hidden">
+            <div class="card-header">
+              <h1 class="card-title">Two-Factor Authentication</h1>
+              <p class="card-subtitle">
+                Enter the 6-digit OTPS code sent to
+                <strong id="otpEmailTarget"></strong>
+              </p>
+            </div>
+
+            <form id="otpForm" class="auth-form" novalidate>
+              <div class="form-group">
+                <label for="otpCode" class="form-label"
+                  >One-Time Password (OTPS)
+                  <span class="required">*</span></label
+                >
+                <div class="input-wrapper">
+                  <input
+                    type="text"
+                    id="otpCode"
+                    inputmode="numeric"
+                    pattern="[0-9]{6}"
+                    class="form-input otp-input"
+                    placeholder="123456"
+                    maxlength="6"
+                    autocomplete="one-time-code"
+                    required
+                  />
+                </div>
+                <span class="field-error" id="otpCodeError"></span>
+              </div>
+
+              <button type="submit" id="otpSubmitBtn" class="btn-submit">
+                <span class="btn-text">Verify & Login</span>
+                <span class="btn-spinner hidden" id="otpSpinner"></span>
+              </button>
+
+              <div class="otp-actions">
+                <button type="button" id="resendOtpBtn" class="btn-link">
+                  Resend OTPS Code
+                </button>
+                <button
+                  type="button"
+                  id="backToLoginBtn"
+                  class="btn-link text-subtle"
+                >
+                  ← Back to Login
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- 3. LOGGED IN CLOUD STORAGE DASHBOARD -->
+          <div id="dashboardSection" class="auth-section hidden">
+            <div class="storage-topbar">
+              <div class="storage-user-meta">
+                <div class="user-avatar-badge">RK</div>
+                <div>
+                  <div class="storage-user-email" id="userEmailDisplay"></div>
+                  <div class="storage-quota-text" id="quotaUsageText">
+                    Loading storage usage…
+                  </div>
+                  <div class="quota-bar hidden" id="quotaBar" aria-hidden="true">
+                    <div class="quota-bar-fill" id="quotaBarFill"></div>
+                  </div>
+                  <button
+                    type="button"
+                    id="quotaRequestOpenBtn"
+                    class="btn-link quota-request-link"
+                  >
+                    Request more storage
+                  </button>
+                </div>
+              </div>
+              <div class="storage-topbar-actions">
+                <div class="notifications-wrapper" id="notificationsWrapper">
+                  <button
+                    type="button"
+                    id="notificationsBellBtn"
+                    class="btn-outline-sm btn-bell"
+                    title="Notifications"
+                    aria-label="Notifications"
+                    aria-expanded="false"
+                  >
+                    <svg
+                      class="bell-icon"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                    </svg>
+                    <span id="notificationsBadge" class="bell-badge hidden">0</span>
+                  </button>
+
+                  <div
+                    id="notificationsPopover"
+                    class="notifications-popover hidden"
+                    role="region"
+                    aria-label="Notifications list"
+                  >
+                    <div class="notifications-popover-header">
+                      <span class="notifications-popover-title">Notifications</span>
+                      <span class="notifications-popover-count" id="notificationsCountLabel">0</span>
+                    </div>
+                    <div id="notificationsList" class="notifications-popover-list">
+                      <div class="notifications-empty">No notifications yet.</div>
+                    </div>
+                  </div>
+                </div>
+
+                <button type="button" class="btn-outline-sm open-change-password-btn">
+                  Change Password
+                </button>
+                <button type="button" id="logoutBtn" class="btn-danger-sm">
+                  <span class="btn-text">Logout</span>
+                  <span class="btn-spinner hidden" id="logoutSpinner"></span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Request a storage quota increase -->
+            <div id="quotaRequestPanel" class="create-folder-box hidden">
+              <div class="admin-quota-header">
+                <div class="admin-quota-title">Request Storage Quota Increase</div>
+                <div class="admin-quota-subtitle" id="quotaRequestSummary"></div>
+              </div>
+              <p class="quota-request-notice" id="quotaRequestNotice"></p>
+              <form id="quotaRequestForm" class="hidden" novalidate>
+                <label for="quotaRequestInput" class="form-label">
+                  New total quota (MB)
+                </label>
+                <div class="create-folder-row">
+                  <input
+                    type="number"
+                    id="quotaRequestInput"
+                    class="form-input"
+                    step="any"
+                    required
+                  />
+                  <button
+                    type="submit"
+                    id="quotaRequestSubmitBtn"
+                    class="btn-primary-sm"
+                  >
+                    <span class="btn-text">Send Request</span>
+                    <span class="btn-spinner hidden"></span>
+                  </button>
+                </div>
+                <div class="quota-input-hint" id="quotaRequestHint"></div>
+                <span class="field-error" id="quotaRequestError"></span>
+              </form>
+              <ul class="quota-history" id="quotaRequestHistory"></ul>
+              <button type="button" id="quotaRequestCloseBtn" class="btn-outline-sm">
+                Close
+              </button>
+            </div>
+
+            <!-- Breadcrumb & Navigation Bar -->
+            <div class="browser-nav-bar">
+              <button
+                type="button"
+                id="navigateUpBtn"
+                class="btn-outline-sm hidden"
+                title="Go to parent folder"
+              >
+                ← Back
+              </button>
+              <span class="breadcrumb-prefix">Path:</span>
+              <nav
+                class="breadcrumbs"
+                id="breadcrumbsContainer"
+                aria-label="Folder breadcrumb"
+              >
+                <button
+                  type="button"
+                  class="breadcrumb-item active"
+                  data-folder-id=""
+                >
+                  My Drive
+                </button>
+              </nav>
+            </div>
+
+            <!-- Toolbar -->
+            <div class="browser-toolbar">
+              <h2 class="current-folder-heading" id="currentFolderTitle">
+                My Drive
+              </h2>
+              <div class="toolbar-actions">
+                <!-- The upload goes to the folder that is currently open (or My Drive). -->
+                <input
+                  type="file"
+                  id="fileUploadInput"
+                  class="hidden"
+                  accept=".txt,.md,.csv,.json,.pdf,.png,.jpg,.jpeg,.gif"
+                />
+                <input
+                  type="file"
+                  id="fileVersionUploadInput"
+                  class="hidden"
+                  accept=".txt,.md,.csv,.json,.pdf,.png,.jpg,.jpeg,.gif"
+                />
+                <button type="button" id="uploadFileBtn" class="btn-outline-sm">
+                  <span class="btn-text">↑ Upload File</span>
+                  <span
+                    class="btn-spinner hidden"
+                    id="uploadFileSpinner"
+                  ></span>
+                </button>
+                <button
+                  type="button"
+                  id="openCreateFolderBtn"
+                  class="btn-primary-sm"
+                >
+                  + New Folder
+                </button>
+              </div>
+            </div>
+
+            <!-- Inline Create Folder Form -->
+            <form
+              id="createFolderForm"
+              class="create-folder-box hidden"
+              novalidate
+            >
+              <div class="create-folder-row">
+                <input
+                  type="text"
+                  id="newFolderNameInput"
+                  class="form-input"
+                  placeholder="Enter new folder name (e.g. Documents)"
+                  maxlength="100"
+                  required
+                />
+                <button
+                  type="submit"
+                  id="createFolderSubmitBtn"
+                  class="btn-primary-sm"
+                >
+                  <span class="btn-text">Create</span>
+                  <span
+                    class="btn-spinner hidden"
+                    id="createFolderSpinner"
+                  ></span>
+                </button>
+                <button
+                  type="button"
+                  id="cancelCreateFolderBtn"
+                  class="btn-outline-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+              <span class="field-error" id="newFolderNameError"></span>
+            </form>
+
+            <!-- Inline Rename Folder Form -->
+            <form
+              id="renameFolderForm"
+              class="create-folder-box rename-box hidden"
+              novalidate
+            >
+              <div class="rename-form-label" id="renameFolderLabel">
+                Rename folder
+              </div>
+              <div class="create-folder-row">
+                <input
+                  type="text"
+                  id="renameFolderNameInput"
+                  class="form-input"
+                  placeholder="Enter new folder name"
+                  maxlength="100"
+                  required
+                />
+                <button
+                  type="submit"
+                  id="renameFolderSubmitBtn"
+                  class="btn-primary-sm"
+                >
+                  <span class="btn-text">Save</span>
+                  <span
+                    class="btn-spinner hidden"
+                    id="renameFolderSpinner"
+                  ></span>
+                </button>
+                <button
+                  type="button"
+                  id="cancelRenameFolderBtn"
+                  class="btn-outline-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+              <span class="field-error" id="renameFolderNameError"></span>
+            </form>
+
+            <!-- Inline Rename File Form -->
+            <form
+              id="renameFileForm"
+              class="create-folder-box rename-box hidden"
+              novalidate
+            >
+              <div class="rename-form-label" id="renameFileLabel">
+                Rename file
+              </div>
+              <div class="create-folder-row">
+                <input
+                  type="text"
+                  id="renameFileNameInput"
+                  class="form-input"
+                  placeholder="Enter new file name"
+                  maxlength="255"
+                  required
+                />
+                <button
+                  type="submit"
+                  id="renameFileSubmitBtn"
+                  class="btn-primary-sm"
+                >
+                  <span class="btn-text">Save</span>
+                  <span
+                    class="btn-spinner hidden"
+                    id="renameFileSpinner"
+                  ></span>
+                </button>
+                <button
+                  type="button"
+                  id="cancelRenameFileBtn"
+                  class="btn-outline-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+              <span class="field-error" id="renameFileNameError"></span>
+            </form>
+
+            <!-- Folder & File Contents -->
+            <div id="folderLoadingState" class="folder-loading hidden">
+              Loading directory contents...
+            </div>
+
+            <div id="folderEmptyState" class="folder-empty hidden">
+              <svg
+                class="empty-folder-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              >
+                <path
+                  d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+                />
+              </svg>
+              <p class="empty-title">This folder is empty</p>
+              <p class="empty-subtitle">
+                Create a new folder to start organizing your content.
+              </p>
+            </div>
+
+            <div id="folderItemsList" class="folder-items-list"></div>
+          </div>
+
+          <!-- 3b. ADMIN PANEL -->
+          <div id="adminSection" class="auth-section hidden">
+            <div class="storage-topbar">
+              <div class="storage-user-meta">
+                <div class="user-avatar-badge admin-avatar-badge">A</div>
+                <div>
+                  <div class="storage-user-email" id="adminEmailDisplay"></div>
+                  <div class="storage-quota-text">Administrator Panel</div>
+                </div>
+              </div>
+              <div class="storage-topbar-actions">
+                <button type="button" class="btn-outline-sm open-change-password-btn">
+                  Change Password
+                </button>
+                <button type="button" id="adminLogoutBtn" class="btn-danger-sm">
+                  <span class="btn-text">Logout</span>
+                  <span
+                    class="btn-spinner hidden"
+                    id="adminLogoutSpinner"
+                  ></span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Admin Navigation Tabs -->
+            <div class="admin-tabs" role="tablist">
+              <button
+                type="button"
+                id="adminTabUsers"
+                class="admin-tab-btn active"
+                role="tab"
+                aria-selected="true"
+              >
+                Users &amp; Storage
+              </button>
+              <button
+                type="button"
+                id="adminTabQuotaRequests"
+                class="admin-tab-btn"
+                role="tab"
+                aria-selected="false"
+              >
+                Quota Requests
+                <span id="adminQuotaRequestsCount" class="bell-badge hidden">0</span>
+              </button>
+              <button
+                type="button"
+                id="adminTabNotifications"
+                class="admin-tab-btn"
+                role="tab"
+                aria-selected="false"
+              >
+                Notifications
+              </button>
+            </div>
+
+            <!-- Tab 1: Users & Storage -->
+            <div id="adminUsersPanel" class="admin-tab-panel">
+              <!-- Summary Stats -->
+              <div class="admin-stats-grid">
+                <div class="admin-stat-card">
+                  <span class="admin-stat-label">Total Users</span>
+                  <strong class="admin-stat-value" id="adminStatUsers">0</strong>
+                </div>
+                <div class="admin-stat-card">
+                  <span class="admin-stat-label">Total Used</span>
+                  <strong class="admin-stat-value" id="adminStatUsed">0 B</strong>
+                </div>
+                <div class="admin-stat-card">
+                  <span class="admin-stat-label">Total Allocated</span>
+                  <strong class="admin-stat-value" id="adminStatQuota">0 B</strong>
+                </div>
+              </div>
+
+              <!-- Search & Refresh Toolbar -->
+              <div class="admin-toolbar">
+                <input
+                  type="search"
+                  id="adminUserSearchInput"
+                  class="form-input admin-search-input"
+                  placeholder="Search users by name or email..."
+                />
+                <button
+                  type="button"
+                  id="adminRefreshUsersBtn"
+                  class="btn-outline-sm"
+                >
+                  ↻ Refresh
+                </button>
+              </div>
+
+              <!-- Inline Edit Storage Quota Form -->
+              <form
+                id="adminQuotaForm"
+                class="create-folder-box admin-quota-box hidden"
+                novalidate
+              >
+                <div class="admin-quota-header">
+                  <div>
+                    <div class="admin-quota-title" id="adminQuotaTargetTitle">
+                      Edit Storage Quota
+                    </div>
+                    <div class="admin-quota-subtitle" id="adminQuotaTargetMeta"></div>
+                  </div>
+                </div>
+                <div class="admin-quota-presets">
+                  <span class="admin-presets-label">Quick adjust:</span>
+                  <button type="button" class="btn-outline-sm admin-preset-btn" data-add-mb="-1024">−1 GB</button>
+                  <button type="button" class="btn-outline-sm admin-preset-btn" data-add-mb="-100">−100 MB</button>
+                  <button type="button" class="btn-outline-sm admin-preset-btn" data-add-mb="100">+100 MB</button>
+                  <button type="button" class="btn-outline-sm admin-preset-btn" data-add-mb="1024">+1 GB</button>
+                </div>
+                <div class="create-folder-row">
+                  <div class="admin-quota-input-group">
+                    <label for="adminNewQuotaMbInput" class="form-label">
+                      New Total Quota (MB)
+                    </label>
+                    <input
+                      type="number"
+                      id="adminNewQuotaMbInput"
+                      class="form-input"
+                      step="any"
+                      required
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    id="adminQuotaSubmitBtn"
+                    class="btn-primary-sm"
+                  >
+                    <span class="btn-text">Save Quota</span>
+                    <span
+                      class="btn-spinner hidden"
+                      id="adminQuotaSpinner"
+                    ></span>
+                  </button>
+                  <button
+                    type="button"
+                    id="adminQuotaCancelBtn"
+                    class="btn-outline-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                <div class="quota-input-hint" id="adminQuotaHint"></div>
+                <div class="quota-input-warning hidden" id="adminQuotaWarning"></div>
+                <span class="field-error" id="adminQuotaError"></span>
+              </form>
+
+              <!-- Loading / Empty / Users List -->
+              <div id="adminUsersLoading" class="folder-loading hidden">
+                Loading users...
+              </div>
+
+              <div id="adminUsersEmpty" class="folder-empty hidden">
+                <p class="empty-title">No matching users found</p>
+                <p class="empty-subtitle">
+                  Try clearing your search filter or refreshing the list.
+                </p>
+              </div>
+
+              <div id="adminUsersList" class="admin-users-list"></div>
+            </div>
+
+            <!-- Tab 2: Quota Requests -->
+            <div id="adminQuotaRequestsPanel" class="admin-tab-panel hidden">
+              <div class="admin-toolbar">
+                <select
+                  id="adminQuotaRequestFilter"
+                  class="form-input admin-search-input"
+                  aria-label="Filter requests by status"
+                >
+                  <option value="pending">Pending requests</option>
+                  <option value="">All requests (history)</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+                <button
+                  type="button"
+                  id="adminRefreshQuotaRequestsBtn"
+                  class="btn-outline-sm"
+                >
+                  ↻ Refresh
+                </button>
+              </div>
+              <div id="adminQuotaRequestsLoading" class="folder-loading hidden">
+                Loading quota requests...
+              </div>
+              <div id="adminQuotaRequestsEmpty" class="folder-empty hidden">
+                <p class="empty-title">No quota requests to show</p>
+                <p class="empty-subtitle">
+                  Requests from users appear here for you to approve or reject.
+                </p>
+              </div>
+              <div id="adminQuotaRequestsList" class="admin-users-list"></div>
+            </div>
+
+            <!-- Tab 3: Notifications (Placeholder) -->
+            <div id="adminNotificationsPanel" class="admin-tab-panel hidden">
+              <div class="folder-empty admin-notifications-placeholder">
+                <svg
+                  class="empty-folder-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                </svg>
+                <p class="empty-title">Notifications Coming Soon</p>
+                <p class="empty-subtitle">
+                  System alerts and security notifications will appear here once
+                  implemented.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. REGISTRATION FORM (Existing UI) -->
+          <div id="registerSection" class="auth-section hidden">
+            <div class="card-header">
+              <h1 class="card-title">Create Account</h1>
+              <p class="card-subtitle" id="registerSubtitle">
+                Sign up for secure cloud storage
+              </p>
+            </div>
+
+            <form id="registrationForm" class="auth-form" novalidate>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="firstName" class="form-label"
+                    >First Name <span class="required">*</span></label
+                  >
+                  <div class="input-wrapper">
+                    <input
+                      type="text"
+                      id="firstName"
+                      name="firstName"
+                      class="form-input"
+                      placeholder="e.g. Petar"
+                      autocomplete="given-name"
+                      maxlength="100"
+                      required
+                    />
+                  </div>
+                  <span class="field-error" id="firstNameError"></span>
+                </div>
+
+                <div class="form-group">
+                  <label for="lastName" class="form-label"
+                    >Last Name <span class="required">*</span></label
+                  >
+                  <div class="input-wrapper">
+                    <input
+                      type="text"
+                      id="lastName"
+                      name="lastName"
+                      class="form-input"
+                      placeholder="e.g. Petrovic"
+                      autocomplete="family-name"
+                      maxlength="100"
+                      required
+                    />
+                  </div>
+                  <span class="field-error" id="lastNameError"></span>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="email" class="form-label"
+                  >Email Address <span class="required">*</span></label
+                >
+                <div class="input-wrapper">
+                  <input
+                    type="email"
+                    id="email"
+                    maxlength="254"
+                    name="email"
+                    class="form-input"
+                    placeholder="petar@example.com"
+                    autocomplete="email"
+                    required
+                  />
+                </div>
+                <span class="field-error" id="emailError"></span>
+              </div>
+
+              <div class="form-group">
+                <label for="password" class="form-label"
+                  >Password <span class="required">*</span></label
+                >
+                <div class="input-wrapper">
+                  <input
+                    type="password"
+                    id="password"
+                    name="password"
+                    class="form-input"
+                    placeholder="Enter a strong password"
+                    autocomplete="new-password"
+                    maxlength="72"
+                    required
+                  />
+                  <button
+                    type="button"
+                    class="toggle-password"
+                    id="togglePasswordBtn"
+                    aria-label="Show password"
+                    tabindex="-1"
+                  >
+                    <svg
+                      class="eye-icon show"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                    <svg
+                      class="eye-icon hide"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+                      <path
+                        d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"
+                      />
+                      <path
+                        d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"
+                      />
+                      <line x1="2" y1="2" x2="22" y2="22" />
+                    </svg>
+                  </button>
+                </div>
+                <span class="field-error" id="passwordError"></span>
+
+                <div class="password-strength-container" id="strengthContainer"></div>
+              </div>
+
+              <div class="form-group">
+                <label for="confirmPassword" class="form-label"
+                  >Confirm Password <span class="required">*</span></label
+                >
+                <div class="input-wrapper">
+                  <input
+                    type="password"
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    class="form-input"
+                    placeholder="Re-enter your password"
+                    autocomplete="new-password"
+                    maxlength="72"
+                    required
+                  />
+                  <button
+                    type="button"
+                    class="toggle-password"
+                    id="toggleConfirmPasswordBtn"
+                    aria-label="Show password"
+                    tabindex="-1"
+                  >
+                    <svg
+                      class="eye-icon show"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                    <svg
+                      class="eye-icon hide"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+                      <path
+                        d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"
+                      />
+                      <path
+                        d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"
+                      />
+                      <line x1="2" y1="2" x2="22" y2="22" />
+                    </svg>
+                  </button>
+                </div>
+                <span class="field-error" id="confirmPasswordError"></span>
+                <div
+                  class="password-match-status"
+                  id="passwordMatchStatus"
+                ></div>
+              </div>
+
+              <button type="submit" id="submitBtn" class="btn-submit">
+                <span class="btn-text">Create Account</span>
+                <span class="btn-spinner hidden" id="btnSpinner"></span>
+              </button>
+            </form>
+          </div>
+
+          <div class="card-footer">
+            <p class="footer-help">
+              Emails are delivered locally to
+              <a
+                href="http://localhost:8025"
+                target="_blank"
+                rel="noopener noreferrer"
+                >Mailpit</a
+              >
+              for testing.
+            </p>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script src="validation.js"></script>
+    <script src="secure-session.js"></script>
+    <script src="api.js"></script>
+    <script src="app.js"></script>
+    <script src="account.js"></script>
+    <script src="quota-requests.js"></script>
+  </body>
+</html>

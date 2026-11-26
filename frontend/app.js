@@ -1,0 +1,2283 @@
+const MAILPIT_URL = "http://localhost:8025";
+const MAILPIT_BUTTON = `<a href="${MAILPIT_URL}" target="_blank" rel="noopener noreferrer" class="btn-mailpit">Open Mailpit Inbox (:8025) ↗</a>`;
+
+const tabLogin = document.getElementById("tabLogin");
+const tabRegister = document.getElementById("tabRegister");
+const loginSection = document.getElementById("loginSection");
+const otpSection = document.getElementById("otpSection");
+const dashboardSection = document.getElementById("dashboardSection");
+const adminSection = document.getElementById("adminSection");
+const registerSection = document.getElementById("registerSection");
+const forceChangePasswordSection = document.getElementById(
+  "forceChangePasswordSection",
+);
+const forgotPasswordSection = document.getElementById("forgotPasswordSection");
+const resetPasswordSection = document.getElementById("resetPasswordSection");
+const changePasswordSection = document.getElementById("changePasswordSection");
+
+const forceChangePasswordForm = document.getElementById(
+  "forceChangePasswordForm",
+);
+const forceNewPasswordInput = document.getElementById("forceNewPassword");
+const forceConfirmPasswordInput = document.getElementById(
+  "forceConfirmPassword",
+);
+const forceChangeSubmitBtn = document.getElementById("forceChangeSubmitBtn");
+const forceChangeSpinner = document.getElementById("forceChangeSpinner");
+const forceNewPasswordError = document.getElementById("forceNewPasswordError");
+const forceConfirmPasswordError = document.getElementById(
+  "forceConfirmPasswordError",
+);
+const toggleForceNewPasswordBtn = document.getElementById(
+  "toggleForceNewPasswordBtn",
+);
+const toggleForceConfirmPasswordBtn = document.getElementById(
+  "toggleForceConfirmPasswordBtn",
+);
+let forceStrengthMeter = null; // created in init()
+const forcePasswordMatchStatus = document.getElementById(
+  "forcePasswordMatchStatus",
+);
+
+let restrictedSessionToken = null;
+
+const loginForm = document.getElementById("loginForm");
+const loginEmailInput = document.getElementById("loginEmail");
+const loginPasswordInput = document.getElementById("loginPassword");
+const loginSubmitBtn = document.getElementById("loginSubmitBtn");
+const loginSpinner = document.getElementById("loginSpinner");
+const loginEmailError = document.getElementById("loginEmailError");
+const loginPasswordError = document.getElementById("loginPasswordError");
+const toggleLoginPasswordBtn = document.getElementById(
+  "toggleLoginPasswordBtn",
+);
+
+const otpForm = document.getElementById("otpForm");
+const otpCodeInput = document.getElementById("otpCode");
+const otpSubmitBtn = document.getElementById("otpSubmitBtn");
+const otpSpinner = document.getElementById("otpSpinner");
+const otpCodeError = document.getElementById("otpCodeError");
+const otpEmailTarget = document.getElementById("otpEmailTarget");
+const resendOtpBtn = document.getElementById("resendOtpBtn");
+const backToLoginBtn = document.getElementById("backToLoginBtn");
+
+const userEmailDisplay = document.getElementById("userEmailDisplay");
+const logoutBtn = document.getElementById("logoutBtn");
+const logoutSpinner = document.getElementById("logoutSpinner");
+
+const authCard = document.querySelector(".auth-card");
+const authTabs = document.querySelector(".auth-tabs");
+const navigateUpBtn = document.getElementById("navigateUpBtn");
+const breadcrumbsContainer = document.getElementById("breadcrumbsContainer");
+const currentFolderTitle = document.getElementById("currentFolderTitle");
+const openCreateFolderBtn = document.getElementById("openCreateFolderBtn");
+const createFolderForm = document.getElementById("createFolderForm");
+const newFolderNameInput = document.getElementById("newFolderNameInput");
+const createFolderSubmitBtn = document.getElementById("createFolderSubmitBtn");
+const createFolderSpinner = document.getElementById("createFolderSpinner");
+const cancelCreateFolderBtn = document.getElementById("cancelCreateFolderBtn");
+const newFolderNameError = document.getElementById("newFolderNameError");
+const folderLoadingState = document.getElementById("folderLoadingState");
+const folderEmptyState = document.getElementById("folderEmptyState");
+const folderItemsList = document.getElementById("folderItemsList");
+const quotaUsageText = document.getElementById("quotaUsageText");
+const quotaBar = document.getElementById("quotaBar");
+const quotaBarFill = document.getElementById("quotaBarFill");
+const fileUploadInput = document.getElementById("fileUploadInput");
+const uploadFileBtn = document.getElementById("uploadFileBtn");
+const uploadFileSpinner = document.getElementById("uploadFileSpinner");
+const fileVersionUploadInput = document.getElementById("fileVersionUploadInput");
+
+let versionTargetFile = null;
+let versionTargetBtn = null;
+
+let currentFolderId = null;
+let currentBreadcrumbs = [];
+
+const renameFolderForm = document.getElementById("renameFolderForm");
+const renameFolderLabel = document.getElementById("renameFolderLabel");
+const renameFolderNameInput = document.getElementById("renameFolderNameInput");
+const renameFolderSubmitBtn = document.getElementById("renameFolderSubmitBtn");
+const renameFolderSpinner = document.getElementById("renameFolderSpinner");
+const cancelRenameFolderBtn = document.getElementById("cancelRenameFolderBtn");
+const renameFolderNameError = document.getElementById("renameFolderNameError");
+
+let renameFolderTarget = null; // { id: string, currentName: string }
+
+let activeLoginEmail = "";
+let activeLoginPassword = "";
+
+const form = document.getElementById("registrationForm");
+const firstNameInput = document.getElementById("firstName");
+const lastNameInput = document.getElementById("lastName");
+const emailInput = document.getElementById("email");
+const passwordInput = document.getElementById("password");
+const confirmPasswordInput = document.getElementById("confirmPassword");
+const submitBtn = document.getElementById("submitBtn");
+const btnSpinner = document.getElementById("btnSpinner");
+
+const firstNameError = document.getElementById("firstNameError");
+const lastNameError = document.getElementById("lastNameError");
+const emailError = document.getElementById("emailError");
+const passwordError = document.getElementById("passwordError");
+const confirmPasswordError = document.getElementById("confirmPasswordError");
+const passwordMatchStatus = document.getElementById("passwordMatchStatus");
+
+const alertContainer = document.getElementById("alertContainer");
+const alertIcon = document.getElementById("alertIcon");
+const alertTitle = document.getElementById("alertTitle");
+const alertMessage = document.getElementById("alertMessage");
+const alertAction = document.getElementById("alertAction");
+const alertCloseBtn = document.getElementById("alertCloseBtn");
+
+let registerStrengthMeter = null; // created in init()
+
+const togglePasswordBtn = document.getElementById("togglePasswordBtn");
+const toggleConfirmPasswordBtn = document.getElementById(
+  "toggleConfirmPasswordBtn",
+);
+
+const EMAIL_REGEX = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
+
+const renameFileForm = document.getElementById("renameFileForm");
+const renameFileLabel = document.getElementById("renameFileLabel");
+const renameFileNameInput = document.getElementById("renameFileNameInput");
+const renameFileSubmitBtn = document.getElementById("renameFileSubmitBtn");
+const renameFileSpinner = document.getElementById("renameFileSpinner");
+const cancelRenameFileBtn = document.getElementById("cancelRenameFileBtn");
+const renameFileNameError = document.getElementById("renameFileNameError");
+
+let renameFileTarget = null; // { id: string, currentName: string }
+
+const notificationsWrapper = document.getElementById("notificationsWrapper");
+const notificationsBellBtn = document.getElementById("notificationsBellBtn");
+const notificationsBadge = document.getElementById("notificationsBadge");
+const notificationsPopover = document.getElementById("notificationsPopover");
+const notificationsCountLabel = document.getElementById("notificationsCountLabel");
+const notificationsList = document.getElementById("notificationsList");
+
+function showLimits(limits) {
+  if (!limits) return;
+  document.getElementById("registerSubtitle").textContent =
+    `Sign up to get ${formatBytes(limits.defaultQuotaBytes)} of secure cloud storage`;
+  strengthMeters.forEach((meter) => meter.refresh());
+}
+
+async function init() {
+  // Read it first: handling the link removes the token from the address bar.
+  const openedFromResetLink = Boolean(readResetTokenFromUrl());
+
+  await session.load();
+
+  registerStrengthMeter = createStrengthMeter(
+    document.getElementById("strengthContainer"),
+  );
+  forceStrengthMeter = createStrengthMeter(
+    document.getElementById("forceStrengthContainer"),
+  );
+  initAccountFeatures();
+  initQuotaRequestFeatures();
+  loadLimits().then(showLimits);
+
+  firstNameInput.addEventListener("input", () =>
+    validateNameField(firstNameInput, firstNameError, "First name"),
+  );
+  lastNameInput.addEventListener("input", () =>
+    validateNameField(lastNameInput, lastNameError, "Last name"),
+  );
+  emailInput.addEventListener("input", handleEmailInput);
+  passwordInput.addEventListener("input", handlePasswordInput);
+  confirmPasswordInput.addEventListener("input", handleConfirmPasswordInput);
+
+  togglePasswordBtn.addEventListener("click", () =>
+    togglePasswordVisibility(passwordInput, togglePasswordBtn),
+  );
+  toggleConfirmPasswordBtn.addEventListener("click", () =>
+    togglePasswordVisibility(confirmPasswordInput, toggleConfirmPasswordBtn),
+  );
+
+  form.addEventListener("submit", handleFormSubmit);
+
+  alertCloseBtn.addEventListener("click", hideAlert);
+
+  checkVerificationTokenInUrl();
+  checkMagicLinkTokenInUrl();
+
+  const requestMagicLinkBtn = document.getElementById("requestMagicLinkBtn");
+  if (requestMagicLinkBtn) {
+    requestMagicLinkBtn.addEventListener("click", handleMagicLinkRequest);
+  }
+  tabLogin.addEventListener("click", () => switchTab("login"));
+  tabRegister.addEventListener("click", () => switchTab("register"));
+
+  toggleLoginPasswordBtn.addEventListener("click", () =>
+    togglePasswordVisibility(loginPasswordInput, toggleLoginPasswordBtn),
+  );
+  loginForm.addEventListener("submit", handleLoginSubmit);
+  if (forceChangePasswordForm) {
+    forceChangePasswordForm.addEventListener(
+      "submit",
+      handleForceChangePasswordSubmit,
+    );
+  }
+  if (toggleForceNewPasswordBtn && forceNewPasswordInput) {
+    toggleForceNewPasswordBtn.addEventListener("click", () =>
+      togglePasswordVisibility(forceNewPasswordInput, toggleForceNewPasswordBtn),
+    );
+  }
+  if (toggleForceConfirmPasswordBtn && forceConfirmPasswordInput) {
+    toggleForceConfirmPasswordBtn.addEventListener("click", () =>
+      togglePasswordVisibility(
+        forceConfirmPasswordInput,
+        toggleForceConfirmPasswordBtn,
+      ),
+    );
+  }
+  if (forceNewPasswordInput && forceConfirmPasswordInput) {
+    forceNewPasswordInput.addEventListener("input", handleForcePasswordInput);
+    forceConfirmPasswordInput.addEventListener(
+      "input",
+      handleForceConfirmPasswordInput,
+    );
+  }
+  otpCodeInput.addEventListener("input", () => {
+    otpCodeInput.value = otpCodeInput.value.replace(/\D/g, "");
+  });
+  otpForm.addEventListener("submit", handleOtpSubmit);
+  resendOtpBtn.addEventListener("click", handleResendOtp);
+  backToLoginBtn.addEventListener("click", () => {
+    resetOtpForm();
+    switchSection(loginSection);
+  });
+  logoutBtn.addEventListener("click", handleLogout);
+
+  if (cancelRenameFolderBtn) {
+    cancelRenameFolderBtn.addEventListener("click", closeRenameForm);
+  }
+  if (renameFolderForm) {
+    renameFolderForm.addEventListener("submit", handleRenameFolderSubmit);
+  }
+
+  if (cancelRenameFileBtn) {
+    cancelRenameFileBtn.addEventListener("click", closeRenameFileForm);
+  }
+  if (renameFileForm) {
+    renameFileForm.addEventListener("submit", handleRenameFileSubmit);
+  }
+
+  if (notificationsBellBtn && notificationsPopover) {
+    notificationsBellBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const isHidden = notificationsPopover.classList.toggle("hidden");
+      notificationsBellBtn.setAttribute("aria-expanded", String(!isHidden));
+    });
+
+    document.addEventListener("click", (e) => {
+      if (
+        notificationsWrapper &&
+        !notificationsWrapper.contains(e.target) &&
+        !notificationsPopover.classList.contains("hidden")
+      ) {
+        notificationsPopover.classList.add("hidden");
+        notificationsBellBtn.setAttribute("aria-expanded", "false");
+      }
+    });
+  }
+
+  // A reset link must not be replaced by the dashboard of a saved session.
+  if (openedFromResetLink) {
+    checkResetTokenInUrl();
+  } else {
+    checkExistingSession();
+  }
+}
+
+function togglePasswordVisibility(inputEl, btnEl) {
+  const isPassword = inputEl.type === "password";
+  inputEl.type = isPassword ? "text" : "password";
+  btnEl.classList.toggle("active", isPassword);
+  btnEl.setAttribute(
+    "aria-label",
+    isPassword ? "Hide password" : "Show password",
+  );
+}
+
+function validateField(inputEl, errorEl, message) {
+  if (!inputEl.value.trim()) {
+    inputEl.classList.add("is-invalid");
+    inputEl.classList.remove("is-valid");
+    errorEl.textContent = message;
+    return false;
+  }
+  inputEl.classList.remove("is-invalid");
+  inputEl.classList.add("is-valid");
+  errorEl.textContent = "";
+  return true;
+}
+
+function validateNameField(inputEl, errorEl, label) {
+  const problem = Validation.name(inputEl.value.trim(), label);
+  inputEl.classList.toggle("is-invalid", Boolean(problem));
+  inputEl.classList.toggle("is-valid", !problem);
+  errorEl.textContent = problem;
+  return !problem;
+}
+
+function handleEmailInput() {
+  const email = emailInput.value.trim();
+  const problem = Validation.email(email, EMAIL_REGEX);
+  if (problem) {
+    emailInput.classList.add("is-invalid");
+    emailInput.classList.remove("is-valid");
+    emailError.textContent = problem;
+    return false;
+  }
+
+  emailInput.classList.remove("is-invalid");
+  emailInput.classList.add("is-valid");
+  emailError.textContent = "";
+  return true;
+}
+
+function evaluatePasswordInput(pwInput, pwError, confirmInput, ui) {
+  const password = pwInput.value;
+  const meetsRules = ui.meter.update(password);
+
+  if (confirmInput.value.length > 0) {
+    evaluateConfirmPasswordInput(
+      pwInput,
+      confirmInput,
+      ui.confirmError,
+      ui.matchStatus,
+    );
+  }
+
+  if (password.length === 0) {
+    pwInput.classList.remove("is-valid", "is-invalid");
+    pwError.textContent = "";
+    return false;
+  }
+
+  if (meetsRules) {
+    pwInput.classList.remove("is-invalid");
+    pwInput.classList.add("is-valid");
+    pwError.textContent = "";
+    return true;
+  }
+
+  pwInput.classList.remove("is-valid");
+  return false;
+}
+
+function evaluateConfirmPasswordInput(
+  pwInput,
+  confirmInput,
+  confirmErrorEl,
+  matchStatusEl,
+) {
+  const password = pwInput.value;
+  const confirmPassword = confirmInput.value;
+
+  if (!confirmPassword) {
+    confirmInput.classList.remove("is-valid", "is-invalid");
+    confirmErrorEl.textContent = "";
+    matchStatusEl.textContent = "";
+    matchStatusEl.className = "password-match-status";
+    return false;
+  }
+
+  if (password !== confirmPassword) {
+    confirmInput.classList.add("is-invalid");
+    confirmInput.classList.remove("is-valid");
+    confirmErrorEl.textContent = "Passwords do not match";
+    matchStatusEl.textContent = "✖ Passwords do not match";
+    matchStatusEl.className = "password-match-status mismatch";
+    return false;
+  }
+
+  confirmInput.classList.remove("is-invalid");
+  confirmInput.classList.add("is-valid");
+  confirmErrorEl.textContent = "";
+  matchStatusEl.textContent = "✔ Passwords match";
+  matchStatusEl.className = "password-match-status match";
+  return true;
+}
+
+function handlePasswordInput() {
+  return evaluatePasswordInput(passwordInput, passwordError, confirmPasswordInput, {
+    meter: registerStrengthMeter,
+    confirmError: confirmPasswordError,
+    matchStatus: passwordMatchStatus,
+  });
+}
+
+function handleForcePasswordInput() {
+  return evaluatePasswordInput(
+    forceNewPasswordInput,
+    forceNewPasswordError,
+    forceConfirmPasswordInput,
+    {
+      meter: forceStrengthMeter,
+      confirmError: forceConfirmPasswordError,
+      matchStatus: forcePasswordMatchStatus,
+    },
+  );
+}
+
+function handleForceConfirmPasswordInput() {
+  return evaluateConfirmPasswordInput(
+    forceNewPasswordInput,
+    forceConfirmPasswordInput,
+    forceConfirmPasswordError,
+    forcePasswordMatchStatus,
+  );
+}
+
+function handleConfirmPasswordInput() {
+  const password = passwordInput.value;
+  const confirmPassword = confirmPasswordInput.value;
+
+  if (!confirmPassword) {
+    confirmPasswordInput.classList.remove("is-valid", "is-invalid");
+    confirmPasswordError.textContent = "";
+    passwordMatchStatus.textContent = "";
+    passwordMatchStatus.className = "password-match-status";
+    return false;
+  }
+
+  if (password !== confirmPassword) {
+    confirmPasswordInput.classList.add("is-invalid");
+    confirmPasswordInput.classList.remove("is-valid");
+    confirmPasswordError.textContent = "Passwords do not match";
+    passwordMatchStatus.textContent = "✖ Passwords do not match";
+    passwordMatchStatus.className = "password-match-status mismatch";
+    return false;
+  }
+
+  confirmPasswordInput.classList.remove("is-invalid");
+  confirmPasswordInput.classList.add("is-valid");
+  confirmPasswordError.textContent = "";
+  passwordMatchStatus.textContent = "✓ Passwords match";
+  passwordMatchStatus.className = "password-match-status match";
+  return true;
+}
+
+function validateFullForm() {
+  let isValid = true;
+  let firstInvalidEl = null;
+
+  if (!validateNameField(firstNameInput, firstNameError, "First name")) {
+    isValid = false;
+    if (!firstInvalidEl) firstInvalidEl = firstNameInput;
+  }
+
+  if (!validateNameField(lastNameInput, lastNameError, "Last name")) {
+    isValid = false;
+    if (!firstInvalidEl) firstInvalidEl = lastNameInput;
+  }
+
+  if (!handleEmailInput()) {
+    isValid = false;
+    if (!firstInvalidEl) firstInvalidEl = emailInput;
+  }
+
+  const password = passwordInput.value;
+  const passwordProblem = Validation.newPassword(password);
+  if (passwordProblem) {
+    passwordInput.classList.add("is-invalid");
+    passwordError.textContent = passwordProblem;
+    isValid = false;
+    if (!firstInvalidEl) firstInvalidEl = passwordInput;
+  }
+
+  const confirmPassword = confirmPasswordInput.value;
+  if (!confirmPassword) {
+    confirmPasswordInput.classList.add("is-invalid");
+    confirmPasswordError.textContent = "Please confirm your password";
+    isValid = false;
+    if (!firstInvalidEl) firstInvalidEl = confirmPasswordInput;
+  } else if (password !== confirmPassword) {
+    confirmPasswordInput.classList.add("is-invalid");
+    confirmPasswordError.textContent = "Passwords do not match";
+    isValid = false;
+    if (!firstInvalidEl) firstInvalidEl = confirmPasswordInput;
+  }
+
+  if (!isValid && firstInvalidEl) {
+    firstInvalidEl.focus();
+  }
+
+  return isValid;
+}
+
+async function handleFormSubmit(event) {
+  event.preventDefault();
+  hideAlert();
+
+  if (!validateFullForm()) {
+    showAlert(
+      "danger",
+      "Validation Error",
+      "Please correct the highlighted errors before submitting the registration form.",
+    );
+    return;
+  }
+
+  const payload = {
+    firstName: firstNameInput.value.trim(),
+    lastName: lastNameInput.value.trim(),
+    email: emailInput.value.trim(),
+    password: passwordInput.value,
+    confirmPassword: confirmPasswordInput.value,
+  };
+
+  setSubmitting(true);
+
+  try {
+    const response = await apiJson("/api/users/register", { method: "POST", body: payload });
+    const { data } = response;
+
+    if (response.status === 201) {
+      const successMsg =
+        data.message ||
+        "Registration successful. Check your email to verify your account.";
+      showAlert(
+        "success",
+        "Registration Successful!",
+        successMsg,
+        MAILPIT_BUTTON,
+      );
+
+      form.reset();
+      resetFormValidationVisuals();
+    } else if (response.status === 409) {
+      const conflictMsg =
+        data.message || "A user with this email address already exists.";
+      emailInput.classList.add("is-invalid");
+      emailError.textContent = conflictMsg;
+      emailInput.focus();
+
+      showAlert("warning", "Account Already Exists", conflictMsg);
+    } else if (response.status === 400) {
+      const errorMsg = data.message || "Invalid registration request.";
+      showAlert("danger", "Validation Failed", errorMsg);
+    } else {
+      const errorMsg =
+        data.message || `Server responded with status code ${response.status}.`;
+      showAlert("danger", "Registration Failed", errorMsg);
+    }
+  } catch (err) {
+    console.error("Registration network error:", err);
+    showAlert(
+      "danger",
+      "Connection Failed",
+      "Unable to connect to API Gateway. Please ensure Docker containers (docker compose up) are running and accessible.",
+    );
+  } finally {
+    setSubmitting(false);
+  }
+}
+
+async function checkVerificationTokenInUrl() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const token = urlParams.get("token");
+  if (!token) return;
+
+  // Ukloni token iz URL-a nakon čitanja
+  window.history.replaceState({}, document.title, window.location.pathname);
+  switchTab("login");
+
+  showAlert(
+    "warning",
+    "Verifying Token...",
+    "Please wait while we verify your email address...",
+  );
+
+  try {
+    const response = await apiJson(`/api/users/verify?token=${encodeURIComponent(token)}`);
+    const { data } = response;
+
+    if (response.ok) {
+      showAlert(
+        "success",
+        "Account Activated!",
+        data.message || "Account successfully activated. You can now log in.",
+      );
+    } else {
+      showAlert(
+        "danger",
+        "Activation Failed",
+        data.message || "Invalid or expired verification token.",
+      );
+    }
+  } catch (err) {
+    showAlert(
+      "danger",
+      "Verification Error",
+      "Could not connect to the API Gateway to verify your token.",
+    );
+  }
+}
+
+async function handleMagicLinkRequest() {
+  hideAlert();
+  const email = loginEmailInput.value.trim();
+  if (Validation.email(email, EMAIL_REGEX)) {
+    loginEmailInput.classList.add("is-invalid");
+    loginEmailError.textContent = "Please enter your email above first";
+    return;
+  }
+  loginEmailInput.classList.remove("is-invalid");
+  loginEmailError.textContent = "";
+
+  showAlert("warning", "Sending...", "Requesting magic login link...");
+
+  try {
+    const response = await apiJson("/api/users/magic-link-request", {
+      method: "POST",
+      body: { email },
+    });
+    const { data } = response;
+
+    if (response.ok) {
+      showAlert(
+        "success",
+        "Magic Link Sent!",
+        data.message || "Check your email for your direct login link.",
+      );
+    } else {
+      showAlert(
+        "danger",
+        "Request Failed",
+        data.message || "Could not send magic link.",
+      );
+    }
+  } catch (err) {
+    showAlert("danger", "Error", "Could not connect to send magic link.");
+  }
+}
+
+async function checkMagicLinkTokenInUrl() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const magicToken = urlParams.get("magicToken");
+  if (!magicToken) return;
+
+  // Clear query string from URL for clean appearance
+  window.history.replaceState({}, document.title, window.location.pathname);
+
+  showAlert(
+    "warning",
+    "Logging in...",
+    "Verifying magic link token and authenticating...",
+  );
+
+  try {
+    const response = await apiJson("/api/users/magic-link-login", {
+      method: "POST",
+      body: { token: magicToken },
+    });
+    const { data } = response;
+
+    if (response.ok && data.token) {
+      if (data.restricted) {
+        restrictedSessionToken = data.token;
+        switchSection(forceChangePasswordSection);
+        showAlert(
+          "warning",
+          "Password Update Required",
+          data.message ||
+          "Your ban period has expired. Please choose a new password.",
+        );
+      } else {
+        await session.start({
+          token: data.token,
+          email: data.user?.email || "user",
+          role: data.user?.role,
+        });
+        showAuthenticatedView(data.user?.email || "user");
+        showAlert(
+          "success",
+          "Welcome!",
+          "Logged in successfully via magic link.",
+        );
+      }
+    } else {
+      showAlert(
+        "danger",
+        "Magic Login Failed",
+        data.message || "Invalid, expired, or already used magic link.",
+      );
+    }
+  } catch (err) {
+    showAlert("danger", "Error", "Could not complete magic login.");
+  }
+}
+
+function setSubmitting(isSubmitting) {
+  submitBtn.disabled = isSubmitting;
+  const btnText = submitBtn.querySelector(".btn-text");
+
+  if (isSubmitting) {
+    btnText.textContent = "Registering Account...";
+    btnSpinner.classList.remove("hidden");
+  } else {
+    btnText.textContent = "Create Account";
+    btnSpinner.classList.add("hidden");
+  }
+}
+
+function showAlert(type, title, message, actionHtml = null) {
+  alertContainer.className = `alert-container alert-${type}`;
+  alertTitle.textContent = title;
+  alertMessage.textContent = message;
+
+  if (type === "success") {
+    alertIcon.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+        <polyline points="22 4 12 14.01 9 11.01"/>
+      </svg>
+    `;
+  } else if (type === "warning") {
+    alertIcon.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+        <line x1="12" y1="9" x2="12" y2="13"/>
+        <line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>
+    `;
+  } else {
+    alertIcon.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="12"/>
+        <line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+    `;
+  }
+
+  if (actionHtml) {
+    alertAction.innerHTML = actionHtml;
+    alertAction.classList.remove("hidden");
+  } else {
+    alertAction.innerHTML = "";
+    alertAction.classList.add("hidden");
+  }
+
+  alertContainer.classList.remove("hidden");
+  alertContainer.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function hideAlert() {
+  alertContainer.classList.add("hidden");
+}
+
+function resetFormValidationVisuals() {
+  const inputs = [
+    firstNameInput,
+    lastNameInput,
+    emailInput,
+    passwordInput,
+    confirmPasswordInput,
+  ];
+  inputs.forEach((input) => {
+    input.classList.remove("is-valid", "is-invalid");
+  });
+
+  const errors = [
+    firstNameError,
+    lastNameError,
+    emailError,
+    passwordError,
+    confirmPasswordError,
+  ];
+  errors.forEach((err) => {
+    err.textContent = "";
+  });
+
+  passwordMatchStatus.textContent = "";
+  passwordMatchStatus.className = "password-match-status";
+
+  registerStrengthMeter.reset();
+}
+
+document.addEventListener("DOMContentLoaded", init);
+
+function switchTab(tab) {
+  hideAlert();
+  if (tab === "login") {
+    tabLogin.classList.add("active");
+    tabRegister.classList.remove("active");
+    if (session.token) {
+      switchSection(canOpenAdminPanel() ? adminSection : dashboardSection);
+    } else {
+      switchSection(loginSection);
+    }
+  } else {
+    tabRegister.classList.add("active");
+    tabLogin.classList.remove("active");
+    switchSection(registerSection);
+  }
+}
+
+function canOpenDashboard() {
+  return Boolean(session.token) && session.role === "RK";
+}
+
+function canOpenAdminPanel() {
+  return Boolean(session.token) && session.role === "A";
+}
+
+function switchSection(sectionToDisplay) {
+  if (sectionToDisplay === dashboardSection && !canOpenDashboard()) {
+    sectionToDisplay = loginSection;
+  }
+  if (sectionToDisplay === adminSection && !canOpenAdminPanel()) {
+    sectionToDisplay = loginSection;
+  }
+  if (sectionToDisplay === changePasswordSection && !session.token) {
+    sectionToDisplay = loginSection;
+  }
+  [
+    loginSection,
+    otpSection,
+    dashboardSection,
+    adminSection,
+    registerSection,
+    forceChangePasswordSection,
+    forgotPasswordSection,
+    resetPasswordSection,
+    changePasswordSection,
+  ].forEach((sec) => {
+    if (sec) sec.classList.add("hidden");
+  });
+  if (sectionToDisplay) sectionToDisplay.classList.remove("hidden");
+
+  const isDashboard = sectionToDisplay === dashboardSection;
+  const isAdmin = sectionToDisplay === adminSection;
+  if (authCard) {
+    authCard.classList.toggle("dashboard-wide", isDashboard);
+    authCard.classList.toggle("admin-wide", isAdmin);
+  }
+  const isSignedInView =
+    isDashboard || isAdmin || sectionToDisplay === changePasswordSection;
+  if (authTabs) authTabs.classList.toggle("hidden", isSignedInView);
+}
+
+function clearSessionViews() {
+  closeQuotaRequestPanel();
+  clearChangePasswordForm();
+  clearAdminQuotaRequests();
+  closeAdminQuotaForm();
+}
+
+function handleSessionExpired() {
+  session.end();
+  clearSessionViews();
+  switchSection(loginSection);
+  showAlert("warning", "Session Expired", "Please sign in again.");
+}
+
+async function handleLoginSubmit(event) {
+  event.preventDefault();
+  hideAlert();
+
+  const email = loginEmailInput.value.trim();
+  const password = loginPasswordInput.value;
+
+  const emailProblem = Validation.email(email, EMAIL_REGEX);
+  if (emailProblem) {
+    loginEmailInput.classList.add("is-invalid");
+    loginEmailError.textContent = emailProblem;
+    return;
+  }
+  const passwordProblem = Validation.password(password);
+  if (passwordProblem) {
+    loginPasswordInput.classList.add("is-invalid");
+    loginPasswordError.textContent = passwordProblem;
+    return;
+  }
+
+  activeLoginEmail = email;
+  activeLoginPassword = password;
+  loginSubmitBtn.disabled = true;
+  loginSpinner.classList.remove("hidden");
+
+  try {
+    const response = await apiJson("/api/users/login", {
+      method: "POST",
+      body: { email, password },
+    });
+    const { data } = response;
+
+    if (response.ok) {
+      if (data.restricted) {
+        restrictedSessionToken = data.token;
+        switchSection(forceChangePasswordSection);
+        showAlert(
+          "warning",
+          "Password Expired",
+          data.message ||
+          "Your ban period has expired. Please choose a new password.",
+        );
+        return;
+      }
+
+      otpEmailTarget.textContent = activeLoginEmail;
+      resetOtpForm();
+      switchSection(otpSection);
+      showAlert(
+        "success",
+        "OTPS Code Sent!",
+        "A 6-digit code has been sent to your email.",
+      );
+    } else {
+      const displayMessage = localizeTimestamps(
+        data.message || "Invalid credentials or unverified account.",
+      );
+
+      showAlert("danger", "Login Failed", displayMessage);
+    }
+  } catch (err) {
+    showAlert(
+      "danger",
+      "Connection Error",
+      "Could not connect to API Gateway.",
+    );
+  } finally {
+    loginSubmitBtn.disabled = false;
+    loginSpinner.classList.add("hidden");
+  }
+}
+
+async function handleOtpSubmit(event) {
+  event.preventDefault();
+  hideAlert();
+
+  const otp = otpCodeInput.value.trim();
+  const otpProblem = Validation.otp(otp);
+  if (otpProblem) {
+    otpCodeInput.classList.add("is-invalid");
+    otpCodeError.textContent = otpProblem;
+    return;
+  }
+
+  otpSubmitBtn.disabled = true;
+  otpSpinner.classList.remove("hidden");
+
+  try {
+    const response = await apiJson("/api/users/verify-otp", {
+      method: "POST",
+      body: { email: activeLoginEmail, password: activeLoginPassword, otp },
+    });
+    const { data } = response;
+
+    if (response.ok && data.token) {
+      activeLoginPassword = "";
+      if (data.restricted) {
+        restrictedSessionToken = data.token;
+        switchSection(forceChangePasswordSection);
+        showAlert(
+          "warning",
+          "Password Update Required",
+          data.message ||
+          "Your ban period has expired. Please choose a new password.",
+        );
+      } else {
+        resetOtpForm();
+        await session.start({
+          token: data.token,
+          email: activeLoginEmail,
+          role: data.user?.role,
+        });
+        showAuthenticatedView(activeLoginEmail);
+        showAlert("success", "Authenticated!", "2FA verification successful.");
+      }
+    } else {
+      showAlert(
+        "danger",
+        "Verification Failed",
+        data.message || "Invalid or expired OTPS code.",
+      );
+    }
+  } catch (err) {
+    showAlert("danger", "Connection Error", "Could not verify OTPS code.");
+  } finally {
+    otpSubmitBtn.disabled = false;
+    otpSpinner.classList.add("hidden");
+  }
+}
+
+async function handleResendOtp() {
+  hideAlert();
+  try {
+    const response = await apiJson("/api/users/resend-otp", {
+      method: "POST",
+      body: { email: activeLoginEmail, password: activeLoginPassword },
+    });
+
+    if (response.ok) {
+      showAlert(
+        "success",
+        "New Code Sent!",
+        "A new OTPS code has been sent to your inbox.",
+      );
+    } else {
+      showAlert("danger", "Resend Failed", "Unable to send a new code.");
+    }
+  } catch (err) {
+    showAlert("danger", "Error", "Could not connect to resend OTPS.");
+  }
+}
+
+function resetOtpForm() {
+  if (otpForm) otpForm.reset();
+  if (otpCodeInput) {
+    otpCodeInput.value = "";
+    otpCodeInput.classList.remove("is-invalid", "is-valid");
+  }
+  if (otpCodeError) otpCodeError.textContent = "";
+}
+
+function resetForceChangePasswordUI() {
+  if (forceChangePasswordForm) forceChangePasswordForm.reset();
+  [forceNewPasswordInput, forceConfirmPasswordInput].forEach((input) => {
+    if (input) {
+      input.type = "password";
+      input.classList.remove("is-valid", "is-invalid");
+    }
+  });
+  [toggleForceNewPasswordBtn, toggleForceConfirmPasswordBtn].forEach((btn) => {
+    if (btn) {
+      btn.classList.remove("active");
+      btn.setAttribute("aria-label", "Show password");
+    }
+  });
+  if (forceNewPasswordError) forceNewPasswordError.textContent = "";
+  if (forceConfirmPasswordError) forceConfirmPasswordError.textContent = "";
+  if (forcePasswordMatchStatus) {
+    forcePasswordMatchStatus.textContent = "";
+    forcePasswordMatchStatus.className = "password-match-status";
+  }
+  forceStrengthMeter.reset();
+}
+
+async function handleLogout() {
+  logoutBtn.disabled = true;
+  logoutSpinner.classList.remove("hidden");
+  try {
+    await apiJson("/api/users/logout", { method: "POST" });
+  } catch (err) {
+    console.warn("Logout API warning:", err);
+  } finally {
+    if (notificationsPopover) notificationsPopover.classList.add("hidden");
+    if (notificationsBellBtn) notificationsBellBtn.setAttribute("aria-expanded", "false");
+    session.end();
+    clearSessionViews();
+    resetOtpForm();
+    currentFolderId = null;
+    currentBreadcrumbs = [];
+    activeLoginPassword = "";
+    logoutBtn.disabled = false;
+    logoutSpinner.classList.add("hidden");
+    switchSection(loginSection);
+    showAlert(
+      "success",
+      "Logged Out",
+      "You have been successfully logged out.",
+    );
+  }
+}
+
+async function handleForceChangePasswordSubmit(event) {
+  event.preventDefault();
+  hideAlert();
+
+  const newPassword = forceNewPasswordInput.value;
+  const confirmPassword = forceConfirmPasswordInput.value;
+
+  const newPasswordProblem = Validation.newPassword(newPassword);
+  if (newPasswordProblem) {
+    forceNewPasswordInput.classList.add("is-invalid");
+    forceNewPasswordError.textContent = newPasswordProblem;
+    return;
+  }
+  forceNewPasswordInput.classList.remove("is-invalid");
+  forceNewPasswordError.textContent = "";
+
+  if (newPassword !== confirmPassword) {
+    forceConfirmPasswordInput.classList.add("is-invalid");
+    forceConfirmPasswordError.textContent = "Passwords do not match";
+    return;
+  }
+  forceConfirmPasswordInput.classList.remove("is-invalid");
+  forceConfirmPasswordError.textContent = "";
+
+  forceChangeSubmitBtn.disabled = true;
+  forceChangeSpinner.classList.remove("hidden");
+
+  try {
+    const response = await apiJson("/api/users/change-expired-password", {
+      method: "POST",
+      token: restrictedSessionToken,
+      body: { password: newPassword, confirmPassword },
+    });
+    const { data } = response;
+
+    if (response.ok) {
+      restrictedSessionToken = null;
+      resetForceChangePasswordUI();
+      switchSection(loginSection);
+      showAlert(
+        "success",
+        "Password Updated",
+        "Your password has been reset and account lock cleared. Please sign in.",
+      );
+    } else {
+      showAlert(
+        "danger",
+        "Update Failed",
+        data.message || "Failed to update password.",
+      );
+    }
+  } catch (err) {
+    showAlert(
+      "danger",
+      "Connection Error",
+      "Could not connect to update password.",
+    );
+  } finally {
+    forceChangeSubmitBtn.disabled = false;
+    forceChangeSpinner.classList.add("hidden");
+  }
+}
+
+function showAuthenticatedView(email) {
+  if (canOpenAdminPanel()) {
+    showAdminPanel(email);
+    return;
+  }
+  showDashboard(email);
+}
+
+function showDashboard(email) {
+  activeLoginPassword = "";
+  if (!canOpenDashboard()) {
+    session.end();
+    switchSection(loginSection);
+    showAlert(
+      "danger",
+      "Access Denied",
+      "This account does not have access to file storage.",
+    );
+    return;
+  }
+  userEmailDisplay.textContent = email;
+  closeQuotaRequestPanel();
+  switchSection(dashboardSection);
+  loadUserQuota();
+  loadUserNotifications();
+  loadFolderContents(null);
+}
+
+async function checkExistingSession() {
+  const token = session.token;
+  const email = session.email;
+  if (!token || !email) return;
+
+  if (canOpenAdminPanel()) {
+    showAdminPanel(email);
+    return;
+  }
+
+  try {
+    const response = await apiJson("/api/folders", { token });
+
+    if (response.status === 401 || response.status === 403) {
+      session.end();
+      return; //stay on login if the token is expired
+    }
+
+    showDashboard(email);
+  } catch {
+    showDashboard(email);
+  }
+}
+
+if (openCreateFolderBtn) {
+  openCreateFolderBtn.addEventListener("click", () => {
+    createFolderForm.classList.remove("hidden");
+    newFolderNameInput.value = "";
+    newFolderNameInput.classList.remove("is-invalid");
+    newFolderNameError.textContent = "";
+    newFolderNameInput.focus();
+  });
+}
+if (cancelCreateFolderBtn) {
+  cancelCreateFolderBtn.addEventListener("click", () => {
+    createFolderForm.classList.add("hidden");
+  });
+}
+if (createFolderForm) {
+  createFolderForm.addEventListener("submit", handleCreateFolderSubmit);
+}
+if (navigateUpBtn) {
+  navigateUpBtn.addEventListener("click", () => {
+    if (currentBreadcrumbs.length <= 1) {
+      loadFolderContents(null);
+    } else {
+      const parentCrumb = currentBreadcrumbs[currentBreadcrumbs.length - 2];
+      loadFolderContents(parentCrumb.id);
+    }
+  });
+}
+
+if (uploadFileBtn && fileUploadInput) {
+  uploadFileBtn.addEventListener("click", () => {
+    hideAlert();
+    fileUploadInput.value = "";
+    fileUploadInput.click();
+  });
+  fileUploadInput.addEventListener("change", handleFileUploadChange);
+}
+
+if (fileVersionUploadInput) {
+  fileVersionUploadInput.addEventListener("change", handleFileVersionUploadChange);
+}
+
+async function loadFolderContents(folderId) {
+  const token = session.token;
+  if (!token) {
+    switchSection(loginSection);
+    return;
+  }
+
+  currentFolderId = folderId || null;
+  folderLoadingState.classList.remove("hidden");
+  folderEmptyState.classList.add("hidden");
+  folderItemsList.innerHTML = "";
+
+  const endpoint = currentFolderId
+    ? `/api/folders/${encodeURIComponent(currentFolderId)}`
+    : "/api/folders";
+
+  try {
+    const response = await apiJson(endpoint, { token });
+    const { data } = response;
+
+    if (response.status === 401) {
+      handleSessionExpired();
+      return;
+    }
+
+    if (response.status === 403) {
+      showAlert("danger", "Access Denied", "You do not have permission to access this resource.");
+      return;
+    }
+
+    if (!response.ok) {
+      showAlert(
+        "danger",
+        "Error",
+        data.message || "Failed to load folder contents.",
+      );
+      return;
+    }
+
+    currentBreadcrumbs = Array.isArray(data.breadcrumbs)
+      ? data.breadcrumbs
+      : [];
+    renderBreadcrumbs(currentBreadcrumbs);
+    renderFolderItems(data.folders || [], data.files || []);
+  } catch (err) {
+    showAlert("danger", "Connection Error", "Could not reach Storage Service.");
+  } finally {
+    folderLoadingState.classList.add("hidden");
+  }
+}
+
+function renderBreadcrumbs(breadcrumbs) {
+  breadcrumbsContainer.innerHTML = "";
+
+  const rootBtn = document.createElement("button");
+  rootBtn.type = "button";
+  rootBtn.className = `breadcrumb-item ${breadcrumbs.length === 0 ? "active" : ""}`;
+  rootBtn.textContent = "My Drive";
+  if (breadcrumbs.length > 0) {
+    rootBtn.addEventListener("click", () => loadFolderContents(null));
+  }
+  breadcrumbsContainer.appendChild(rootBtn);
+
+  breadcrumbs.forEach((crumb, idx) => {
+    const sep = document.createElement("span");
+    sep.className = "breadcrumb-sep";
+    sep.textContent = "/";
+    breadcrumbsContainer.appendChild(sep);
+
+    const isLast = idx === breadcrumbs.length - 1;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `breadcrumb-item ${isLast ? "active" : ""}`;
+    btn.textContent = crumb.name;
+    if (!isLast) {
+      btn.addEventListener("click", () => loadFolderContents(crumb.id));
+    }
+    breadcrumbsContainer.appendChild(btn);
+  });
+
+  if (breadcrumbs.length > 0) {
+    navigateUpBtn.classList.remove("hidden");
+    currentFolderTitle.textContent = breadcrumbs[breadcrumbs.length - 1].name;
+  } else {
+    navigateUpBtn.classList.add("hidden");
+    currentFolderTitle.textContent = "My Drive";
+  }
+}
+
+function openRenameForm(folderId, currentName) {
+  hideAlert();
+  if (createFolderForm) createFolderForm.classList.add("hidden");
+  closeRenameFileForm();
+
+  renameFolderTarget = { id: folderId, currentName };
+  renameFolderLabel.textContent = `Rename folder "${currentName}"`;
+  renameFolderNameInput.value = currentName;
+  renameFolderNameInput.classList.remove("is-invalid");
+  renameFolderNameError.textContent = "";
+  renameFolderForm.classList.remove("hidden");
+  renameFolderNameInput.focus();
+  renameFolderNameInput.select();
+}
+
+function closeRenameForm() {
+  renameFolderTarget = null;
+  if (renameFolderForm) renameFolderForm.classList.add("hidden");
+  if (renameFolderNameInput) {
+    renameFolderNameInput.value = "";
+    renameFolderNameInput.classList.remove("is-invalid");
+  }
+  if (renameFolderNameError) renameFolderNameError.textContent = "";
+}
+
+function openRenameFileForm(fileId, currentName) {
+  hideAlert();
+  if (createFolderForm) createFolderForm.classList.add("hidden");
+  closeRenameForm();
+
+  renameFileTarget = { id: fileId, currentName };
+  renameFileLabel.textContent = `Rename file "${currentName}"`;
+  renameFileNameInput.value = currentName;
+  renameFileNameInput.classList.remove("is-invalid");
+  renameFileNameError.textContent = "";
+  renameFileForm.classList.remove("hidden");
+  renameFileNameInput.focus();
+
+  const dotIdx = currentName.lastIndexOf(".");
+  if (dotIdx > 0) {
+    renameFileNameInput.setSelectionRange(0, dotIdx);
+  } else {
+    renameFileNameInput.select();
+  }
+}
+
+function closeRenameFileForm() {
+  renameFileTarget = null;
+  if (renameFileForm) renameFileForm.classList.add("hidden");
+  if (renameFileNameInput) {
+    renameFileNameInput.value = "";
+    renameFileNameInput.classList.remove("is-invalid");
+  }
+  if (renameFileNameError) renameFileNameError.textContent = "";
+}
+
+function renderFolderItems(folders, files) {
+  folderItemsList.innerHTML = "";
+
+  if (folders.length === 0 && files.length === 0) {
+    folderEmptyState.classList.remove("hidden");
+    return;
+  }
+  folderEmptyState.classList.add("hidden");
+
+  folders.forEach((folder) => {
+    const row = document.createElement("div");
+    row.className = "storage-item-row folder-row";
+    row.title = `Open folder "${folder.name}"`;
+
+    const createdDate = folder.createdAt
+      ? new Date(folder.createdAt).toLocaleDateString()
+      : "";
+
+    row.innerHTML = `
+      <div class="item-left">
+        <svg class="item-icon-folder" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
+        </svg>
+        <span class="item-name"></span>
+      </div>
+      <div class="item-right">
+        <span class="item-meta">Folder • ${Validation.escapeHtml(createdDate)}</span>
+        <button type="button" class="btn-rename-sm" title="Rename folder">Rename</button>
+      </div>
+    `;
+    row.querySelector(".item-name").textContent = folder.name;
+
+    const renameBtn = row.querySelector(".btn-rename-sm");
+    renameBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openRenameForm(folder.id, folder.name);
+    });
+
+    row.addEventListener("click", () => {
+      closeRenameForm();
+      loadFolderContents(folder.id);
+    });
+    folderItemsList.appendChild(row);
+  });
+
+  files.forEach((file) => {
+    const row = document.createElement("div");
+    row.className = "storage-item-row";
+
+    const hasUpdated =
+      file.updatedAt &&
+      file.createdAt &&
+      new Date(file.updatedAt).getTime() > new Date(file.createdAt).getTime() + 1000;
+    const dateLabel = hasUpdated
+      ? `Updated ${new Date(file.updatedAt).toLocaleString()}`
+      : file.createdAt
+        ? new Date(file.createdAt).toLocaleDateString()
+        : "";
+
+    row.innerHTML = `
+      <div class="item-left">
+        <svg class="item-icon-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+        </svg>
+        <span class="item-name"></span>
+      </div>
+      <div class="item-right">
+        <span class="item-meta">${Validation.escapeHtml(formatBytes(file.sizeBytes))} • ${Validation.escapeHtml(dateLabel)}</span>
+        <button type="button" class="btn-rename-sm btn-verify-sm" title="Check that the stored file is unchanged">Verify</button>
+        <button type="button" class="btn-rename-sm btn-rename-file-sm" title="Rename file">Rename</button>
+        <button type="button" class="btn-rename-sm btn-version-sm" title="Upload a new version of this file">↑ New Version</button>
+      </div>
+    `;
+    row.querySelector(".item-name").textContent = file.name;
+
+    const verifyBtn = row.querySelector(".btn-verify-sm");
+    verifyBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      verifyFileIntegrity(file, verifyBtn);
+    });
+
+    const renameFileBtn = row.querySelector(".btn-rename-file-sm");
+    renameFileBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openRenameFileForm(file.id, file.name);
+    });
+
+    const versionBtn = row.querySelector(".btn-version-sm");
+    versionBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      startFileVersionUpload(file, versionBtn);
+    });
+
+    folderItemsList.appendChild(row);
+  });
+}
+
+// The server hashes the stored file again and compares it with the saved SHA-256.
+async function verifyFileIntegrity(file, button) {
+  hideAlert();
+  button.disabled = true;
+
+  try {
+    const { ok, status, data } = await apiJson(
+      `/api/files/${encodeURIComponent(file.id)}/integrity`,
+      { token: session.token },
+    );
+    if (ok) {
+      showAlert(
+        data.intact ? "success" : "danger",
+        data.intact ? "File Is Intact" : "Integrity Check Failed",
+        `"${file.name}": ${data.message}`,
+      );
+    } else if (status === 401) {
+      handleSessionExpired();
+    } else if (status !== 429) {
+      showAlert("danger", "Check Not Completed", data.message || "Could not check the file.");
+    }
+  } catch (err) {
+    showAlert("danger", "Connection Error", "Could not reach Storage Service.");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function handleRenameFolderSubmit(event) {
+  event.preventDefault();
+  hideAlert();
+
+  if (!renameFolderTarget) return;
+
+  const newName = renameFolderNameInput.value.trim();
+  const renameProblem = Validation.folderName(newName);
+  if (renameProblem) {
+    renameFolderNameInput.classList.add("is-invalid");
+    renameFolderNameError.textContent = renameProblem;
+    return;
+  }
+  renameFolderNameInput.classList.remove("is-invalid");
+  renameFolderNameError.textContent = "";
+
+  const token = session.token;
+  if (!token) {
+    switchSection(loginSection);
+    return;
+  }
+
+  renameFolderSubmitBtn.disabled = true;
+  renameFolderSpinner.classList.remove("hidden");
+
+  try {
+    const response = await apiJson(`/api/folders/${encodeURIComponent(renameFolderTarget.id)}`,
+      { method: "PATCH", token, body: { name: newName } });
+    const { data } = response;
+
+    if (response.ok) {
+      closeRenameForm();
+      showAlert("success", "Folder Renamed", `Folder renamed to "${newName}".`);
+      await loadFolderContents(currentFolderId);
+    } else if (response.status === 401) {
+      handleSessionExpired();
+    } else if (response.status === 403) {
+      showAlert("danger", "Access Denied", "You do not have permission to rename this folder.");
+    } else {
+      renameFolderNameInput.classList.add("is-invalid");
+      renameFolderNameError.textContent =
+        data.message || "Could not rename folder.";
+    }
+  } catch (err) {
+    showAlert("danger", "Connection Error", "Could not reach Storage Service.");
+  } finally {
+    renameFolderSubmitBtn.disabled = false;
+    renameFolderSpinner.classList.add("hidden");
+  }
+}
+
+async function handleCreateFolderSubmit(event) {
+  event.preventDefault();
+  hideAlert();
+
+  const name = newFolderNameInput.value.trim();
+  const nameProblem = Validation.folderName(name);
+  if (nameProblem) {
+    newFolderNameInput.classList.add("is-invalid");
+    newFolderNameError.textContent = nameProblem;
+    return;
+  }
+  newFolderNameInput.classList.remove("is-invalid");
+  newFolderNameError.textContent = "";
+
+  const token = session.token;
+  if (!token) {
+    switchSection(loginSection);
+    return;
+  }
+
+  createFolderSubmitBtn.disabled = true;
+  createFolderSpinner.classList.remove("hidden");
+
+  try {
+    const response = await apiJson("/api/folders", {
+      method: "POST",
+      token,
+      body: { name, parentId: currentFolderId },
+    });
+    const { data } = response;
+
+    if (response.status === 201) {
+      createFolderForm.classList.add("hidden");
+      newFolderNameInput.value = "";
+      showAlert("success", "Folder Created", `Folder "${name}" was created.`);
+      await loadFolderContents(currentFolderId);
+    } else if (response.status === 401) {
+      handleSessionExpired();
+    } else if (response.status === 403) {
+      showAlert("danger", "Access Denied", "You do not have permission to create folders here.");
+    } else {
+      newFolderNameInput.classList.add("is-invalid");
+      newFolderNameError.textContent =
+        data.message || "Could not create folder.";
+    }
+  } catch (err) {
+    showAlert("danger", "Connection Error", "Could not reach Storage Service.");
+  } finally {
+    createFolderSubmitBtn.disabled = false;
+    createFolderSpinner.classList.add("hidden");
+  }
+}
+
+// #region file upload and storage quota (US-2.2)
+
+function formatBytes(bytes) {
+  const n = Number(bytes);
+  if (!n || n <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const idx = Math.min(Math.floor(Math.log(n) / Math.log(1024)), units.length - 1);
+  const value = n / Math.pow(1024, idx);
+  // "100 MB", not "100.0 MB" - the same form the server uses in its messages.
+  return `${idx === 0 ? value : value.toFixed(1).replace(/\.0$/, "")} ${units[idx]}`;
+}
+
+function updateQuotaDisplay(usedBytes, totalBytes) {
+  if (!quotaUsageText) return;
+  const used = Number(usedBytes) || 0;
+  const total = Number(totalBytes) || 0;
+  if (total <= 0) return;
+
+  // Possible after an administrator lowered the quota below the usage.
+  const overQuota = used > total;
+  quotaUsageText.textContent =
+    `${formatBytes(used)} of ${formatBytes(total)} used` +
+    (overQuota ? " — over quota, new uploads are blocked" : "");
+  quotaUsageText.classList.toggle("is-over-quota", overQuota);
+  if (quotaBar && quotaBarFill) {
+    const pct = Math.min(100, (used / total) * 100);
+    quotaBarFill.style.width = `${pct}%`;
+    quotaBarFill.classList.toggle("is-nearly-full", pct >= 90);
+    quotaBar.classList.remove("hidden");
+  }
+}
+
+async function loadUserQuota() {
+  const token = session.token;
+  if (!token) return;
+
+  try {
+    const response = await apiJson("/api/files/quota", { token });
+    if (response.ok) {
+      const { data } = response;
+      updateQuotaDisplay(data.usedStorageBytes, data.storageQuotaBytes);
+    }
+  } catch (err) {
+    console.warn("Could not load storage quota:", err);
+  }
+}
+
+async function loadUserNotifications() {
+  const token = session.token;
+  if (!token || !notificationsList) return;
+
+  try {
+    const response = await apiJson("/api/notifications", { token });
+
+    if (!response.ok) return;
+
+    const { data } = response;
+    const items = Array.isArray(data.notifications) ? data.notifications : [];
+    renderNotifications(items);
+  } catch (err) {
+    console.warn("Could not load notifications:", err);
+  }
+}
+
+function renderNotifications(items) {
+  if (!notificationsList) return;
+
+  const count = items.length;
+  if (notificationsCountLabel) {
+    notificationsCountLabel.textContent = String(count);
+  }
+  if (notificationsBadge) {
+    notificationsBadge.textContent = String(count);
+    notificationsBadge.classList.toggle("hidden", count === 0);
+  }
+
+  if (count === 0) {
+    notificationsList.innerHTML =
+      '<div class="notifications-empty">No notifications yet.</div>';
+    return;
+  }
+
+  notificationsList.innerHTML = "";
+  items.forEach((n) => {
+    const typeClass =
+      n.type === "success" || n.type === "warning" || n.type === "info"
+        ? `type-${n.type}`
+        : "type-info";
+
+    const timeText = n.createdAt
+      ? new Date(n.createdAt).toLocaleString()
+      : "";
+
+    const card = document.createElement("div");
+    card.className = `notification-item ${typeClass}`;
+    card.innerHTML = `
+      <div class="notification-item-title"></div>
+      <div class="notification-item-message"></div>
+      <div class="notification-item-time"></div>
+    `;
+    card.querySelector(".notification-item-title").textContent = n.title || "";
+    card.querySelector(".notification-item-message").textContent = n.message || "";
+    card.querySelector(".notification-item-time").textContent = timeText;
+
+    notificationsList.appendChild(card);
+  });
+}
+
+// 2.2.1: the user picked a file; it goes into the folder that is open right now.
+async function handleFileUploadChange(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+
+  hideAlert();
+  const problem = Validation.fileName(file.name, file.size);
+  if (problem) {
+    showAlert("danger", "Cannot Upload File", problem);
+    fileUploadInput.value = "";
+    return;
+  }
+
+  const token = session.token;
+  if (!token) {
+    switchSection(loginSection);
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("file", file);
+  if (currentFolderId) {
+    formData.append("folderId", currentFolderId);
+  }
+
+  uploadFileBtn.disabled = true;
+  uploadFileSpinner.classList.remove("hidden");
+
+  try {
+    // No Content-Type header: the browser sets multipart/form-data with the boundary.
+    const response = await apiJson("/api/files/upload", {
+      method: "POST",
+      token,
+      body: formData,
+    });
+    const { data } = response;
+
+    if (response.status === 201) {
+      if (data.quota) {
+        updateQuotaDisplay(data.quota.usedStorageBytes, data.quota.storageQuotaBytes);
+      }
+      showAlert(
+        "success",
+        "File Uploaded",
+        `"${file.name}" (${formatBytes(file.size)}) was uploaded successfully.`,
+      );
+      await loadFolderContents(currentFolderId);
+    } else if (response.status === 413 && /quota/i.test(data.message || "")) {
+      // 2.2.4: quota violation - the server aborted the upload; show its message.
+      showAlert(
+        "danger",
+        "Storage Quota Exceeded",
+        data.message ||
+          "Upload aborted: you do not have enough free storage space.",
+      );
+      loadUserQuota();
+    } else if (response.status === 413) {
+      showAlert("danger", "File Too Large", data.message || "This file is too large to upload.");
+    } else if (response.status === 401) {
+      handleSessionExpired();
+    } else if (response.status === 429) {
+      // apiJson already showed the "Too Many Requests" alert
+    } else {
+      showAlert("danger", "Upload Failed", data.message || "Could not upload the file.");
+    }
+  } catch (err) {
+    showAlert("danger", "Connection Error", "Could not reach Storage Service.");
+  } finally {
+    uploadFileBtn.disabled = false;
+    uploadFileSpinner.classList.add("hidden");
+    fileUploadInput.value = "";
+  }
+}
+
+function getFileExtension(name) {
+  const idx = name.lastIndexOf(".");
+  return idx >= 0 ? name.slice(idx).toLowerCase() : "";
+}
+
+function startFileVersionUpload(file, btnEl) {
+  if (!fileVersionUploadInput) return;
+  hideAlert();
+  versionTargetFile = file;
+  versionTargetBtn = btnEl;
+
+  const ext = getFileExtension(file.name);
+  fileVersionUploadInput.accept = ext || ".txt,.md,.csv,.json,.pdf,.png,.jpg,.jpeg,.gif";
+  fileVersionUploadInput.value = "";
+  fileVersionUploadInput.click();
+}
+
+async function handleFileVersionUploadChange(event) {
+  const selectedFile = event.target.files && event.target.files[0];
+  const targetFile = versionTargetFile;
+  const triggerBtn = versionTargetBtn;
+
+  if (!selectedFile || !targetFile) return;
+
+  hideAlert();
+  const problem = Validation.fileName(selectedFile.name, selectedFile.size);
+  if (problem) {
+    showAlert("danger", "Cannot Upload New Version", problem);
+    fileVersionUploadInput.value = "";
+    return;
+  }
+
+  const expectedExt = getFileExtension(targetFile.name);
+  const actualExt = getFileExtension(selectedFile.name);
+  if (expectedExt && actualExt !== expectedExt) {
+    showAlert(
+      "danger",
+      "File Type Mismatch",
+      `The new version must have the same extension (${expectedExt}) as "${targetFile.name}".`,
+    );
+    fileVersionUploadInput.value = "";
+    return;
+  }
+
+  const token = session.token;
+  if (!token) {
+    switchSection(loginSection);
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("file", selectedFile);
+
+  if (triggerBtn) {
+    triggerBtn.disabled = true;
+    triggerBtn.textContent = "Uploading…";
+  }
+
+  try {
+    const response = await apiJson(`/api/files/${encodeURIComponent(targetFile.id)}/version`,
+      { method: "POST", token, body: formData });
+    const { data } = response;
+
+    if (response.ok) {
+      if (data.quota && Number(data.quota.storageQuotaBytes) > 0) {
+        updateQuotaDisplay(data.quota.usedStorageBytes, data.quota.storageQuotaBytes);
+      } else {
+        loadUserQuota();
+      }
+      showAlert(
+        "success",
+        "New Version Uploaded",
+        `New version of "${targetFile.name}" (${formatBytes(selectedFile.size)}) was uploaded successfully.`,
+      );
+      await loadFolderContents(currentFolderId);
+    } else if (response.status === 413 && /quota/i.test(data.message || "")) {
+      showAlert(
+        "danger",
+        "Storage Quota Exceeded",
+        data.message ||
+          "Version upload aborted: you do not have enough free storage space for the larger file.",
+      );
+      loadUserQuota();
+    } else if (response.status === 413) {
+      showAlert("danger", "File Too Large", data.message || "This file is too large to upload.");
+    } else if (response.status === 401) {
+      handleSessionExpired();
+    } else if (response.status === 429) {
+      // apiJson already showed the "Too Many Requests" alert
+    } else {
+      showAlert(
+        "danger",
+        "Version Upload Failed",
+        data.message || "Could not upload the new file version.",
+      );
+    }
+  } catch (err) {
+    showAlert("danger", "Connection Error", "Could not reach Storage Service.");
+  } finally {
+    if (triggerBtn) {
+      triggerBtn.disabled = false;
+      triggerBtn.textContent = "New Version";
+    }
+    fileVersionUploadInput.value = "";
+    versionTargetFile = null;
+    versionTargetBtn = null;
+  }
+}
+
+// #endregion
+
+// #region Admin Panel
+
+const adminEmailDisplay = document.getElementById("adminEmailDisplay");
+const adminLogoutBtn = document.getElementById("adminLogoutBtn");
+const adminLogoutSpinner = document.getElementById("adminLogoutSpinner");
+
+const adminTabs = {
+  users: {
+    button: document.getElementById("adminTabUsers"),
+    panel: document.getElementById("adminUsersPanel"),
+  },
+  quotaRequests: {
+    button: document.getElementById("adminTabQuotaRequests"),
+    panel: document.getElementById("adminQuotaRequestsPanel"),
+  },
+  notifications: {
+    button: document.getElementById("adminTabNotifications"),
+    panel: document.getElementById("adminNotificationsPanel"),
+  },
+};
+
+const adminStatUsers = document.getElementById("adminStatUsers");
+const adminStatUsed = document.getElementById("adminStatUsed");
+const adminStatQuota = document.getElementById("adminStatQuota");
+const adminUserSearchInput = document.getElementById("adminUserSearchInput");
+const adminRefreshUsersBtn = document.getElementById("adminRefreshUsersBtn");
+
+const adminQuotaForm = document.getElementById("adminQuotaForm");
+const adminQuotaTargetTitle = document.getElementById("adminQuotaTargetTitle");
+const adminQuotaTargetMeta = document.getElementById("adminQuotaTargetMeta");
+const adminNewQuotaMbInput = document.getElementById("adminNewQuotaMbInput");
+const adminQuotaSubmitBtn = document.getElementById("adminQuotaSubmitBtn");
+const adminQuotaCancelBtn = document.getElementById("adminQuotaCancelBtn");
+const adminQuotaHint = document.getElementById("adminQuotaHint");
+const adminQuotaWarning = document.getElementById("adminQuotaWarning");
+const adminQuotaError = document.getElementById("adminQuotaError");
+const adminPresetBtns = document.querySelectorAll(".admin-preset-btn");
+
+const adminUsersLoading = document.getElementById("adminUsersLoading");
+const adminUsersEmpty = document.getElementById("adminUsersEmpty");
+const adminUsersList = document.getElementById("adminUsersList");
+
+let adminUsers = [];
+let adminQuotaTargetUser = null;
+
+function showAdminPanel(email) {
+  activeLoginPassword = "";
+  if (!canOpenAdminPanel()) {
+    session.end();
+    switchSection(loginSection);
+    showAlert("danger", "Access Denied", "Administrator privileges required.");
+    return;
+  }
+  if (adminEmailDisplay) adminEmailDisplay.textContent = email;
+  clearAdminQuotaRequests();
+  switchSection(adminSection);
+  switchAdminTab("users");
+  loadAdminUsers();
+  refreshPendingQuotaRequestCount();
+}
+
+function switchAdminTab(tab) {
+  Object.entries(adminTabs).forEach(([name, { button, panel }]) => {
+    const active = name === tab;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+    panel.classList.toggle("hidden", !active);
+  });
+}
+
+async function loadAdminUsers() {
+  const token = session.token;
+  if (!token) {
+    switchSection(loginSection);
+    return;
+  }
+
+  closeAdminQuotaForm();
+  adminUsersLoading.classList.remove("hidden");
+  adminUsersEmpty.classList.add("hidden");
+  adminUsersList.innerHTML = "";
+
+  try {
+    const { ok, status, data } = await apiJson("/api/admin/users", { token });
+
+    if (status === 401) {
+      handleSessionExpired();
+    } else if (!ok) {
+      showAlert("danger", "Error Loading Users", data.message || "Could not load users.");
+    } else {
+      adminUsers = data.users || [];
+      renderAdminUsers();
+    }
+  } catch (err) {
+    showAlert("danger", "Connection Error", "Could not load users.");
+  } finally {
+    adminUsersLoading.classList.add("hidden");
+  }
+}
+
+function updateAdminStats(users) {
+  const totalUsers = users.length;
+  const totalUsed = users.reduce(
+    (sum, u) => sum + (Number(u.usedStorageBytes) || 0),
+    0,
+  );
+  const totalQuota = users.reduce(
+    (sum, u) => sum + (Number(u.storageQuotaBytes) || 0),
+    0,
+  );
+
+  if (adminStatUsers) adminStatUsers.textContent = String(totalUsers);
+  if (adminStatUsed) adminStatUsed.textContent = formatBytes(totalUsed);
+  if (adminStatQuota) adminStatQuota.textContent = formatBytes(totalQuota);
+}
+
+function renderAdminUsers() {
+  if (!adminUsersList) return;
+  adminUsersList.innerHTML = "";
+
+  updateAdminStats(adminUsers);
+
+  const query = (adminUserSearchInput?.value || "").trim().toLowerCase();
+  const filtered = adminUsers.filter((u) => {
+    if (!query) return true;
+    const fullName = `${u.firstName || ""} ${u.lastName || ""}`.toLowerCase();
+    const email = (u.email || "").toLowerCase();
+    return fullName.includes(query) || email.includes(query);
+  });
+
+  if (filtered.length === 0) {
+    if (adminUsersEmpty) adminUsersEmpty.classList.remove("hidden");
+    return;
+  }
+  if (adminUsersEmpty) adminUsersEmpty.classList.add("hidden");
+
+  filtered.forEach((user) => {
+    const used = Number(user.usedStorageBytes) || 0;
+    const quota = Number(user.storageQuotaBytes) || 0;
+    const pct = quota > 0 ? Math.min(100, (used / quota) * 100) : 0;
+    const fullName =
+      `${user.firstName || ""} ${user.lastName || ""}`.trim() || "Unnamed User";
+    const isAdminUser = user.role === "A";
+
+    const row = document.createElement("div");
+    row.className = "admin-user-row";
+
+    row.innerHTML = `
+      <div class="admin-user-info">
+        <div class="admin-user-name-line">
+          <span class="admin-user-name"></span>
+          <span class="role-pill ${isAdminUser ? "role-admin" : "role-user"}">
+            ${isAdminUser ? "Admin" : "Regular"}
+          </span>
+          <span class="status-pill ${user.isVerified ? "verified" : "unverified"}">
+            ${user.isVerified ? "Verified" : "Unverified"}
+          </span>
+          ${used > quota ? '<span class="status-pill request-rejected">Over quota</span>' : ""}
+        </div>
+        <div class="admin-user-email"></div>
+      </div>
+      <div class="admin-user-storage">
+        <div class="admin-storage-text">
+          ${Validation.escapeHtml(formatBytes(used))} / ${Validation.escapeHtml(formatBytes(quota))}
+        </div>
+        <div class="quota-bar" aria-hidden="true">
+          <div class="quota-bar-fill ${pct >= 90 ? "is-nearly-full" : ""}" style="width: ${pct}%"></div>
+        </div>
+      </div>
+      <div class="admin-user-actions">
+        <button type="button" class="btn-outline-sm admin-edit-quota-btn">
+          Edit Quota
+        </button>
+      </div>
+    `;
+
+    row.querySelector(".admin-user-name").textContent = fullName;
+    row.querySelector(".admin-user-email").textContent = user.email || "";
+
+    row
+      .querySelector(".admin-edit-quota-btn")
+      .addEventListener("click", () => openAdminQuotaForm(user));
+
+    adminUsersList.appendChild(row);
+  });
+}
+
+async function openAdminQuotaForm(user) {
+  hideAlert();
+  adminQuotaTargetUser = user;
+  const fullName =
+    `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email;
+
+  adminQuotaTargetTitle.textContent = `Edit Storage Quota for ${fullName}`;
+  adminQuotaTargetMeta.textContent =
+    `${user.email} • Current usage: ${formatBytes(user.usedStorageBytes)} / ${formatBytes(user.storageQuotaBytes)}`;
+  adminNewQuotaMbInput.value = String(toMb(user.storageQuotaBytes));
+  setFieldError(adminNewQuotaMbInput, adminQuotaError, "");
+  adminQuotaWarning.classList.add("hidden");
+  adminQuotaForm.classList.remove("hidden");
+  adminNewQuotaMbInput.focus();
+
+  const limits = await loadLimits();
+  adminQuotaHint.textContent = limits ? quotaRangeHint(limits) : "";
+}
+
+function closeAdminQuotaForm() {
+  adminQuotaTargetUser = null;
+  adminQuotaForm.classList.add("hidden");
+  adminNewQuotaMbInput.value = "";
+  setFieldError(adminNewQuotaMbInput, adminQuotaError, "");
+  adminQuotaWarning.classList.add("hidden");
+}
+
+// The entered quota in bytes (0 when the field holds no number).
+function enteredQuotaBytes(input) {
+  return Math.round(Number(input.value) * BYTES_PER_MB) || 0;
+}
+
+// Live feedback: out of range, or below what the user already stores.
+function checkAdminQuotaInput() {
+  if (!adminQuotaTargetUser || !appLimits) return;
+  const bytes = enteredQuotaBytes(adminNewQuotaMbInput);
+  const problem = quotaRangeProblem(bytes, appLimits);
+  setFieldError(adminNewQuotaMbInput, adminQuotaError, problem);
+
+  const used = Number(adminQuotaTargetUser.usedStorageBytes) || 0;
+  const belowUsage = !problem && bytes < used;
+  adminQuotaWarning.textContent = belowUsage
+    ? `This is below the current usage of ${formatBytes(used)}. No files are deleted, but the user cannot upload until the usage fits.`
+    : "";
+  adminQuotaWarning.classList.toggle("hidden", !belowUsage);
+}
+
+async function handleAdminQuotaSubmit(event) {
+  event.preventDefault();
+  hideAlert();
+  const user = adminQuotaTargetUser;
+  if (!user) return;
+
+  const limits = await loadLimits();
+  if (!limits) {
+    setFieldError(adminNewQuotaMbInput, adminQuotaError, "Could not load the quota limits. Try again.");
+    return;
+  }
+
+  const bytes = enteredQuotaBytes(adminNewQuotaMbInput);
+  const unchanged = Number(adminNewQuotaMbInput.value) === toMb(user.storageQuotaBytes);
+  const problem =
+    quotaRangeProblem(bytes, limits) ||
+    (unchanged ? "That is already the current quota" : "");
+  setFieldError(adminNewQuotaMbInput, adminQuotaError, problem);
+  if (problem) return;
+
+  setButtonBusy(adminQuotaSubmitBtn, true);
+  try {
+    const { ok, status, data } = await apiJson(
+      `/api/admin/users/${encodeURIComponent(user.id)}/quota`,
+      { method: "PATCH", token: session.token, body: { storageQuotaBytes: bytes } },
+    );
+
+    if (status === 401) {
+      handleSessionExpired();
+    } else if (!ok) {
+      setFieldError(adminNewQuotaMbInput, adminQuotaError, data.message || "Failed to update storage quota.");
+    } else {
+      adminUsers = adminUsers.map((u) => (u.id === user.id ? data : u));
+      closeAdminQuotaForm();
+      renderAdminUsers();
+      showAlert(
+        "success",
+        "Storage Quota Updated",
+        `Storage quota for ${user.email} is now ${formatBytes(bytes)}.`,
+      );
+    }
+  } catch (err) {
+    showAlert("danger", "Connection Error", "Could not reach the server. The quota may not have changed.");
+  } finally {
+    setButtonBusy(adminQuotaSubmitBtn, false);
+  }
+}
+
+if (adminLogoutBtn) {
+  adminLogoutBtn.addEventListener("click", async () => {
+    adminLogoutBtn.disabled = true;
+    if (adminLogoutSpinner) adminLogoutSpinner.classList.remove("hidden");
+    await handleLogout();
+    adminUsers = [];
+    adminLogoutBtn.disabled = false;
+    if (adminLogoutSpinner) adminLogoutSpinner.classList.add("hidden");
+  });
+}
+Object.entries(adminTabs).forEach(([name, { button }]) => {
+  button.addEventListener("click", () => {
+    hideAlert();
+    switchAdminTab(name);
+    if (name === "quotaRequests") loadAdminQuotaRequests();
+  });
+});
+if (adminUserSearchInput) {
+  adminUserSearchInput.addEventListener("input", renderAdminUsers);
+}
+if (adminRefreshUsersBtn) {
+  adminRefreshUsersBtn.addEventListener("click", loadAdminUsers);
+}
+adminQuotaCancelBtn.addEventListener("click", closeAdminQuotaForm);
+adminQuotaForm.addEventListener("submit", handleAdminQuotaSubmit);
+adminNewQuotaMbInput.addEventListener("input", checkAdminQuotaInput);
+adminPresetBtns.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const next = (Number(adminNewQuotaMbInput.value) || 0) + Number(btn.dataset.addMb);
+    adminNewQuotaMbInput.value = String(Math.max(next, 0));
+    checkAdminQuotaInput();
+  });
+});
+
+async function handleRenameFileSubmit(event) {
+  event.preventDefault();
+  hideAlert();
+
+  if (!renameFileTarget) return;
+
+  const newName = renameFileNameInput.value.trim();
+  const renameProblem = Validation.renameFileName(newName, renameFileTarget.currentName);
+  if (renameProblem) {
+    renameFileNameInput.classList.add("is-invalid");
+    renameFileNameError.textContent = renameProblem;
+    return;
+  }
+  renameFileNameInput.classList.remove("is-invalid");
+  renameFileNameError.textContent = "";
+
+  const token = session.token;
+  if (!token) {
+    switchSection(loginSection);
+    return;
+  }
+
+  renameFileSubmitBtn.disabled = true;
+  renameFileSpinner.classList.remove("hidden");
+
+  try {
+    const response = await apiJson(`/api/files/${encodeURIComponent(renameFileTarget.id)}`,
+      { method: "PATCH", token, body: { name: newName } });
+    const { data } = response;
+
+    if (response.ok) {
+      closeRenameFileForm();
+      showAlert("success", "File Renamed", `File renamed to "${newName}".`);
+      await loadFolderContents(currentFolderId);
+    } else if (response.status === 401) {
+      handleSessionExpired();
+    } else if (response.status === 403) {
+      showAlert("danger", "Access Denied", "You do not have permission to rename this file.");
+    } else {
+      renameFileNameInput.classList.add("is-invalid");
+      renameFileNameError.textContent =
+        data.message || "Could not rename file.";
+    }
+  } catch (err) {
+    showAlert("danger", "Connection Error", "Could not reach Storage Service.");
+  } finally {
+    renameFileSubmitBtn.disabled = false;
+    renameFileSpinner.classList.add("hidden");
+  }
+}
+
+// #endregion
