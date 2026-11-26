@@ -16,21 +16,11 @@ type CassandraNotificationRepository struct {
 	session *gocql.Session
 }
 
-// Options are the cassandra_* settings of config.yaml.
-type Options struct {
-	Timeout           time.Duration // per query, and for connecting
-	ReplicationFactor int
-	SchemaConsistency gocql.Consistency // creating the keyspace
-	Consistency       gocql.Consistency // everything else
-}
-
-// NewCassandraNotificationRepository: keyspace is written into CQL statements,
-// so the caller must have checked that it is a plain identifier.
-func NewCassandraNotificationRepository(hosts []string, keyspace string, opts Options) (*CassandraNotificationRepository, error) {
+func NewCassandraNotificationRepository(hosts []string, keyspace string) (*CassandraNotificationRepository, error) {
 	sysCluster := gocql.NewCluster(hosts...)
-	sysCluster.Consistency = opts.SchemaConsistency
-	sysCluster.Timeout = opts.Timeout
-	sysCluster.ConnectTimeout = opts.Timeout
+	sysCluster.Consistency = gocql.Quorum
+	sysCluster.Timeout = 10 * time.Second
+	sysCluster.ConnectTimeout = 10 * time.Second
 
 	sysSession, err := sysCluster.CreateSession()
 	if err != nil {
@@ -39,8 +29,8 @@ func NewCassandraNotificationRepository(hosts []string, keyspace string, opts Op
 
 	createKS := fmt.Sprintf(`
 		CREATE KEYSPACE IF NOT EXISTS %s
-		WITH replication = {'class': 'SimpleStrategy', 'replication_factor': %d}
-	`, keyspace, opts.ReplicationFactor)
+		WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1}
+	`, keyspace)
 	if err := sysSession.Query(createKS).Exec(); err != nil {
 		sysSession.Close()
 		return nil, fmt.Errorf("create keyspace: %w", err)
@@ -49,9 +39,9 @@ func NewCassandraNotificationRepository(hosts []string, keyspace string, opts Op
 
 	ksCluster := gocql.NewCluster(hosts...)
 	ksCluster.Keyspace = keyspace
-	ksCluster.Consistency = opts.Consistency
-	ksCluster.Timeout = opts.Timeout
-	ksCluster.ConnectTimeout = opts.Timeout
+	ksCluster.Consistency = gocql.One
+	ksCluster.Timeout = 10 * time.Second
+	ksCluster.ConnectTimeout = 10 * time.Second
 
 	session, err := ksCluster.CreateSession()
 	if err != nil {

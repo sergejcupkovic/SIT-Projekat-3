@@ -1,3 +1,6 @@
+const MAILPIT_URL = "http://localhost:8025";
+const MAILPIT_BUTTON = `<a href="${MAILPIT_URL}" target="_blank" rel="noopener noreferrer" class="btn-mailpit">Open Mailpit Inbox (:8025) ↗</a>`;
+
 const tabLogin = document.getElementById("tabLogin");
 const tabRegister = document.getElementById("tabRegister");
 const loginSection = document.getElementById("loginSection");
@@ -59,14 +62,11 @@ const resendOtpBtn = document.getElementById("resendOtpBtn");
 const backToLoginBtn = document.getElementById("backToLoginBtn");
 
 const userEmailDisplay = document.getElementById("userEmailDisplay");
-const jwtTokenDisplay = document.getElementById("jwtTokenDisplay");
 const logoutBtn = document.getElementById("logoutBtn");
 const logoutSpinner = document.getElementById("logoutSpinner");
 
 const authCard = document.querySelector(".auth-card");
 const authTabs = document.querySelector(".auth-tabs");
-const toggleTokenDrawerBtn = document.getElementById("toggleTokenDrawerBtn");
-const jwtDrawer = document.getElementById("jwtDrawer");
 const navigateUpBtn = document.getElementById("navigateUpBtn");
 const breadcrumbsContainer = document.getElementById("breadcrumbsContainer");
 const currentFolderTitle = document.getElementById("currentFolderTitle");
@@ -156,88 +156,11 @@ const notificationsPopover = document.getElementById("notificationsPopover");
 const notificationsCountLabel = document.getElementById("notificationsCountLabel");
 const notificationsList = document.getElementById("notificationsList");
 
-function getCandidateEndpoints(path) {
-  const endpoints = [];
-
-  if (
-    window.location.protocol === "http:" ||
-    window.location.protocol === "https:"
-  ) {
-    endpoints.push(path);
-  }
-
-  const hostname = window.location.hostname || "localhost";
-  // Fallback: call the API gateway directly over HTTPS.
-  if (hostname === "127.0.0.1") {
-    endpoints.push(`https://127.0.0.1:8443${path}`);
-    endpoints.push(`https://localhost:8443${path}`);
-  } else {
-    endpoints.push(`https://localhost:8443${path}`);
-    endpoints.push(`https://127.0.0.1:8443${path}`);
-  }
-
-  return [...new Set(endpoints)];
-}
-
-async function fetchWithFallback(path, options) {
-  const endpoints = getCandidateEndpoints(path);
-  let lastError = null;
-
-  for (const url of endpoints) {
-    try {
-      const response = await fetch(url, options);
-      if (response.status === 429) {
-        showAlert("warning", "Too Many Requests", "You are sending requests too fast. Please slow down and try again.");
-        return { response, url };
-      }
-      if (response.status === 404 && url === path && endpoints.length > 1) {
-        continue;
-      }
-      return { response, url };
-    } catch (err) {
-      lastError = err;
-    }
-  }
-
-  throw lastError;
-}
-
-// Puts the configured limits into labels and input attributes.
-function applyLimitsToUi(limits) {
-  const setMaxLength = (inputs, max) => {
-    inputs.forEach((input) => {
-      if (input && max) input.maxLength = max;
-    });
-  };
-  setMaxLength([firstNameInput, lastNameInput], limits.maxNameLength);
-  setMaxLength([newFolderNameInput, renameFolderNameInput], limits.maxFolderNameLength);
-  setMaxLength([renameFileNameInput], limits.maxFileNameLength);
-  setMaxLength(
-    document.querySelectorAll("input[data-new-password]"),
-    limits.passwordMaxLength,
-  );
-
-  const accept = limits.allowedFileExtensions.join(",");
-  fileUploadInput.accept = accept;
-  fileVersionUploadInput.accept = accept;
-
+function showLimits(limits) {
+  if (!limits) return;
   document.getElementById("registerSubtitle").textContent =
     `Sign up to get ${formatBytes(limits.defaultQuotaBytes)} of secure cloud storage`;
-
   strengthMeters.forEach((meter) => meter.refresh());
-
-  const mailUrl = limits.mailUiUrl;
-  document.querySelectorAll("[data-mail-ui-link]").forEach((link) => {
-    if (mailUrl) link.href = mailUrl;
-    link.classList.toggle("hidden", !mailUrl);
-  });
-  document.querySelectorAll("[data-mail-ui-only]").forEach((el) => {
-    el.classList.toggle("hidden", !mailUrl);
-  });
-
-  // Storage bars drawn before the limits arrived get their warning colour now.
-  if (lastQuotaShown) updateQuotaDisplay(...lastQuotaShown);
-  if (adminUsers.length) renderAdminUsers();
 }
 
 async function init() {
@@ -254,8 +177,7 @@ async function init() {
   );
   initAccountFeatures();
   initQuotaRequestFeatures();
-  AppLimits.onLoad(applyLimitsToUi);
-  AppLimits.load();
+  loadLimits().then(showLimits);
 
   firstNameInput.addEventListener("input", () =>
     validateNameField(firstNameInput, firstNameError, "First name"),
@@ -288,7 +210,6 @@ async function init() {
   tabLogin.addEventListener("click", () => switchTab("login"));
   tabRegister.addEventListener("click", () => switchTab("register"));
 
-  // Login, OTPS & Logout Events
   toggleLoginPasswordBtn.addEventListener("click", () =>
     togglePasswordVisibility(loginPasswordInput, toggleLoginPasswordBtn),
   );
@@ -613,22 +534,8 @@ async function handleFormSubmit(event) {
   setSubmitting(true);
 
   try {
-    const { response } = await fetchWithFallback("/api/users/register", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
-
-    let data = {};
-    const textData = await response.text();
-    try {
-      data = JSON.parse(textData);
-    } catch {
-      data = { message: textData.trim() };
-    }
+    const response = await apiJson("/api/users/register", { method: "POST", body: payload });
+    const { data } = response;
 
     if (response.status === 201) {
       const successMsg =
@@ -638,7 +545,7 @@ async function handleFormSubmit(event) {
         "success",
         "Registration Successful!",
         successMsg,
-        mailInboxAction(),
+        MAILPIT_BUTTON,
       );
 
       form.reset();
@@ -687,23 +594,8 @@ async function checkVerificationTokenInUrl() {
   );
 
   try {
-    const { response } = await fetchWithFallback(
-      `/api/users/verify?token=${encodeURIComponent(token)}`,
-      {
-        method: "GET",
-        headers: {
-          Accept: "application/json",
-        },
-      },
-    );
-
-    let data = {};
-    const text = await response.text();
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { message: text.trim() };
-    }
+    const response = await apiJson(`/api/users/verify?token=${encodeURIComponent(token)}`);
+    const { data } = response;
 
     if (response.ok) {
       showAlert(
@@ -741,22 +633,11 @@ async function handleMagicLinkRequest() {
   showAlert("warning", "Sending...", "Requesting magic login link...");
 
   try {
-    const { response } = await fetchWithFallback(
-      "/api/users/magic-link-request",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      },
-    );
-
-    const text = await response.text();
-    let data = {};
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { message: text.trim() };
-    }
+    const response = await apiJson("/api/users/magic-link-request", {
+      method: "POST",
+      body: { email },
+    });
+    const { data } = response;
 
     if (response.ok) {
       showAlert(
@@ -791,22 +672,11 @@ async function checkMagicLinkTokenInUrl() {
   );
 
   try {
-    const { response } = await fetchWithFallback(
-      "/api/users/magic-link-login",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: magicToken }),
-      },
-    );
-
-    const text = await response.text();
-    let data = {};
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { message: text.trim() };
-    }
+    const response = await apiJson("/api/users/magic-link-login", {
+      method: "POST",
+      body: { token: magicToken },
+    });
+    const { data } = response;
 
     if (response.ok && data.token) {
       if (data.restricted) {
@@ -824,7 +694,7 @@ async function checkMagicLinkTokenInUrl() {
           email: data.user?.email || "user",
           role: data.user?.role,
         });
-        showAuthenticatedView(data.user?.email || "user", data.token);
+        showAuthenticatedView(data.user?.email || "user");
         showAlert(
           "success",
           "Welcome!",
@@ -994,7 +864,6 @@ function switchSection(sectionToDisplay) {
   if (authTabs) authTabs.classList.toggle("hidden", isSignedInView);
 }
 
-// Forgets everything shown for the previous session.
 function clearSessionViews() {
   closeQuotaRequestPanel();
   clearChangePasswordForm();
@@ -1002,7 +871,6 @@ function clearSessionViews() {
   closeAdminQuotaForm();
 }
 
-// The API refused the session token: back to the login form.
 function handleSessionExpired() {
   session.end();
   clearSessionViews();
@@ -1036,19 +904,11 @@ async function handleLoginSubmit(event) {
   loginSpinner.classList.remove("hidden");
 
   try {
-    const { response } = await fetchWithFallback("/api/users/login", {
+    const response = await apiJson("/api/users/login", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+      body: { email, password },
     });
-
-    const text = await response.text();
-    let data = {};
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { message: text.trim() };
-    }
+    const { data } = response;
 
     if (response.ok) {
       if (data.restricted) {
@@ -1072,17 +932,9 @@ async function handleLoginSubmit(event) {
         "A 6-digit code has been sent to your email.",
       );
     } else {
-      let displayMessage =
-        data.message || "Invalid credentials or unverified account.";
-
-      // Convert any ISO/RFC3339 timestamp in the message to the user's local timezone
-      const isoRegex =
-        /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})/;
-      const match = displayMessage.match(isoRegex);
-      if (match) {
-        const localTimeStr = new Date(match[0]).toLocaleString();
-        displayMessage = displayMessage.replace(match[0], localTimeStr);
-      }
+      const displayMessage = localizeTimestamps(
+        data.message || "Invalid credentials or unverified account.",
+      );
 
       showAlert("danger", "Login Failed", displayMessage);
     }
@@ -1114,23 +966,11 @@ async function handleOtpSubmit(event) {
   otpSpinner.classList.remove("hidden");
 
   try {
-    const { response } = await fetchWithFallback("/api/users/verify-otp", {
+    const response = await apiJson("/api/users/verify-otp", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: activeLoginEmail,
-        password: activeLoginPassword,
-        otp,
-      }),
+      body: { email: activeLoginEmail, password: activeLoginPassword, otp },
     });
-
-    const text = await response.text();
-    let data = {};
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { message: text.trim() };
-    }
+    const { data } = response;
 
     if (response.ok && data.token) {
       activeLoginPassword = "";
@@ -1150,7 +990,7 @@ async function handleOtpSubmit(event) {
           email: activeLoginEmail,
           role: data.user?.role,
         });
-        showAuthenticatedView(activeLoginEmail, data.token);
+        showAuthenticatedView(activeLoginEmail);
         showAlert("success", "Authenticated!", "2FA verification successful.");
       }
     } else {
@@ -1171,13 +1011,9 @@ async function handleOtpSubmit(event) {
 async function handleResendOtp() {
   hideAlert();
   try {
-    const { response } = await fetchWithFallback("/api/users/resend-otp", {
+    const response = await apiJson("/api/users/resend-otp", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: activeLoginEmail,
-        password: activeLoginPassword,
-      }),
+      body: { email: activeLoginEmail, password: activeLoginPassword },
     });
 
     if (response.ok) {
@@ -1230,7 +1066,7 @@ async function handleLogout() {
   logoutBtn.disabled = true;
   logoutSpinner.classList.remove("hidden");
   try {
-    await fetchWithFallback("/api/users/logout", { method: "POST" });
+    await apiJson("/api/users/logout", { method: "POST" });
   } catch (err) {
     console.warn("Logout API warning:", err);
   } finally {
@@ -1281,28 +1117,12 @@ async function handleForceChangePasswordSubmit(event) {
   forceChangeSpinner.classList.remove("hidden");
 
   try {
-    const { response } = await fetchWithFallback(
-      "/api/users/change-expired-password",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${restrictedSessionToken}`,
-        },
-        body: JSON.stringify({
-          password: newPassword,
-          confirmPassword: confirmPassword,
-        }),
-      },
-    );
-
-    const text = await response.text();
-    let data = {};
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { message: text.trim() };
-    }
+    const response = await apiJson("/api/users/change-expired-password", {
+      method: "POST",
+      token: restrictedSessionToken,
+      body: { password: newPassword, confirmPassword },
+    });
+    const { data } = response;
 
     if (response.ok) {
       restrictedSessionToken = null;
@@ -1332,15 +1152,15 @@ async function handleForceChangePasswordSubmit(event) {
   }
 }
 
-function showAuthenticatedView(email, token) {
+function showAuthenticatedView(email) {
   if (canOpenAdminPanel()) {
-    showAdminPanel(email, token);
+    showAdminPanel(email);
     return;
   }
-  showDashboard(email, token);
+  showDashboard(email);
 }
 
-function showDashboard(email, token) {
+function showDashboard(email) {
   activeLoginPassword = "";
   if (!canOpenDashboard()) {
     session.end();
@@ -1353,7 +1173,6 @@ function showDashboard(email, token) {
     return;
   }
   userEmailDisplay.textContent = email;
-  if (jwtTokenDisplay) jwtTokenDisplay.value = token;
   closeQuotaRequestPanel();
   switchSection(dashboardSection);
   loadUserQuota();
@@ -1367,32 +1186,24 @@ async function checkExistingSession() {
   if (!token || !email) return;
 
   if (canOpenAdminPanel()) {
-    showAdminPanel(email, token);
+    showAdminPanel(email);
     return;
   }
 
   try {
-    const { response } = await fetchWithFallback("/api/folders", {
-      method: "GET",
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-    });
+    const response = await apiJson("/api/folders", { token });
 
     if (response.status === 401 || response.status === 403) {
       session.end();
       return; //stay on login if the token is expired
     }
 
-    showDashboard(email, token);
+    showDashboard(email);
   } catch {
-    showDashboard(email, token);
+    showDashboard(email);
   }
 }
 
-if (toggleTokenDrawerBtn) {
-  toggleTokenDrawerBtn.addEventListener("click", () => {
-    jwtDrawer.classList.toggle("hidden");
-  });
-}
 if (openCreateFolderBtn) {
   openCreateFolderBtn.addEventListener("click", () => {
     createFolderForm.classList.remove("hidden");
@@ -1451,26 +1262,11 @@ async function loadFolderContents(folderId) {
     : "/api/folders";
 
   try {
-    const { response } = await fetchWithFallback(endpoint, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
-      },
-    });
-
-    const text = await response.text();
-    let data = {};
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { message: text.trim() };
-    }
+    const response = await apiJson(endpoint, { token });
+    const { data } = response;
 
     if (response.status === 401) {
-      session.end();
-      switchSection(loginSection);
-      showAlert("warning", "Session Expired", "Please sign in again.");
+      handleSessionExpired();
       return;
     }
 
@@ -1711,34 +1507,16 @@ async function handleRenameFolderSubmit(event) {
   renameFolderSpinner.classList.remove("hidden");
 
   try {
-    const { response } = await fetchWithFallback(
-      `/api/folders/${encodeURIComponent(renameFolderTarget.id)}`,
-      {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ name: newName }),
-      },
-    );
-
-    const text = await response.text();
-    let data = {};
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { message: text.trim() };
-    }
+    const response = await apiJson(`/api/folders/${encodeURIComponent(renameFolderTarget.id)}`,
+      { method: "PATCH", token, body: { name: newName } });
+    const { data } = response;
 
     if (response.ok) {
       closeRenameForm();
       showAlert("success", "Folder Renamed", `Folder renamed to "${newName}".`);
       await loadFolderContents(currentFolderId);
     } else if (response.status === 401) {
-      session.end();
-      switchSection(loginSection);
-      showAlert("warning", "Session Expired", "Please sign in again.");
+      handleSessionExpired();
     } else if (response.status === 403) {
       showAlert("danger", "Access Denied", "You do not have permission to rename this folder.");
     } else {
@@ -1778,25 +1556,12 @@ async function handleCreateFolderSubmit(event) {
   createFolderSpinner.classList.remove("hidden");
 
   try {
-    const { response } = await fetchWithFallback("/api/folders", {
+    const response = await apiJson("/api/folders", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        name,
-        parentId: currentFolderId,
-      }),
+      token,
+      body: { name, parentId: currentFolderId },
     });
-
-    const text = await response.text();
-    let data = {};
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { message: text.trim() };
-    }
+    const { data } = response;
 
     if (response.status === 201) {
       createFolderForm.classList.add("hidden");
@@ -1804,9 +1569,7 @@ async function handleCreateFolderSubmit(event) {
       showAlert("success", "Folder Created", `Folder "${name}" was created.`);
       await loadFolderContents(currentFolderId);
     } else if (response.status === 401) {
-      session.end();
-      switchSection(loginSection);
-      showAlert("warning", "Session Expired", "Please sign in again.");
+      handleSessionExpired();
     } else if (response.status === 403) {
       showAlert("danger", "Access Denied", "You do not have permission to create folders here.");
     } else {
@@ -1824,8 +1587,6 @@ async function handleCreateFolderSubmit(event) {
 
 // #region file upload and storage quota (US-2.2)
 
-// The API returns int64 values as JSON strings ("1048576"), so always go
-// through Number() before doing any arithmetic.
 function formatBytes(bytes) {
   const n = Number(bytes);
   if (!n || n <= 0) return "0 B";
@@ -1836,11 +1597,8 @@ function formatBytes(bytes) {
   return `${idx === 0 ? value : value.toFixed(1).replace(/\.0$/, "")} ${units[idx]}`;
 }
 
-let lastQuotaShown = null; // [used, total] of the storage bar
-
 function updateQuotaDisplay(usedBytes, totalBytes) {
   if (!quotaUsageText) return;
-  lastQuotaShown = [usedBytes, totalBytes];
   const used = Number(usedBytes) || 0;
   const total = Number(totalBytes) || 0;
   if (total <= 0) return;
@@ -1854,7 +1612,7 @@ function updateQuotaDisplay(usedBytes, totalBytes) {
   if (quotaBar && quotaBarFill) {
     const pct = Math.min(100, (used / total) * 100);
     quotaBarFill.style.width = `${pct}%`;
-    quotaBarFill.classList.toggle("is-nearly-full", isNearlyFull(pct));
+    quotaBarFill.classList.toggle("is-nearly-full", pct >= 90);
     quotaBar.classList.remove("hidden");
   }
 }
@@ -1864,12 +1622,9 @@ async function loadUserQuota() {
   if (!token) return;
 
   try {
-    const { response } = await fetchWithFallback("/api/files/quota", {
-      method: "GET",
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-    });
+    const response = await apiJson("/api/files/quota", { token });
     if (response.ok) {
-      const data = await response.json();
+      const { data } = response;
       updateQuotaDisplay(data.usedStorageBytes, data.storageQuotaBytes);
     }
   } catch (err) {
@@ -1882,17 +1637,11 @@ async function loadUserNotifications() {
   if (!token || !notificationsList) return;
 
   try {
-    const { response } = await fetchWithFallback("/api/notifications", {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
-      },
-    });
+    const response = await apiJson("/api/notifications", { token });
 
     if (!response.ok) return;
 
-    const data = await response.json();
+    const { data } = response;
     const items = Array.isArray(data.notifications) ? data.notifications : [];
     renderNotifications(items);
   } catch (err) {
@@ -1944,22 +1693,13 @@ function renderNotifications(items) {
   });
 }
 
-// Saves sending a file the server would refuse for its size.
-function fileSizeProblem(size) {
-  const max = AppLimits.current?.maxUploadBytes;
-  return max && size > max
-    ? `File is too large: the maximum size of a single file is ${formatBytes(max)}`
-    : "";
-}
-
 // 2.2.1: the user picked a file; it goes into the folder that is open right now.
 async function handleFileUploadChange(event) {
   const file = event.target.files && event.target.files[0];
   if (!file) return;
 
   hideAlert();
-  const problem =
-    Validation.fileName(file.name, file.size) || fileSizeProblem(file.size);
+  const problem = Validation.fileName(file.name, file.size);
   if (problem) {
     showAlert("danger", "Cannot Upload File", problem);
     fileUploadInput.value = "";
@@ -1983,19 +1723,12 @@ async function handleFileUploadChange(event) {
 
   try {
     // No Content-Type header: the browser sets multipart/form-data with the boundary.
-    const { response } = await fetchWithFallback("/api/files/upload", {
+    const response = await apiJson("/api/files/upload", {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      token,
       body: formData,
     });
-
-    const text = await response.text();
-    let data = {};
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { message: text.trim() };
-    }
+    const { data } = response;
 
     if (response.status === 201) {
       if (data.quota) {
@@ -2019,11 +1752,9 @@ async function handleFileUploadChange(event) {
     } else if (response.status === 413) {
       showAlert("danger", "File Too Large", data.message || "This file is too large to upload.");
     } else if (response.status === 401) {
-      session.end();
-      switchSection(loginSection);
-      showAlert("warning", "Session Expired", "Please sign in again.");
+      handleSessionExpired();
     } else if (response.status === 429) {
-      // fetchWithFallback already showed the "Too Many Requests" alert
+      // apiJson already showed the "Too Many Requests" alert
     } else {
       showAlert("danger", "Upload Failed", data.message || "Could not upload the file.");
     }
@@ -2048,8 +1779,7 @@ function startFileVersionUpload(file, btnEl) {
   versionTargetBtn = btnEl;
 
   const ext = getFileExtension(file.name);
-  fileVersionUploadInput.accept =
-    ext || (AppLimits.current?.allowedFileExtensions.join(",") ?? "");
+  fileVersionUploadInput.accept = ext || ".txt,.md,.csv,.json,.pdf,.png,.jpg,.jpeg,.gif";
   fileVersionUploadInput.value = "";
   fileVersionUploadInput.click();
 }
@@ -2062,9 +1792,7 @@ async function handleFileVersionUploadChange(event) {
   if (!selectedFile || !targetFile) return;
 
   hideAlert();
-  const problem =
-    Validation.fileName(selectedFile.name, selectedFile.size) ||
-    fileSizeProblem(selectedFile.size);
+  const problem = Validation.fileName(selectedFile.name, selectedFile.size);
   if (problem) {
     showAlert("danger", "Cannot Upload New Version", problem);
     fileVersionUploadInput.value = "";
@@ -2098,22 +1826,9 @@ async function handleFileVersionUploadChange(event) {
   }
 
   try {
-    const { response } = await fetchWithFallback(
-      `/api/files/${encodeURIComponent(targetFile.id)}/version`,
-      {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-        body: formData,
-      },
-    );
-
-    const text = await response.text();
-    let data = {};
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { message: text.trim() };
-    }
+    const response = await apiJson(`/api/files/${encodeURIComponent(targetFile.id)}/version`,
+      { method: "POST", token, body: formData });
+    const { data } = response;
 
     if (response.ok) {
       if (data.quota && Number(data.quota.storageQuotaBytes) > 0) {
@@ -2138,11 +1853,9 @@ async function handleFileVersionUploadChange(event) {
     } else if (response.status === 413) {
       showAlert("danger", "File Too Large", data.message || "This file is too large to upload.");
     } else if (response.status === 401) {
-      session.end();
-      switchSection(loginSection);
-      showAlert("warning", "Session Expired", "Please sign in again.");
+      handleSessionExpired();
     } else if (response.status === 429) {
-      // fetchWithFallback već prikazuje upozorenje za previše zahtjeva
+      // apiJson already showed the "Too Many Requests" alert
     } else {
       showAlert(
         "danger",
@@ -2168,9 +1881,6 @@ async function handleFileVersionUploadChange(event) {
 // #region Admin Panel
 
 const adminEmailDisplay = document.getElementById("adminEmailDisplay");
-const adminToggleTokenBtn = document.getElementById("adminToggleTokenBtn");
-const adminJwtDrawer = document.getElementById("adminJwtDrawer");
-const adminJwtTokenDisplay = document.getElementById("adminJwtTokenDisplay");
 const adminLogoutBtn = document.getElementById("adminLogoutBtn");
 const adminLogoutSpinner = document.getElementById("adminLogoutSpinner");
 
@@ -2198,17 +1908,13 @@ const adminRefreshUsersBtn = document.getElementById("adminRefreshUsersBtn");
 const adminQuotaForm = document.getElementById("adminQuotaForm");
 const adminQuotaTargetTitle = document.getElementById("adminQuotaTargetTitle");
 const adminQuotaTargetMeta = document.getElementById("adminQuotaTargetMeta");
-const adminNewQuotaInput = document.getElementById("adminNewQuotaInput");
-const adminNewQuotaUnit = document.getElementById("adminNewQuotaUnit");
+const adminNewQuotaMbInput = document.getElementById("adminNewQuotaMbInput");
 const adminQuotaSubmitBtn = document.getElementById("adminQuotaSubmitBtn");
 const adminQuotaCancelBtn = document.getElementById("adminQuotaCancelBtn");
 const adminQuotaHint = document.getElementById("adminQuotaHint");
 const adminQuotaWarning = document.getElementById("adminQuotaWarning");
 const adminQuotaError = document.getElementById("adminQuotaError");
-const adminQuotaMinBtn = document.getElementById("adminQuotaMinBtn");
-const adminQuotaMaxBtn = document.getElementById("adminQuotaMaxBtn");
-const adminQuotaSteps = document.getElementById("adminQuotaSteps");
-const adminBoundBtns = document.querySelectorAll(".admin-bound-btn");
+const adminPresetBtns = document.querySelectorAll(".admin-preset-btn");
 
 const adminUsersLoading = document.getElementById("adminUsersLoading");
 const adminUsersEmpty = document.getElementById("adminUsersEmpty");
@@ -2217,7 +1923,7 @@ const adminUsersList = document.getElementById("adminUsersList");
 let adminUsers = [];
 let adminQuotaTargetUser = null;
 
-function showAdminPanel(email, token) {
+function showAdminPanel(email) {
   activeLoginPassword = "";
   if (!canOpenAdminPanel()) {
     session.end();
@@ -2226,7 +1932,6 @@ function showAdminPanel(email, token) {
     return;
   }
   if (adminEmailDisplay) adminEmailDisplay.textContent = email;
-  if (adminJwtTokenDisplay) adminJwtTokenDisplay.value = token;
   clearAdminQuotaRequests();
   switchSection(adminSection);
   switchAdminTab("users");
@@ -2260,19 +1965,13 @@ async function loadAdminUsers() {
 
     if (status === 401) {
       handleSessionExpired();
-      return;
+    } else if (!ok) {
+      showAlert("danger", "Error Loading Users", data.message || "Could not load users.");
+    } else {
+      adminUsers = data.users || [];
+      renderAdminUsers();
     }
-    if (!ok) {
-      if (status !== 429) {
-        showAlert("danger", "Error Loading Users", data.message || "Could not load users.");
-      }
-      return;
-    }
-
-    adminUsers = data.users || [];
-    renderAdminUsers();
   } catch (err) {
-    console.warn("Could not load users:", err);
     showAlert("danger", "Connection Error", "Could not load users.");
   } finally {
     adminUsersLoading.classList.add("hidden");
@@ -2345,7 +2044,7 @@ function renderAdminUsers() {
           ${Validation.escapeHtml(formatBytes(used))} / ${Validation.escapeHtml(formatBytes(quota))}
         </div>
         <div class="quota-bar" aria-hidden="true">
-          <div class="quota-bar-fill ${isNearlyFull(pct) ? "is-nearly-full" : ""}" style="width: ${pct}%"></div>
+          <div class="quota-bar-fill ${pct >= 90 ? "is-nearly-full" : ""}" style="width: ${pct}%"></div>
         </div>
       </div>
       <div class="admin-user-actions">
@@ -2366,93 +2065,51 @@ function renderAdminUsers() {
   });
 }
 
-function setAdminQuotaInput(bytes, unit = bestSizeUnit(bytes)) {
-  adminNewQuotaUnit.value = unit;
-  adminNewQuotaInput.value = sizeInUnit(bytes, unit);
-  adminQuotaShown = { text: adminNewQuotaInput.value, unit, bytes };
-  validateAdminQuotaInput();
-}
-
-// What the field was last filled with. While it is unchanged the exact byte
-// value is used, even if the unit could only show it rounded.
-let adminQuotaShown = null;
-
-// The size currently entered, in bytes, or null.
-function adminQuotaInputBytes() {
-  if (
-    adminQuotaShown &&
-    adminNewQuotaInput.value === adminQuotaShown.text &&
-    adminNewQuotaUnit.value === adminQuotaShown.unit
-  ) {
-    return adminQuotaShown.bytes;
-  }
-  return readSizeInput(adminNewQuotaInput, adminNewQuotaUnit);
-}
-
-// Why the entered quota cannot be saved, or "".
-function adminQuotaProblem(bytes, limits) {
-  if (bytes === null) {
-    // badInput: something was typed that is not a number the browser can hold.
-    return adminNewQuotaInput.validity.badInput && limits
-      ? quotaRangeMessage(limits)
-      : "Enter the new quota";
-  }
-  if (limits && (bytes < limits.minQuotaBytes || bytes > limits.maxQuotaBytes))
-    return quotaRangeMessage(limits);
-  if (!limits && bytes <= 0) return "The quota must be greater than 0";
-  return "";
-}
-
-// Live feedback while the administrator types.
-function validateAdminQuotaInput() {
-  if (!adminQuotaTargetUser) return;
-  const bytes = adminQuotaInputBytes();
-  const problem = adminQuotaProblem(bytes, AppLimits.current);
-  setFieldError(adminNewQuotaInput, adminQuotaError, problem);
-
-  const used = Number(adminQuotaTargetUser.usedStorageBytes) || 0;
-  const belowUsage = !problem && bytes < used;
-  adminQuotaWarning.textContent = belowUsage
-    ? `This is below the current usage of ${formatBytes(used)}. No files are deleted, ` +
-      "but the user cannot upload until the usage fits the new quota."
-    : "";
-  adminQuotaWarning.classList.toggle("hidden", !belowUsage);
-}
-
 async function openAdminQuotaForm(user) {
   hideAlert();
   adminQuotaTargetUser = user;
-  const limits = await AppLimits.load();
-  // Another user may have been picked (or the form closed) while loading.
-  if (adminQuotaTargetUser !== user) return;
-
-  const usedStr = formatBytes(user.usedStorageBytes);
-  const quotaStr = formatBytes(user.storageQuotaBytes);
   const fullName =
     `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email;
 
   adminQuotaTargetTitle.textContent = `Edit Storage Quota for ${fullName}`;
-  adminQuotaTargetMeta.textContent = `${user.email} • Current usage: ${usedStr} / ${quotaStr}`;
-  adminQuotaHint.textContent = limits
-    ? `Allowed: ${formatBytes(limits.minQuotaBytes)} to ${formatBytes(limits.maxQuotaBytes)}. The quota can be raised or lowered.`
-    : "";
-  adminQuotaMinBtn.textContent = limits ? `Min (${formatBytes(limits.minQuotaBytes)})` : "Minimum";
-  adminQuotaMaxBtn.textContent = limits ? `Max (${formatBytes(limits.maxQuotaBytes)})` : "Maximum";
-  adminBoundBtns.forEach((btn) => btn.classList.toggle("hidden", !limits));
-  renderAdminQuotaSteps(limits?.adminQuotaAdjustStepsBytes || []);
-
+  adminQuotaTargetMeta.textContent =
+    `${user.email} • Current usage: ${formatBytes(user.usedStorageBytes)} / ${formatBytes(user.storageQuotaBytes)}`;
+  adminNewQuotaMbInput.value = String(toMb(user.storageQuotaBytes));
+  setFieldError(adminNewQuotaMbInput, adminQuotaError, "");
+  adminQuotaWarning.classList.add("hidden");
   adminQuotaForm.classList.remove("hidden");
-  setAdminQuotaInput(Number(user.storageQuotaBytes) || 0);
-  adminNewQuotaInput.focus();
+  adminNewQuotaMbInput.focus();
+
+  const limits = await loadLimits();
+  adminQuotaHint.textContent = limits ? quotaRangeHint(limits) : "";
 }
 
 function closeAdminQuotaForm() {
   adminQuotaTargetUser = null;
-  adminQuotaShown = null;
   adminQuotaForm.classList.add("hidden");
-  adminNewQuotaInput.value = "";
-  setFieldError(adminNewQuotaInput, adminQuotaError, "");
+  adminNewQuotaMbInput.value = "";
+  setFieldError(adminNewQuotaMbInput, adminQuotaError, "");
   adminQuotaWarning.classList.add("hidden");
+}
+
+// The entered quota in bytes (0 when the field holds no number).
+function enteredQuotaBytes(input) {
+  return Math.round(Number(input.value) * BYTES_PER_MB) || 0;
+}
+
+// Live feedback: out of range, or below what the user already stores.
+function checkAdminQuotaInput() {
+  if (!adminQuotaTargetUser || !appLimits) return;
+  const bytes = enteredQuotaBytes(adminNewQuotaMbInput);
+  const problem = quotaRangeProblem(bytes, appLimits);
+  setFieldError(adminNewQuotaMbInput, adminQuotaError, problem);
+
+  const used = Number(adminQuotaTargetUser.usedStorageBytes) || 0;
+  const belowUsage = !problem && bytes < used;
+  adminQuotaWarning.textContent = belowUsage
+    ? `This is below the current usage of ${formatBytes(used)}. No files are deleted, but the user cannot upload until the usage fits.`
+    : "";
+  adminQuotaWarning.classList.toggle("hidden", !belowUsage);
 }
 
 async function handleAdminQuotaSubmit(event) {
@@ -2461,67 +2118,48 @@ async function handleAdminQuotaSubmit(event) {
   const user = adminQuotaTargetUser;
   if (!user) return;
 
-  const limits = await AppLimits.load();
-  if (adminQuotaTargetUser !== user) return;
-  const bytes = adminQuotaInputBytes();
-  const currentBytes = Number(user.storageQuotaBytes) || 0;
-  const problem =
-    adminQuotaProblem(bytes, limits) ||
-    (bytes === currentBytes ? "That is already the current quota" : "");
-  setFieldError(adminNewQuotaInput, adminQuotaError, problem);
-  if (problem) return;
-
-  const token = session.token;
-  if (!token) {
-    switchSection(loginSection);
+  const limits = await loadLimits();
+  if (!limits) {
+    setFieldError(adminNewQuotaMbInput, adminQuotaError, "Could not load the quota limits. Try again.");
     return;
   }
+
+  const bytes = enteredQuotaBytes(adminNewQuotaMbInput);
+  const unchanged = Number(adminNewQuotaMbInput.value) === toMb(user.storageQuotaBytes);
+  const problem =
+    quotaRangeProblem(bytes, limits) ||
+    (unchanged ? "That is already the current quota" : "");
+  setFieldError(adminNewQuotaMbInput, adminQuotaError, problem);
+  if (problem) return;
 
   setButtonBusy(adminQuotaSubmitBtn, true);
   try {
     const { ok, status, data } = await apiJson(
       `/api/admin/users/${encodeURIComponent(user.id)}/quota`,
-      { method: "PATCH", token, body: { storageQuotaBytes: bytes } },
+      { method: "PATCH", token: session.token, body: { storageQuotaBytes: bytes } },
     );
 
     if (status === 401) {
       handleSessionExpired();
-      return;
+    } else if (!ok) {
+      setFieldError(adminNewQuotaMbInput, adminQuotaError, data.message || "Failed to update storage quota.");
+    } else {
+      adminUsers = adminUsers.map((u) => (u.id === user.id ? data : u));
+      closeAdminQuotaForm();
+      renderAdminUsers();
+      showAlert(
+        "success",
+        "Storage Quota Updated",
+        `Storage quota for ${user.email} is now ${formatBytes(bytes)}.`,
+      );
     }
-    if (!ok) {
-      if (status !== 429) {
-        setFieldError(adminNewQuotaInput, adminQuotaError, data.message || "Failed to update storage quota.");
-      }
-      return;
-    }
-
-    adminUsers = adminUsers.map((u) => (u.id === user.id ? data : u));
-    closeAdminQuotaForm();
-    renderAdminUsers();
-    const overQuota = Number(data.usedStorageBytes) > Number(data.storageQuotaBytes);
-    showAlert(
-      overQuota ? "warning" : "success",
-      "Storage Quota Updated",
-      `Storage quota for ${user.email} ${bytes > currentBytes ? "increased" : "decreased"} to ${formatBytes(bytes)}.` +
-        (overQuota ? " The usage is above it, so new uploads are blocked for now." : ""),
-    );
   } catch (err) {
-    console.warn("Could not update the quota:", err);
-    showAlert(
-      "danger",
-      "Connection Error",
-      "Could not reach the server. Refresh the list to see the current quota.",
-    );
+    showAlert("danger", "Connection Error", "Could not reach the server. The quota may not have changed.");
   } finally {
     setButtonBusy(adminQuotaSubmitBtn, false);
   }
 }
 
-if (adminToggleTokenBtn) {
-  adminToggleTokenBtn.addEventListener("click", () => {
-    if (adminJwtDrawer) adminJwtDrawer.classList.toggle("hidden");
-  });
-}
 if (adminLogoutBtn) {
   adminLogoutBtn.addEventListener("click", async () => {
     adminLogoutBtn.disabled = true;
@@ -2547,39 +2185,12 @@ if (adminRefreshUsersBtn) {
 }
 adminQuotaCancelBtn.addEventListener("click", closeAdminQuotaForm);
 adminQuotaForm.addEventListener("submit", handleAdminQuotaSubmit);
-adminNewQuotaInput.addEventListener("input", validateAdminQuotaInput);
-adminNewQuotaUnit.addEventListener("change", validateAdminQuotaInput);
-
-// The "quick adjust" buttons (admin_quota_adjust_steps_bytes).
-function renderAdminQuotaSteps(steps) {
-  adminQuotaSteps.innerHTML = "";
-  steps.forEach((step) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "btn-outline-sm admin-preset-btn";
-    button.textContent = `${step < 0 ? "−" : "+"}${formatBytes(Math.abs(step))}`;
-    button.addEventListener("click", () => adjustAdminQuota(step));
-    adminQuotaSteps.appendChild(button);
-  });
-}
-
-function adjustAdminQuota(step) {
-  if (!adminQuotaTargetUser) return;
-  const base = adminQuotaInputBytes() ?? Number(adminQuotaTargetUser.storageQuotaBytes);
-  let next = base + step;
-  const limits = AppLimits.current;
-  // The buttons stop at the bounds instead of producing an invalid value.
-  if (limits) next = Math.min(limits.maxQuotaBytes, Math.max(limits.minQuotaBytes, next));
-  setAdminQuotaInput(Math.max(next, 0));
-}
-
-adminBoundBtns.forEach((btn) => {
+adminNewQuotaMbInput.addEventListener("input", checkAdminQuotaInput);
+adminPresetBtns.forEach((btn) => {
   btn.addEventListener("click", () => {
-    const limits = AppLimits.current;
-    if (!adminQuotaTargetUser || !limits) return;
-    setAdminQuotaInput(
-      btn.dataset.bound === "min" ? limits.minQuotaBytes : limits.maxQuotaBytes,
-    );
+    const next = (Number(adminNewQuotaMbInput.value) || 0) + Number(btn.dataset.addMb);
+    adminNewQuotaMbInput.value = String(Math.max(next, 0));
+    checkAdminQuotaInput();
   });
 });
 
@@ -2609,34 +2220,16 @@ async function handleRenameFileSubmit(event) {
   renameFileSpinner.classList.remove("hidden");
 
   try {
-    const { response } = await fetchWithFallback(
-      `/api/files/${encodeURIComponent(renameFileTarget.id)}`,
-      {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ name: newName }),
-      },
-    );
-
-    const text = await response.text();
-    let data = {};
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { message: text.trim() };
-    }
+    const response = await apiJson(`/api/files/${encodeURIComponent(renameFileTarget.id)}`,
+      { method: "PATCH", token, body: { name: newName } });
+    const { data } = response;
 
     if (response.ok) {
       closeRenameFileForm();
       showAlert("success", "File Renamed", `File renamed to "${newName}".`);
       await loadFolderContents(currentFolderId);
     } else if (response.status === 401) {
-      session.end();
-      switchSection(loginSection);
-      showAlert("warning", "Session Expired", "Please sign in again.");
+      handleSessionExpired();
     } else if (response.status === 403) {
       showAlert("danger", "Access Denied", "You do not have permission to rename this file.");
     } else {

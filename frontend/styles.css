@@ -1458,17 +1458,7 @@ body {
   display: none;
 }
 
-/* Storage quota inputs (admin editor and increase requests) */
-.size-input-row {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.form-input.size-unit-select {
-  width: auto;
-  flex-shrink: 0;
-}
-
+/* Storage quota inputs */
 .quota-input-hint {
   font-size: 0.775rem;
   color: var(--text-muted);
@@ -1555,8 +1545,4 @@ body {
 
 .admin-tab-btn .bell-badge {
   margin-left: 0.3rem;
-}
-
-.admin-quota-steps {
-  display: contents;
 }

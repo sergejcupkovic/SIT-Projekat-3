@@ -21,30 +21,25 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// File upload is the one route that is NOT generated from a google.api.http
-// annotation: grpc-gateway cannot decode multipart/form-data. This handler is
-// registered on the same mux (gw.HandlePath), so it still sits behind CORS,
-// security headers and the rate limiter, and answers in the same JSON shape.
-//
-//	POST /api/files/upload   multipart/form-data
-//	     file      the file (required)
-//	     folderId  target folder; omit for the root "My Drive"
-//
-// It turns the request into the client-streaming rpc StorageService.UploadFile:
-// one message with name, size and folder, then the content in upload_chunk_bytes chunks.
-// The size sent up front is the REAL size of the received file, which is what
-// lets storage-service check the quota before it stores a single byte.
+// Uploads are handled by hand because grpc-gateway cannot decode multipart forms.
+const (
+	uploadChunkSize = 64 << 10
+	// Room for the multipart framing and the folderId field on top of the file itself.
+	multipartOverhead = 1 << 20
+	// Parts bigger than this are spooled to temporary files instead of RAM.
+	multipartMemory = 8 << 20
+	uploadTimeout   = 10 * time.Minute
+)
 
 type uploadHandler struct {
 	gw        *runtime.ServeMux
 	storage   storagepb.StorageServiceClient
 	jwtSecret []byte
 	maxBytes  int64
-	settings  uploadSettings // chunk size, memory and time limits (config.yaml)
 }
 
 func newUploadHandler(gw *runtime.ServeMux, storage storagepb.StorageServiceClient, jwtSecret []byte, maxFileBytes int64) *uploadHandler {
-	return &uploadHandler{gw: gw, storage: storage, jwtSecret: jwtSecret, maxBytes: maxFileBytes, settings: defaultUploadSettings()}
+	return &uploadHandler{gw: gw, storage: storage, jwtSecret: jwtSecret, maxBytes: maxFileBytes}
 }
 
 // handle serves POST /api/files/upload.
@@ -71,7 +66,7 @@ func (u *uploadHandler) handle(w http.ResponseWriter, r *http.Request, _ map[str
 		meta.FolderId = &folderID
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), u.settings.Timeout)
+	ctx, cancel := context.WithTimeout(r.Context(), uploadTimeout)
 	defer cancel()
 	ctx = metadata.AppendToOutgoingContext(ctx, "authorization", authHeader)
 
@@ -111,7 +106,7 @@ func (u *uploadHandler) handleVersion(w http.ResponseWriter, r *http.Request, pa
 		SizeBytes: header.Size,
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), u.settings.Timeout)
+	ctx, cancel := context.WithTimeout(r.Context(), uploadTimeout)
 	defer cancel()
 	ctx = metadata.AppendToOutgoingContext(ctx, "authorization", authHeader)
 
@@ -126,11 +121,11 @@ func (u *uploadHandler) handleVersion(w http.ResponseWriter, r *http.Request, pa
 
 func (u *uploadHandler) parseMultipartFile(w http.ResponseWriter, r *http.Request) (multipart.File, *multipart.FileHeader, func(), bool) {
 	rc := http.NewResponseController(w)
-	_ = rc.SetReadDeadline(time.Now().Add(u.settings.Timeout))
-	_ = rc.SetWriteDeadline(time.Now().Add(u.settings.Timeout))
+	_ = rc.SetReadDeadline(time.Now().Add(uploadTimeout))
+	_ = rc.SetWriteDeadline(time.Now().Add(uploadTimeout))
 
-	r.Body = http.MaxBytesReader(w, r.Body, u.maxBytes+u.settings.MultipartOverheadBytes)
-	if err := r.ParseMultipartForm(u.settings.MultipartMemoryBytes); err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, u.maxBytes+multipartOverhead)
+	if err := r.ParseMultipartForm(multipartMemory); err != nil {
 		var tooBig *http.MaxBytesError
 		switch {
 		case errors.As(err, &tooBig):
@@ -173,7 +168,6 @@ func (u *uploadHandler) writeProtoResponse(w http.ResponseWriter, r *http.Reques
 	_, _ = w.Write(body)
 }
 
-// stream sends the metadata and then the content of file to storage-service.
 func (u *uploadHandler) stream(ctx context.Context, meta *storagepb.UploadFileMetadata, file multipart.File) (*storagepb.UploadFileResponse, error) {
 	stream, err := u.storage.UploadFile(ctx)
 	if err != nil {
@@ -183,7 +177,7 @@ func (u *uploadHandler) stream(ctx context.Context, meta *storagepb.UploadFileMe
 	send := func(m *storagepb.UploadFileRequest) bool { return stream.Send(m) == nil }
 
 	if send(&storagepb.UploadFileRequest{Payload: &storagepb.UploadFileRequest_Metadata{Metadata: meta}}) {
-		buf := make([]byte, u.settings.ChunkBytes)
+		buf := make([]byte, uploadChunkSize)
 		for {
 			n, readErr := file.Read(buf)
 			if n > 0 {
@@ -202,8 +196,6 @@ func (u *uploadHandler) stream(ctx context.Context, meta *storagepb.UploadFileMe
 		}
 	}
 
-	// A failed Send only says "the stream is over"; the real reason (quota
-	// exceeded, bad file type, ...) is the status that CloseAndRecv returns.
 	return stream.CloseAndRecv()
 }
 
@@ -216,7 +208,7 @@ func (u *uploadHandler) streamVersion(ctx context.Context, meta *storagepb.Uploa
 	send := func(m *storagepb.UploadNewFileVersionRequest) bool { return stream.Send(m) == nil }
 
 	if send(&storagepb.UploadNewFileVersionRequest{Payload: &storagepb.UploadNewFileVersionRequest_Metadata{Metadata: meta}}) {
-		buf := make([]byte, u.settings.ChunkBytes)
+		buf := make([]byte, uploadChunkSize)
 		for {
 			n, readErr := file.Read(buf)
 			if n > 0 {
@@ -248,11 +240,6 @@ func (u *uploadHandler) validToken(authHeader string) bool {
 	return err == nil && token.Valid
 }
 
-// writeGRPCError maps a gRPC status to HTTP exactly like grpc-gateway does for
-// the generated routes, with one deliberate exception: ResourceExhausted from
-// the upload means "storage quota exceeded" and is answered with 413 Payload
-// Too Large, not with 429, which the frontend (and the rate limiter) use for
-// "too many requests".
 func writeGRPCError(w http.ResponseWriter, err error) {
 	st := status.Convert(err)
 	httpCode := runtime.HTTPStatusFromCode(st.Code())
@@ -262,8 +249,6 @@ func writeGRPCError(w http.ResponseWriter, err error) {
 	writeError(w, httpCode, st.Code(), st.Message())
 }
 
-// writeError writes the same body shape grpc-gateway uses for errors:
-// {"code": <grpc code>, "message": "...", "details": []}.
 func writeError(w http.ResponseWriter, httpCode int, code codes.Code, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(httpCode)
@@ -274,7 +259,6 @@ func writeError(w http.ResponseWriter, httpCode int, code codes.Code, message st
 	})
 }
 
-// humanSize renders 1572864 as "1.5 MB".
 func humanSize(n int64) string {
 	const unit = 1024
 	if n < unit {

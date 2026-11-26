@@ -1,15 +1,5 @@
 #!/usr/bin/env bash
-# Generates the TLS material for local HTTPS (run from Git Bash or any Unix shell):
-#
-#   ca.key / ca.crt          - a private "Stashr Local Dev CA" (trust ca.crt in your OS / Postman)
-#   server.key / server.crt  - the server certificate used by BOTH nginx (frontend)
-#                              and the api-gateway, signed by the CA above.
-#
-# The server certificate's Subject Alternative Names cover every hostname it is
-# reached by:  localhost, 127.0.0.1 (browser / Postman), api-gateway (nginx -> gateway
-# inside Docker) and frontend.
-#
-# Private keys are git-ignored; every developer generates their own.
+# Creates the local CA and server certificate. Run once per machine.
 set -euo pipefail
 cd "$(dirname "$0")"
 

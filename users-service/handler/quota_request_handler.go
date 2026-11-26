@@ -8,10 +8,9 @@ import (
 
 	"users-service/domain"
 	"users-service/repository"
+	"users-service/service"
 
 	userspb "stashr/proto/users"
-
-	"stashr/shared/appconfig"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -20,48 +19,18 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// quotaRequestStore is the part of repository.QuotaRequestRepository used here.
-type quotaRequestStore interface {
-	Create(ctx context.Context, request *domain.QuotaRequest) error
-	FindByID(ctx context.Context, id primitive.ObjectID) (*domain.QuotaRequest, error)
-	FindByUser(ctx context.Context, userID primitive.ObjectID) ([]domain.QuotaRequest, error)
-	FindAll(ctx context.Context, status domain.QuotaRequestStatus) ([]domain.QuotaRequest, error)
-	Resolve(ctx context.Context, id primitive.ObjectID, status domain.QuotaRequestStatus, adminID string, at time.Time) (*domain.QuotaRequest, error)
-	Reopen(ctx context.Context, id primitive.ObjectID) error
-}
-
-// quotaRequestUsers is the part of repository.UserRepository used here.
-type quotaRequestUsers interface {
-	FindByID(ctx context.Context, id primitive.ObjectID) (*domain.User, error)
-	FindByIDs(ctx context.Context, ids []primitive.ObjectID) ([]domain.User, error)
-	RaiseStorageQuota(ctx context.Context, userID primitive.ObjectID, newQuotaBytes int64) (*domain.User, bool, error)
-}
-
-// QuotaRequestHandler implements userspb.QuotaRequestServiceServer: regular
-// users ask for more storage, administrators approve or reject.
 type QuotaRequestHandler struct {
 	userspb.UnimplementedQuotaRequestServiceServer
 
-	requests quotaRequestStore
-	users    quotaRequestUsers
-	limits   appconfig.Limits
-	// quota_request_rollback_timeout
-	rollbackTimeout time.Duration
+	requests *repository.QuotaRequestRepository
+	users    *repository.UserRepository
 }
 
-var _ userspb.QuotaRequestServiceServer = (*QuotaRequestHandler)(nil)
-
-func NewQuotaRequestHandler(requests quotaRequestStore, users quotaRequestUsers, limits appconfig.Limits) *QuotaRequestHandler {
-	return &QuotaRequestHandler{requests: requests, users: users, limits: limits, rollbackTimeout: 5 * time.Second}
+func NewQuotaRequestHandler(requests *repository.QuotaRequestRepository, users *repository.UserRepository) *QuotaRequestHandler {
+	return &QuotaRequestHandler{requests: requests, users: users}
 }
 
-// SetRollbackTimeout applies quota_request_rollback_timeout.
-func (h *QuotaRequestHandler) SetRollbackTimeout(d time.Duration) { h.rollbackTimeout = d }
-
-const pendingExistsMsg = "You already have a pending quota request. Wait for an administrator to decide on it."
-
-// CreateQuotaRequest  <-  POST /api/users/quota-requests  (HTTP 201)
-// The user comes from the session token, never from the request.
+// CreateQuotaRequest  <-  POST /api/users/quota-requests
 func (h *QuotaRequestHandler) CreateQuotaRequest(ctx context.Context, in *userspb.CreateQuotaRequestRequest) (*userspb.QuotaRequestInfo, error) {
 	userID, err := callerID(ctx)
 	if err != nil {
@@ -74,12 +43,8 @@ func (h *QuotaRequestHandler) CreateQuotaRequest(ctx context.Context, in *usersp
 	}
 
 	requested := in.GetRequestedQuotaBytes()
-	if !h.limits.QuotaInRange(requested) {
-		return nil, status.Error(codes.InvalidArgument, h.limits.QuotaRangeMessage())
-	}
-	if requested <= user.StorageQuotaBytes {
-		return nil, status.Error(codes.InvalidArgument,
-			"Requested quota must be greater than your current quota of "+appconfig.FormatBytes(user.StorageQuotaBytes))
+	if err := service.ValidateQuotaRequest(requested, user.StorageQuotaBytes); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
 	request := &domain.QuotaRequest{
@@ -91,7 +56,7 @@ func (h *QuotaRequestHandler) CreateQuotaRequest(ctx context.Context, in *usersp
 	}
 	if err := h.requests.Create(ctx, request); err != nil {
 		if errors.Is(err, repository.ErrPendingQuotaRequestExists) {
-			return nil, status.Error(codes.AlreadyExists, pendingExistsMsg)
+			return nil, status.Error(codes.AlreadyExists, "You already have a pending quota request. Wait for an administrator to decide on it.")
 		}
 		log.Printf("create quota request for %s: %v", user.ID.Hex(), err)
 		return nil, status.Error(codes.Internal, "Error saving quota request")
@@ -118,14 +83,14 @@ func (h *QuotaRequestHandler) ListMyQuotaRequests(ctx context.Context, _ *usersp
 		return nil, status.Error(codes.Internal, "Error loading quota requests")
 	}
 
-	resp := &userspb.ListQuotaRequestsResponse{Requests: make([]*userspb.QuotaRequestInfo, 0, len(requests))}
+	resp := &userspb.ListQuotaRequestsResponse{}
 	for i := range requests {
 		resp.Requests = append(resp.Requests, toQuotaRequestInfo(&requests[i], user))
 	}
 	return resp, nil
 }
 
-// ListQuotaRequests  <-  GET /api/admin/quota-requests[?status=...]
+// ListQuotaRequests  <-  GET /api/admin/quota-requests
 func (h *QuotaRequestHandler) ListQuotaRequests(ctx context.Context, in *userspb.ListQuotaRequestsRequest) (*userspb.ListQuotaRequestsResponse, error) {
 	if err := requireAdmin(ctx); err != nil {
 		return nil, err
@@ -144,69 +109,48 @@ func (h *QuotaRequestHandler) ListQuotaRequests(ctx context.Context, in *userspb
 		return nil, status.Error(codes.Internal, "Error loading quota requests")
 	}
 
-	ids := make([]primitive.ObjectID, 0, len(requests))
-	seen := make(map[primitive.ObjectID]bool, len(requests))
-	for _, r := range requests {
-		if !seen[r.UserID] {
-			seen[r.UserID] = true
-			ids = append(ids, r.UserID)
-		}
-	}
-	users, err := h.users.FindByIDs(ctx, ids)
-	if err != nil {
-		log.Printf("load users of quota requests: %v", err)
-		return nil, status.Error(codes.Internal, "Error loading quota requests")
-	}
-	byID := make(map[primitive.ObjectID]*domain.User, len(users))
-	for i := range users {
-		byID[users[i].ID] = &users[i]
-	}
-
-	resp := &userspb.ListQuotaRequestsResponse{Requests: make([]*userspb.QuotaRequestInfo, 0, len(requests))}
+	resp := &userspb.ListQuotaRequestsResponse{}
 	for i := range requests {
-		resp.Requests = append(resp.Requests, toQuotaRequestInfo(&requests[i], byID[requests[i].UserID]))
+		user, err := h.users.FindByID(ctx, requests[i].UserID)
+		if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, userLookupError(err)
+		}
+		resp.Requests = append(resp.Requests, toQuotaRequestInfo(&requests[i], user))
 	}
 	return resp, nil
 }
 
 // ApproveQuotaRequest  <-  POST /api/admin/quota-requests/{request_id}/approve
-//
-// The request is first claimed (pending -> approved) and only then is the quota
-// raised, so two administrators cannot decide it twice. If the quota cannot be
-// raised the request goes back to pending.
 func (h *QuotaRequestHandler) ApproveQuotaRequest(ctx context.Context, in *userspb.ResolveQuotaRequestRequest) (*userspb.QuotaRequestInfo, error) {
 	adminID, request, err := h.pendingRequestForAdmin(ctx, in.GetRequestId())
 	if err != nil {
 		return nil, err
 	}
-	// The bounds may have been changed in config.yaml since the request was made.
-	if !h.limits.QuotaInRange(request.RequestedQuotaBytes) {
-		return nil, status.Error(codes.InvalidArgument, h.limits.QuotaRangeMessage())
+
+	user, err := h.users.FindByID(ctx, request.UserID)
+	if err != nil {
+		return nil, userLookupError(err)
+	}
+	if !service.QuotaInRange(request.RequestedQuotaBytes) {
+		return nil, status.Error(codes.InvalidArgument, service.QuotaRangeMessage())
+	}
+	// Approving an increase must never lower a quota the admin raised meanwhile.
+	if request.RequestedQuotaBytes <= user.StorageQuotaBytes {
+		return nil, status.Error(codes.Aborted, "The user's quota is already "+service.FormatBytes(user.StorageQuotaBytes)+
+			", which is not less than the requested size. Reject this request instead.")
 	}
 
+	// Resolve only matches a pending request, so it cannot be decided twice.
 	resolved, err := h.requests.Resolve(ctx, request.ID, domain.QuotaRequestApproved, adminID, time.Now().UTC())
 	if err != nil {
 		return nil, resolveError(err)
 	}
-
-	user, raised, err := h.users.RaiseStorageQuota(ctx, resolved.UserID, resolved.RequestedQuotaBytes)
+	updated, err := h.users.UpdateStorageQuota(ctx, resolved.UserID, resolved.RequestedQuotaBytes)
 	if err != nil {
 		log.Printf("approve quota request %s: %v", resolved.ID.Hex(), err)
-		h.reopen(ctx, resolved.ID)
 		return nil, status.Error(codes.Internal, "Error updating storage quota")
 	}
-	if !raised {
-		h.reopen(ctx, resolved.ID)
-		current, err := h.users.FindByID(ctx, resolved.UserID)
-		if err != nil {
-			return nil, userLookupError(err)
-		}
-		return nil, status.Error(codes.Aborted,
-			"The user's quota is already "+appconfig.FormatBytes(current.StorageQuotaBytes)+
-				", which is not less than the requested size. Reject this request instead.")
-	}
-
-	return toQuotaRequestInfo(resolved, user), nil
+	return toQuotaRequestInfo(resolved, updated), nil
 }
 
 // RejectQuotaRequest  <-  POST /api/admin/quota-requests/{request_id}/reject
@@ -220,17 +164,13 @@ func (h *QuotaRequestHandler) RejectQuotaRequest(ctx context.Context, in *usersp
 	if err != nil {
 		return nil, resolveError(err)
 	}
-
 	user, err := h.users.FindByID(ctx, resolved.UserID)
-	if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
-		// The decision is saved; only the user details of the reply are missing.
-		log.Printf("load user of rejected quota request %s: %v", resolved.ID.Hex(), err)
+	if err != nil {
+		return nil, userLookupError(err)
 	}
 	return toQuotaRequestInfo(resolved, user), nil
 }
 
-// pendingRequestForAdmin checks that the caller is an administrator and that
-// requestID names a request that still awaits a decision.
 func (h *QuotaRequestHandler) pendingRequestForAdmin(ctx context.Context, requestID string) (string, *domain.QuotaRequest, error) {
 	adminID, err := adminCallerID(ctx)
 	if err != nil {
@@ -254,15 +194,6 @@ func (h *QuotaRequestHandler) pendingRequestForAdmin(ctx context.Context, reques
 	return adminID, request, nil
 }
 
-// reopen must also work when the caller has given up on the request.
-func (h *QuotaRequestHandler) reopen(ctx context.Context, id primitive.ObjectID) {
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), h.rollbackTimeout)
-	defer cancel()
-	if err := h.requests.Reopen(ctx, id); err != nil {
-		log.Printf("WARNING: quota request %s is marked approved but the quota was not changed: %v", id.Hex(), err)
-	}
-}
-
 func alreadyResolvedError() error {
 	return status.Error(codes.Aborted, "This quota request has already been resolved")
 }
@@ -275,7 +206,7 @@ func resolveError(err error) error {
 	return status.Error(codes.Internal, "Error updating quota request")
 }
 
-// toQuotaRequestInfo builds the reply; user is nil if the account no longer exists.
+// user is nil if the account no longer exists.
 func toQuotaRequestInfo(r *domain.QuotaRequest, user *domain.User) *userspb.QuotaRequestInfo {
 	info := &userspb.QuotaRequestInfo{
 		Id:                  r.ID.Hex(),

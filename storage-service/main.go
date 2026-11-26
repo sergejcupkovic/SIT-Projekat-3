@@ -6,23 +6,19 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"storage-service/filecheck"
 	"storage-service/handler"
 	"storage-service/middleware"
 	"storage-service/repository"
 	"storage-service/service"
 	"syscall"
+	"time"
 
 	storagepb "stashr/proto/storage"
-
-	"stashr/shared/appconfig"
 
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/health"
-	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
 )
 
@@ -32,30 +28,30 @@ func main() {
 		mongoURI = "mongodb://mongodb:27017"
 	}
 
+	dbName := os.Getenv("MONGO_DB_NAME")
+	if dbName == "" {
+		dbName = "storage_db"
+	}
+
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
 		log.Fatal("JWT_SECRET environment variable is required")
 	}
 
-	// Object store (S3 API) that holds the file contents. Credentials have no
-	// built-in default on purpose: docker-compose passes them from .env.
 	objEndpoint := envOr("OBJECT_STORE_ENDPOINT", "object-store:9000")
 	objAccessKey := os.Getenv("OBJECT_STORE_ACCESS_KEY")
 	objSecretKey := os.Getenv("OBJECT_STORE_SECRET_KEY")
 	if objAccessKey == "" || objSecretKey == "" {
 		log.Fatal("OBJECT_STORE_ACCESS_KEY and OBJECT_STORE_SECRET_KEY environment variables are required")
 	}
+	objBucket := envOr("OBJECT_STORE_BUCKET", "stashr-files")
+	objUseSSL := os.Getenv("OBJECT_STORE_USE_SSL") == "true"
+
 	usersAddr := envOr("USERS_GRPC_ADDR", "users-service:50051")
 
-	// Every tunable comes from config.yaml (CONFIG_PATH).
-	limits, cfg, err := loadConfig(appconfig.Path())
-	if err != nil {
-		log.Fatal(err)
-	}
-	filecheck.Configure(limits)
-	handler.SetMaxFolderNameLength(limits.MaxFolderNameLength)
+	cfg := loadConfig()
 
-	ctx, cancel := context.WithTimeout(context.Background(), cfg.MongoConnectTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
@@ -71,29 +67,24 @@ func main() {
 	}
 	log.Println("Storage service connected to MongoDB")
 
-	objectStore, err := service.NewObjectStore(objEndpoint, objAccessKey, objSecretKey, cfg.ObjectStoreBucket,
-		cfg.ObjectStoreUseSSL, cfg.ObjectStoreConnectAttempts, cfg.ObjectStoreConnectRetryDelay)
+	objectStore, err := service.NewObjectStore(objEndpoint, objAccessKey, objSecretKey, objBucket, objUseSSL)
 	if err != nil {
 		log.Fatalf("Failed to initialize the object store: %v", err)
 	}
-	log.Printf("Storage service connected to object store %s (bucket %q)", objEndpoint, cfg.ObjectStoreBucket)
+	log.Printf("Storage service connected to object store %s (bucket %q)", objEndpoint, objBucket)
 
-	// Client of users-service's internal QuotaService. grpc.NewClient connects
-	// lazily and reconnects on its own, so start-up order does not matter.
 	usersConn, err := grpc.NewClient(usersAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("Failed to create users-service gRPC client (%s): %v", usersAddr, err)
 	}
 	defer usersConn.Close()
 
-	db := client.Database(cfg.MongoDBName)
+	db := client.Database(dbName)
 	folderRepo := repository.NewFolderRepository(db)
 	fileRepo := repository.NewFileRepository(db)
 
 	folderHandler := handler.NewFolderHandler(folderRepo, fileRepo)
-	quotaClient := service.NewQuotaClient(usersConn, cfg.QuotaServiceTimeout)
-	fileHandler := handler.NewFileHandler(fileRepo, folderRepo, objectStore, quotaClient, limits.MaxUploadBytes)
-	fileHandler.SetCleanupTimeout(cfg.UploadCleanupTimeout)
+	fileHandler := handler.NewFileHandler(fileRepo, folderRepo, objectStore, service.NewQuotaClient(usersConn), cfg.MaxUploadBytes)
 
 	port := os.Getenv("STORAGE_GRPC_PORT")
 	if port == "" {
@@ -105,17 +96,11 @@ func main() {
 		log.Fatalf("Failed to listen on :%s: %v", port, err)
 	}
 
-	// Every rpc (unary, and the streaming file upload) passes through the JWT
-	// interceptor before reaching the handler.
 	srv := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(middleware.AuthUnaryInterceptor([]byte(jwtSecret))),
 		grpc.ChainStreamInterceptor(middleware.AuthStreamInterceptor([]byte(jwtSecret))),
 	)
 	storagepb.RegisterStorageServiceServer(srv, handler.NewStorageServer(folderHandler, fileHandler)) // generated in storage_service_grpc.pb.go
-
-	healthSrv := health.NewServer()
-	healthpb.RegisterHealthServer(srv, healthSrv)
-	healthSrv.SetServingStatus(storagepb.StorageService_ServiceDesc.ServiceName, healthpb.HealthCheckResponse_SERVING)
 
 	reflection.Register(srv)
 

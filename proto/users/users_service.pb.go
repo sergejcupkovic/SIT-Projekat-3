@@ -1388,30 +1388,13 @@ func (x *ListUsersResponse) GetUsers() []*AdminUserInfo {
 
 // The config.yaml limits the frontend mirrors.
 type LimitsResponse struct {
-	state                    protoimpl.MessageState `protogen:"open.v1"`
-	MinQuotaBytes            int64                  `protobuf:"varint,1,opt,name=min_quota_bytes,json=minQuotaBytes,proto3" json:"min_quota_bytes,omitempty"`
-	MaxQuotaBytes            int64                  `protobuf:"varint,2,opt,name=max_quota_bytes,json=maxQuotaBytes,proto3" json:"max_quota_bytes,omitempty"`
-	DefaultQuotaBytes        int64                  `protobuf:"varint,3,opt,name=default_quota_bytes,json=defaultQuotaBytes,proto3" json:"default_quota_bytes,omitempty"`
-	MaxUploadBytes           int64                  `protobuf:"varint,4,opt,name=max_upload_bytes,json=maxUploadBytes,proto3" json:"max_upload_bytes,omitempty"`
-	MaxFileNameLength        int32                  `protobuf:"varint,5,opt,name=max_file_name_length,json=maxFileNameLength,proto3" json:"max_file_name_length,omitempty"`
-	MaxFolderNameLength      int32                  `protobuf:"varint,6,opt,name=max_folder_name_length,json=maxFolderNameLength,proto3" json:"max_folder_name_length,omitempty"`
-	MaxNameLength            int32                  `protobuf:"varint,7,opt,name=max_name_length,json=maxNameLength,proto3" json:"max_name_length,omitempty"`
-	PasswordMinLength        int32                  `protobuf:"varint,8,opt,name=password_min_length,json=passwordMinLength,proto3" json:"password_min_length,omitempty"`
-	PasswordMaxLength        int32                  `protobuf:"varint,9,opt,name=password_max_length,json=passwordMaxLength,proto3" json:"password_max_length,omitempty"`
-	PasswordRequireUppercase bool                   `protobuf:"varint,10,opt,name=password_require_uppercase,json=passwordRequireUppercase,proto3" json:"password_require_uppercase,omitempty"`
-	PasswordRequireLowercase bool                   `protobuf:"varint,11,opt,name=password_require_lowercase,json=passwordRequireLowercase,proto3" json:"password_require_lowercase,omitempty"`
-	PasswordRequireDigit     bool                   `protobuf:"varint,12,opt,name=password_require_digit,json=passwordRequireDigit,proto3" json:"password_require_digit,omitempty"`
-	PasswordRequireSpecial   bool                   `protobuf:"varint,13,opt,name=password_require_special,json=passwordRequireSpecial,proto3" json:"password_require_special,omitempty"`
-	AllowedFileExtensions    []string               `protobuf:"bytes,14,rep,name=allowed_file_extensions,json=allowedFileExtensions,proto3" json:"allowed_file_extensions,omitempty"`
-	// Frontend settings.
-	StorageWarningPercent        int32   `protobuf:"varint,15,opt,name=storage_warning_percent,json=storageWarningPercent,proto3" json:"storage_warning_percent,omitempty"`
-	QuotaRequestHistoryItems     int32   `protobuf:"varint,16,opt,name=quota_request_history_items,json=quotaRequestHistoryItems,proto3" json:"quota_request_history_items,omitempty"`
-	QuotaRequestSuggestionFactor float64 `protobuf:"fixed64,17,opt,name=quota_request_suggestion_factor,json=quotaRequestSuggestionFactor,proto3" json:"quota_request_suggestion_factor,omitempty"`
-	AdminQuotaAdjustStepsBytes   []int64 `protobuf:"varint,18,rep,packed,name=admin_quota_adjust_steps_bytes,json=adminQuotaAdjustStepsBytes,proto3" json:"admin_quota_adjust_steps_bytes,omitempty"`
-	// Empty when there is no mail inbox to link to.
-	MailUiUrl     string `protobuf:"bytes,19,opt,name=mail_ui_url,json=mailUiUrl,proto3" json:"mail_ui_url,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	MinQuotaBytes     int64                  `protobuf:"varint,1,opt,name=min_quota_bytes,json=minQuotaBytes,proto3" json:"min_quota_bytes,omitempty"`
+	MaxQuotaBytes     int64                  `protobuf:"varint,2,opt,name=max_quota_bytes,json=maxQuotaBytes,proto3" json:"max_quota_bytes,omitempty"`
+	DefaultQuotaBytes int64                  `protobuf:"varint,3,opt,name=default_quota_bytes,json=defaultQuotaBytes,proto3" json:"default_quota_bytes,omitempty"`
+	PasswordMinLength int32                  `protobuf:"varint,4,opt,name=password_min_length,json=passwordMinLength,proto3" json:"password_min_length,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *LimitsResponse) Reset() {
@@ -1465,116 +1448,11 @@ func (x *LimitsResponse) GetDefaultQuotaBytes() int64 {
 	return 0
 }
 
-func (x *LimitsResponse) GetMaxUploadBytes() int64 {
-	if x != nil {
-		return x.MaxUploadBytes
-	}
-	return 0
-}
-
-func (x *LimitsResponse) GetMaxFileNameLength() int32 {
-	if x != nil {
-		return x.MaxFileNameLength
-	}
-	return 0
-}
-
-func (x *LimitsResponse) GetMaxFolderNameLength() int32 {
-	if x != nil {
-		return x.MaxFolderNameLength
-	}
-	return 0
-}
-
-func (x *LimitsResponse) GetMaxNameLength() int32 {
-	if x != nil {
-		return x.MaxNameLength
-	}
-	return 0
-}
-
 func (x *LimitsResponse) GetPasswordMinLength() int32 {
 	if x != nil {
 		return x.PasswordMinLength
 	}
 	return 0
-}
-
-func (x *LimitsResponse) GetPasswordMaxLength() int32 {
-	if x != nil {
-		return x.PasswordMaxLength
-	}
-	return 0
-}
-
-func (x *LimitsResponse) GetPasswordRequireUppercase() bool {
-	if x != nil {
-		return x.PasswordRequireUppercase
-	}
-	return false
-}
-
-func (x *LimitsResponse) GetPasswordRequireLowercase() bool {
-	if x != nil {
-		return x.PasswordRequireLowercase
-	}
-	return false
-}
-
-func (x *LimitsResponse) GetPasswordRequireDigit() bool {
-	if x != nil {
-		return x.PasswordRequireDigit
-	}
-	return false
-}
-
-func (x *LimitsResponse) GetPasswordRequireSpecial() bool {
-	if x != nil {
-		return x.PasswordRequireSpecial
-	}
-	return false
-}
-
-func (x *LimitsResponse) GetAllowedFileExtensions() []string {
-	if x != nil {
-		return x.AllowedFileExtensions
-	}
-	return nil
-}
-
-func (x *LimitsResponse) GetStorageWarningPercent() int32 {
-	if x != nil {
-		return x.StorageWarningPercent
-	}
-	return 0
-}
-
-func (x *LimitsResponse) GetQuotaRequestHistoryItems() int32 {
-	if x != nil {
-		return x.QuotaRequestHistoryItems
-	}
-	return 0
-}
-
-func (x *LimitsResponse) GetQuotaRequestSuggestionFactor() float64 {
-	if x != nil {
-		return x.QuotaRequestSuggestionFactor
-	}
-	return 0
-}
-
-func (x *LimitsResponse) GetAdminQuotaAdjustStepsBytes() []int64 {
-	if x != nil {
-		return x.AdminQuotaAdjustStepsBytes
-	}
-	return nil
-}
-
-func (x *LimitsResponse) GetMailUiUrl() string {
-	if x != nil {
-		return x.MailUiUrl
-	}
-	return ""
 }
 
 type QuotaRequestInfo struct {
@@ -1984,28 +1862,12 @@ const file_users_users_service_proto_rawDesc = "" +
 	"\x13storage_quota_bytes\x18\a \x01(\x03R\x11storageQuotaBytes\x12,\n" +
 	"\x12used_storage_bytes\x18\b \x01(\x03R\x10usedStorageBytes\"?\n" +
 	"\x11ListUsersResponse\x12*\n" +
-	"\x05users\x18\x01 \x03(\v2\x14.users.AdminUserInfoR\x05users\"\xee\a\n" +
+	"\x05users\x18\x01 \x03(\v2\x14.users.AdminUserInfoR\x05users\"\xc0\x01\n" +
 	"\x0eLimitsResponse\x12&\n" +
 	"\x0fmin_quota_bytes\x18\x01 \x01(\x03R\rminQuotaBytes\x12&\n" +
 	"\x0fmax_quota_bytes\x18\x02 \x01(\x03R\rmaxQuotaBytes\x12.\n" +
-	"\x13default_quota_bytes\x18\x03 \x01(\x03R\x11defaultQuotaBytes\x12(\n" +
-	"\x10max_upload_bytes\x18\x04 \x01(\x03R\x0emaxUploadBytes\x12/\n" +
-	"\x14max_file_name_length\x18\x05 \x01(\x05R\x11maxFileNameLength\x123\n" +
-	"\x16max_folder_name_length\x18\x06 \x01(\x05R\x13maxFolderNameLength\x12&\n" +
-	"\x0fmax_name_length\x18\a \x01(\x05R\rmaxNameLength\x12.\n" +
-	"\x13password_min_length\x18\b \x01(\x05R\x11passwordMinLength\x12.\n" +
-	"\x13password_max_length\x18\t \x01(\x05R\x11passwordMaxLength\x12<\n" +
-	"\x1apassword_require_uppercase\x18\n" +
-	" \x01(\bR\x18passwordRequireUppercase\x12<\n" +
-	"\x1apassword_require_lowercase\x18\v \x01(\bR\x18passwordRequireLowercase\x124\n" +
-	"\x16password_require_digit\x18\f \x01(\bR\x14passwordRequireDigit\x128\n" +
-	"\x18password_require_special\x18\r \x01(\bR\x16passwordRequireSpecial\x126\n" +
-	"\x17allowed_file_extensions\x18\x0e \x03(\tR\x15allowedFileExtensions\x126\n" +
-	"\x17storage_warning_percent\x18\x0f \x01(\x05R\x15storageWarningPercent\x12=\n" +
-	"\x1bquota_request_history_items\x18\x10 \x01(\x05R\x18quotaRequestHistoryItems\x12E\n" +
-	"\x1fquota_request_suggestion_factor\x18\x11 \x01(\x01R\x1cquotaRequestSuggestionFactor\x12B\n" +
-	"\x1eadmin_quota_adjust_steps_bytes\x18\x12 \x03(\x03R\x1aadminQuotaAdjustStepsBytes\x12\x1e\n" +
-	"\vmail_ui_url\x18\x13 \x01(\tR\tmailUiUrl\"\xe4\x03\n" +
+	"\x13default_quota_bytes\x18\x03 \x01(\x03R\x11defaultQuotaBytes\x12.\n" +
+	"\x13password_min_length\x18\x04 \x01(\x05R\x11passwordMinLength\"\xe4\x03\n" +
 	"\x10QuotaRequestInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x14\n" +

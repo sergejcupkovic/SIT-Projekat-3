@@ -31,15 +31,14 @@
           <span class="logo-text">SIT 3. Godina Projekat</span>
         </div>
         <div class="header-badges">
-          <!-- href: mail_ui_url in config.yaml; stays hidden when that is empty -->
           <a
+            href="http://localhost:8025"
             target="_blank"
             rel="noopener noreferrer"
-            class="badge badge-link hidden"
+            class="badge badge-link"
             title="Open Mailpit inbox"
-            data-mail-ui-link
           >
-            Mailpit Web UI ↗
+            Mailpit Web UI :8025 ↗
           </a>
         </div>
       </header>
@@ -248,8 +247,8 @@
                     class="form-input"
                     placeholder="Enter a new password"
                     autocomplete="new-password"
-                    data-new-password
                     data-password-toggle
+                    maxlength="72"
                     required
                   />
                 </div>
@@ -271,8 +270,8 @@
                     class="form-input"
                     placeholder="Re-enter your new password"
                     autocomplete="new-password"
-                    data-new-password
                     data-password-toggle
+                    maxlength="72"
                     required
                   />
                 </div>
@@ -336,8 +335,8 @@
                     class="form-input"
                     placeholder="Enter a new password"
                     autocomplete="new-password"
-                    data-new-password
                     data-password-toggle
+                    maxlength="72"
                     required
                   />
                 </div>
@@ -359,8 +358,8 @@
                     class="form-input"
                     placeholder="Re-enter your new password"
                     autocomplete="new-password"
-                    data-new-password
                     data-password-toggle
+                    maxlength="72"
                     required
                   />
                 </div>
@@ -410,7 +409,7 @@
                     class="form-input"
                     placeholder="Enter a strong password"
                     autocomplete="new-password"
-                    data-new-password
+                    maxlength="72"
                     required
                   />
                   <button
@@ -467,7 +466,7 @@
                     class="form-input"
                     placeholder="Re-enter your new password"
                     autocomplete="new-password"
-                    data-new-password
+                    maxlength="72"
                     required
                   />
                   <button
@@ -657,7 +656,7 @@
               <p class="quota-request-notice" id="quotaRequestNotice"></p>
               <form id="quotaRequestForm" class="hidden" novalidate>
                 <label for="quotaRequestInput" class="form-label">
-                  New total quota
+                  New total quota (MB)
                 </label>
                 <div class="create-folder-row">
                   <input
@@ -667,15 +666,6 @@
                     step="any"
                     required
                   />
-                  <select
-                    id="quotaRequestUnit"
-                    class="form-input size-unit-select"
-                    aria-label="Unit"
-                  >
-                    <option value="MB">MB</option>
-                    <option value="GB">GB</option>
-                    <option value="TB">TB</option>
-                  </select>
                   <button
                     type="submit"
                     id="quotaRequestSubmitBtn"
@@ -731,11 +721,13 @@
                   type="file"
                   id="fileUploadInput"
                   class="hidden"
+                  accept=".txt,.md,.csv,.json,.pdf,.png,.jpg,.jpeg,.gif"
                 />
                 <input
                   type="file"
                   id="fileVersionUploadInput"
                   class="hidden"
+                  accept=".txt,.md,.csv,.json,.pdf,.png,.jpg,.jpeg,.gif"
                 />
                 <button type="button" id="uploadFileBtn" class="btn-outline-sm">
                   <span class="btn-text">↑ Upload File</span>
@@ -766,6 +758,7 @@
                   id="newFolderNameInput"
                   class="form-input"
                   placeholder="Enter new folder name (e.g. Documents)"
+                  maxlength="100"
                   required
                 />
                 <button
@@ -805,6 +798,7 @@
                   id="renameFolderNameInput"
                   class="form-input"
                   placeholder="Enter new folder name"
+                  maxlength="100"
                   required
                 />
                 <button
@@ -844,6 +838,7 @@
                   id="renameFileNameInput"
                   class="form-input"
                   placeholder="Enter new file name"
+                  maxlength="255"
                   required
                 />
                 <button
@@ -1001,34 +996,23 @@
                 </div>
                 <div class="admin-quota-presets">
                   <span class="admin-presets-label">Quick adjust:</span>
-                  <!-- filled from admin_quota_adjust_steps_bytes in config.yaml -->
-                  <span class="admin-quota-steps" id="adminQuotaSteps"></span>
-                  <button type="button" class="btn-outline-sm admin-bound-btn" data-bound="min" id="adminQuotaMinBtn">Minimum</button>
-                  <button type="button" class="btn-outline-sm admin-bound-btn" data-bound="max" id="adminQuotaMaxBtn">Maximum</button>
+                  <button type="button" class="btn-outline-sm admin-preset-btn" data-add-mb="-1024">−1 GB</button>
+                  <button type="button" class="btn-outline-sm admin-preset-btn" data-add-mb="-100">−100 MB</button>
+                  <button type="button" class="btn-outline-sm admin-preset-btn" data-add-mb="100">+100 MB</button>
+                  <button type="button" class="btn-outline-sm admin-preset-btn" data-add-mb="1024">+1 GB</button>
                 </div>
                 <div class="create-folder-row">
                   <div class="admin-quota-input-group">
-                    <label for="adminNewQuotaInput" class="form-label">
-                      New Total Quota
+                    <label for="adminNewQuotaMbInput" class="form-label">
+                      New Total Quota (MB)
                     </label>
-                    <div class="size-input-row">
-                      <input
-                        type="number"
-                        id="adminNewQuotaInput"
-                        class="form-input"
-                        step="any"
-                        required
-                      />
-                      <select
-                        id="adminNewQuotaUnit"
-                        class="form-input size-unit-select"
-                        aria-label="Unit"
-                      >
-                        <option value="MB">MB</option>
-                        <option value="GB">GB</option>
-                        <option value="TB">TB</option>
-                      </select>
-                    </div>
+                    <input
+                      type="number"
+                      id="adminNewQuotaMbInput"
+                      class="form-input"
+                      step="any"
+                      required
+                    />
                   </div>
                   <button
                     type="submit"
@@ -1149,6 +1133,7 @@
                       class="form-input"
                       placeholder="e.g. Petar"
                       autocomplete="given-name"
+                      maxlength="100"
                       required
                     />
                   </div>
@@ -1167,6 +1152,7 @@
                       class="form-input"
                       placeholder="e.g. Petrovic"
                       autocomplete="family-name"
+                      maxlength="100"
                       required
                     />
                   </div>
@@ -1205,7 +1191,7 @@
                     class="form-input"
                     placeholder="Enter a strong password"
                     autocomplete="new-password"
-                    data-new-password
+                    maxlength="72"
                     required
                   />
                   <button
@@ -1260,7 +1246,7 @@
                     class="form-input"
                     placeholder="Re-enter your password"
                     autocomplete="new-password"
-                    data-new-password
+                    maxlength="72"
                     required
                   />
                   <button
@@ -1312,10 +1298,13 @@
             </form>
           </div>
 
-          <div class="card-footer hidden" data-mail-ui-only>
+          <div class="card-footer">
             <p class="footer-help">
               Emails are delivered locally to
-              <a target="_blank" rel="noopener noreferrer" data-mail-ui-link
+              <a
+                href="http://localhost:8025"
+                target="_blank"
+                rel="noopener noreferrer"
                 >Mailpit</a
               >
               for testing.
@@ -1327,7 +1316,7 @@
 
     <script src="validation.js"></script>
     <script src="secure-session.js"></script>
-    <script src="limits.js"></script>
+    <script src="api.js"></script>
     <script src="app.js"></script>
     <script src="account.js"></script>
     <script src="quota-requests.js"></script>

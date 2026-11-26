@@ -355,24 +355,7 @@ message LimitsResponse {
   int64 min_quota_bytes = 1;
   int64 max_quota_bytes = 2;
   int64 default_quota_bytes = 3;
-  int64 max_upload_bytes = 4;
-  int32 max_file_name_length = 5;
-  int32 max_folder_name_length = 6;
-  int32 max_name_length = 7;
-  int32 password_min_length = 8;
-  int32 password_max_length = 9;
-  bool password_require_uppercase = 10;
-  bool password_require_lowercase = 11;
-  bool password_require_digit = 12;
-  bool password_require_special = 13;
-  repeated string allowed_file_extensions = 14;
-  // Frontend settings.
-  int32 storage_warning_percent = 15;
-  int32 quota_request_history_items = 16;
-  double quota_request_suggestion_factor = 17;
-  repeated int64 admin_quota_adjust_steps_bytes = 18;
-  // Empty when there is no mail inbox to link to.
-  string mail_ui_url = 19;
+  int32 password_min_length = 4;
 }
 
 message QuotaRequestInfo {

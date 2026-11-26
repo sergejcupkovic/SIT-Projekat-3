@@ -16,15 +16,16 @@ import (
 	"unicode/utf8"
 	"users-service/config"
 
-	"stashr/shared/appconfig"
-
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
 const (
-	maxEmailLen   = 254 // RFC 5321, not a tunable
-	dummyPassword = "dummy-password-not-a-real-user"
+	maxNameLen     = 100
+	maxEmailLen    = 254
+	maxPasswordLen = 72 // bcrypt ignores anything longer
+	smtpTimeout    = 10 * time.Second
+	dummyPassword  = "dummy-password-not-a-real-user"
 )
 
 var (
@@ -73,26 +74,6 @@ type RegisterRequest struct {
 	ConfirmPassword string `json:"confirmPassword"`
 }
 
-type LoginRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-}
-
-type VerifyOTPRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-	OTP      string `json:"otp"`
-}
-
-type ResendOTPRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-}
-
-type ForgotPasswordRequest struct {
-	Email string `json:"email"`
-}
-
 type ResetPasswordRequest struct {
 	Token           string `json:"token"`
 	Password        string `json:"password"`
@@ -112,7 +93,7 @@ func ValidateRegistration(req *RegisterRequest) error {
 	if req.FirstName == "" || req.LastName == "" || req.Email == "" {
 		return errors.New("all fields are required")
 	}
-	if utf8.RuneCountInString(req.FirstName) > Cfg.MaxNameLength || utf8.RuneCountInString(req.LastName) > Cfg.MaxNameLength {
+	if utf8.RuneCountInString(req.FirstName) > maxNameLen || utf8.RuneCountInString(req.LastName) > maxNameLen {
 		return errors.New("name is too long")
 	}
 	if !nameRegex.MatchString(req.FirstName) || !nameRegex.MatchString(req.LastName) {
@@ -131,10 +112,9 @@ func ValidateRegistration(req *RegisterRequest) error {
 	return ValidatePassword(req.Password)
 }
 
-// ValidatePassword applies the password_* rules of config.yaml to a new password.
 func ValidatePassword(p string) error {
-	if len(p) < Cfg.PasswordMinLength || len(p) > Cfg.PasswordMaxLength {
-		return fmt.Errorf("password must be %d-%d characters long", Cfg.PasswordMinLength, Cfg.PasswordMaxLength)
+	if len(p) < Cfg.PasswordMinLength || len(p) > maxPasswordLen {
+		return fmt.Errorf("password must be %d-%d characters long", Cfg.PasswordMinLength, maxPasswordLen)
 	}
 	var up, low, digit, special bool
 	for _, r := range p {
@@ -149,50 +129,15 @@ func ValidatePassword(p string) error {
 			special = true
 		}
 	}
-
-	var required []string
-	missing := false
-	for _, rule := range []struct {
-		enabled, met bool
-		name         string
-	}{
-		{Cfg.PasswordRequireUppercase, up, "an uppercase letter"},
-		{Cfg.PasswordRequireLowercase, low, "a lowercase letter"},
-		{Cfg.PasswordRequireDigit, digit, "a digit"},
-		{Cfg.PasswordRequireSpecial, special, "a special character"},
-	} {
-		if rule.enabled {
-			required = append(required, rule.name)
-			missing = missing || !rule.met
-		}
-	}
-	if missing {
-		return errors.New("password must contain " + joinWithAnd(required))
+	if !(up && low && digit && special) {
+		return errors.New("password must contain an uppercase letter, a lowercase letter, a digit, and a special character")
 	}
 	return nil
 }
 
-// joinWithAnd renders ["a", "b", "c"] as "a, b, and c".
-func joinWithAnd(items []string) string {
-	switch len(items) {
-	case 0:
-		return ""
-	case 1:
-		return items[0]
-	case 2:
-		return items[0] + " and " + items[1]
-	}
-	return strings.Join(items[:len(items)-1], ", ") + ", and " + items[len(items)-1]
-}
-
-// ValidateChangePassword checks the input of a signed-in user's password
-// change. Whether currentPassword is correct is checked against the database.
 func ValidateChangePassword(currentPassword, newPassword, confirmPassword string) error {
 	if currentPassword == "" {
 		return errors.New("current password is required")
-	}
-	if len(currentPassword) > appconfig.BcryptMaxPasswordBytes {
-		return errors.New("current password is incorrect")
 	}
 	if newPassword == "" {
 		return errors.New("new password is required")
@@ -327,8 +272,6 @@ func VerifyRestrictedToken(tokenString string) (string, error) {
 	return email, nil
 }
 
-// parseSessionToken validates a full session JWT (HS256, not expired, not the
-// restricted password-change token) and returns its user ID and role.
 func parseSessionToken(tokenString string) (userID string, role string, err error) {
 	token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -355,10 +298,7 @@ func parseSessionToken(tokenString string) (userID string, role string, err erro
 	return userID, role, nil
 }
 
-// VerifySessionToken validates a full session JWT (HS256, not expired, not the
-// restricted password-change token, role RK) and returns the user ID it was
-// issued for. Used by the internal quota rpcs so a caller can only ever touch
-// the quota of the user its token belongs to.
+// Accepts only a full session token of a regular user.
 func VerifySessionToken(tokenString string) (string, error) {
 	userID, role, err := parseSessionToken(tokenString)
 	if err != nil {
@@ -370,8 +310,6 @@ func VerifySessionToken(tokenString string) (string, error) {
 	return userID, nil
 }
 
-// VerifyAccountToken validates a full session JWT of any role and returns the
-// user ID it was issued for.
 func VerifyAccountToken(tokenString string) (string, error) {
 	userID, _, err := parseSessionToken(tokenString)
 	return userID, err
@@ -379,7 +317,6 @@ func VerifyAccountToken(tokenString string) (string, error) {
 
 var ErrAdminRequired = errors.New("administrator privileges required")
 
-// VerifyAdminToken validates a full session JWT and checks that its role is "A".
 func VerifyAdminToken(tokenString string) (string, error) {
 	userID, role, err := parseSessionToken(tokenString)
 	if err != nil {
@@ -402,12 +339,12 @@ func PasswordChangeAllowed(lastChanged time.Time) (ok bool, retryAt time.Time) {
 func sendMail(host, port, from, to, subject, body string) error {
 	msg := fmt.Appendf(nil, "To: %s\r\nSubject: %s\r\n\r\n%s\r\n", to, subject, body)
 	addr := net.JoinHostPort(host, port)
-	conn, err := net.DialTimeout("tcp", addr, Cfg.SMTPTimeout)
+	conn, err := net.DialTimeout("tcp", addr, smtpTimeout)
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
-	if err := conn.SetDeadline(time.Now().Add(Cfg.SMTPTimeout)); err != nil {
+	if err := conn.SetDeadline(time.Now().Add(smtpTimeout)); err != nil {
 		return err
 	}
 	c, err := smtp.NewClient(conn, host)

@@ -11,8 +11,6 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// FileRepository keeps the file METADATA (name, type, size, owner, parent
-// folder, timestamp) in MongoDB; the content is in the object store.
 type FileRepository struct {
 	collection *mongo.Collection
 }

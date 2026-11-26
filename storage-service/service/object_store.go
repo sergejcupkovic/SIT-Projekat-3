@@ -1,5 +1,3 @@
-// Package service holds storage-service's clients of other systems: the S3
-// compatible object store and the Users service.
 package service
 
 import (
@@ -13,17 +11,12 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
-// ObjectStore keeps the CONTENT of uploaded files in an S3 compatible object
-// store (the docker-compose service "minio"); only metadata goes to MongoDB.
 type ObjectStore struct {
 	client *minio.Client
 	bucket string
 }
 
-// NewObjectStore connects to the store and makes sure the bucket exists. The
-// store may still be starting when the service boots, so it makes up to
-// attempts tries, retryDelay apart.
-func NewObjectStore(endpoint, accessKey, secretKey, bucket string, useSSL bool, attempts int, retryDelay time.Duration) (*ObjectStore, error) {
+func NewObjectStore(endpoint, accessKey, secretKey, bucket string, useSSL bool) (*ObjectStore, error) {
 	client, err := minio.New(endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
 		Secure: useSSL,
@@ -34,7 +27,7 @@ func NewObjectStore(endpoint, accessKey, secretKey, bucket string, useSSL bool, 
 
 	ctx := context.Background()
 	var lastErr error
-	for attempt := 1; attempt <= attempts; attempt++ {
+	for attempt := 1; attempt <= 10; attempt++ {
 		exists, err := client.BucketExists(ctx, bucket)
 		if err == nil && !exists {
 			err = client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{})
@@ -43,14 +36,13 @@ func NewObjectStore(endpoint, accessKey, secretKey, bucket string, useSSL bool, 
 			return &ObjectStore{client: client, bucket: bucket}, nil
 		}
 
-		lastErr = fmt.Errorf("waiting for object store (attempt %d/%d): %w", attempt, attempts, err)
+		lastErr = fmt.Errorf("waiting for object store (attempt %d/10): %w", attempt, err)
 		log.Println(lastErr)
-		time.Sleep(retryDelay)
+		time.Sleep(2 * time.Second)
 	}
 	return nil, lastErr
 }
 
-// Put stores exactly size bytes read from r under key.
 func (s *ObjectStore) Put(ctx context.Context, key string, r io.Reader, size int64, contentType string) error {
 	_, err := s.client.PutObject(ctx, s.bucket, key, r, size, minio.PutObjectOptions{
 		ContentType: contentType,
@@ -58,7 +50,6 @@ func (s *ObjectStore) Put(ctx context.Context, key string, r io.Reader, size int
 	return err
 }
 
-// Delete removes an object; removing a key that does not exist is not an error.
 func (s *ObjectStore) Delete(ctx context.Context, key string) error {
 	return s.client.RemoveObject(ctx, s.bucket, key, minio.RemoveObjectOptions{})
 }

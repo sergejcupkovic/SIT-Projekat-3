@@ -1,12 +1,7 @@
-// Password handling: the strength meter shared by every "new password" field,
-// "Forgot password?", the reset link from the email, and changing the password
-// while signed in.
-
 // #region shared password widgets
 
 const strengthMeters = [];
 
-// Fills container with a strength bar and the configured requirement checklist.
 function createStrengthMeter(container) {
   container.innerHTML = `
     <div class="strength-meter-bar"><div class="strength-meter-fill"></div></div>
@@ -55,7 +50,6 @@ function createStrengthMeter(container) {
   const meter = {
     update,
     reset: () => update(""),
-    // after the configured rules arrived
     refresh: () => update(lastValue),
   };
   meter.reset();
@@ -63,7 +57,6 @@ function createStrengthMeter(container) {
   return meter;
 }
 
-// Gives a password input the same show/hide button as the login form.
 function addPasswordToggle(input) {
   const button = toggleLoginPasswordBtn.cloneNode(true);
   button.removeAttribute("id");
@@ -78,7 +71,6 @@ function setFieldError(input, errorEl, message) {
   errorEl.textContent = message;
 }
 
-// Empties a form and returns its password fields to the hidden state.
 function resetPasswordForm(form) {
   form.reset();
   form.querySelectorAll("input").forEach((input) => {
@@ -102,7 +94,6 @@ function setButtonBusy(button, busy) {
   button.querySelector(".btn-spinner")?.classList.toggle("hidden", !busy);
 }
 
-// Shows the RFC3339 timestamps in server messages in the user's local time.
 function localizeTimestamps(message) {
   return message.replace(
     /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})/g,
@@ -110,7 +101,6 @@ function localizeTimestamps(message) {
   );
 }
 
-// A "new password + confirmation" pair with its meter and live feedback.
 function createNewPasswordFields(prefix) {
   const password = document.getElementById(`${prefix}NewPassword`);
   const confirm = document.getElementById(`${prefix}ConfirmPassword`);
@@ -137,7 +127,6 @@ function createNewPasswordFields(prefix) {
     confirm,
     passwordErrorEl,
     meter,
-    // Marks the invalid fields; true when both can be submitted.
     validate() {
       const problem = Validation.newPassword(password.value);
       setFieldError(password, passwordErrorEl, problem);
@@ -195,7 +184,7 @@ async function handleForgotPasswordSubmit(event) {
         "Check Your Email",
         data.message ||
           "If an account with that email exists, a password reset link has been sent.",
-        mailInboxAction(),
+        MAILPIT_BUTTON,
       );
     } else if (status !== 429) {
       showAlert("danger", "Request Failed", data.message || "Could not request a reset link.");

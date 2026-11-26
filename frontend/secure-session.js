@@ -1,7 +1,4 @@
-// The session (JWT, e-mail, role) is kept in localStorage only as an AES-GCM
-// ciphertext. GCM also authenticates it, so a modified value fails to decrypt
-// and is discarded. The key is generated as non-extractable and lives in
-// IndexedDB, so its raw bytes are never available to page scripts.
+// The session is kept in localStorage, encrypted with a non-extractable AES-GCM key.
 const session = (() => {
   const DB_NAME = "stashr-secure";
   const STORE = "keys";

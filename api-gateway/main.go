@@ -1,17 +1,4 @@
-// api-gateway is the single public entry point of the system.
-//
-//	client ──HTTPS (REST/JSON)──▶ api-gateway ──gRPC (protobuf, HTTP/2)──▶ users-service / storage-service
-//
-// Its routes come from the google.api.http annotations in proto/*/*.proto:
-// protoc-gen-grpc-gateway generated *.pb.gw.go files with Register<Service>Handler
-// functions that add, for every annotated rpc, an HTTP route that
-//  1. decodes the JSON body / path params / query params into the protobuf request,
-//  2. calls the rpc through a gRPC client connection,
-//  3. encodes the protobuf reply (or gRPC status error) back to JSON + HTTP status.
-//
-// The single exception is the multipart file upload (upload.go), which
-// grpc-gateway cannot decode; it is registered by hand and streams into the
-// StorageService.UploadFile rpc.
+// The API gateway takes HTTPS REST requests and calls the services over gRPC.
 package main
 
 import (
@@ -23,12 +10,11 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	storagepb "stashr/proto/storage"
 	userspb "stashr/proto/users"
 	notificationspb "stashr/proto/notifications"
-
-	"stashr/shared/appconfig"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"golang.org/x/time/rate"
@@ -54,22 +40,13 @@ func main() {
 	port := env("GATEWAY_PORT", "8443")
 	certFile := env("TLS_CERT_FILE", "/certs/server.crt")
 	keyFile := env("TLS_KEY_FILE", "/certs/server.key")
-	frontendURL := env("FRONTEND_URL", "https://localhost:3000")
 
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if len(jwtSecret) < 32 {
 		log.Fatal("JWT_SECRET must be set and at least 32 chars")
 	}
-	// Every tunable comes from config.yaml (CONFIG_PATH).
-	limits, cfg, err := loadConfig(appconfig.Path())
-	if err != nil {
-		log.Fatal(err)
-	}
+	cfg := loadConfig()
 
-	// ---- gRPC clients (gateway -> services) ----
-	// Plaintext HTTP/2 inside the private Docker network. grpc.NewClient does not
-	// connect immediately; it connects on first use and reconnects automatically,
-	// so the gateway can start before the services are up.
 	usersConn, err := grpc.NewClient(usersAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("Failed to create users-service gRPC client (%s): %v", usersAddr, err)
@@ -88,16 +65,9 @@ func main() {
 	}
 	defer notificationsConn.Close()
 
-	// Upper bound for every backend call made on behalf of an HTTP request.
-	runtime.DefaultContextTimeout = cfg.RequestTimeout
+	runtime.DefaultContextTimeout = 15 * time.Second
 
-	// ---- REST <-> gRPC translator ----
 	gw := runtime.NewServeMux(
-		// JSON <-> protobuf conversion (protojson):
-		//  * field names in lowerCamelCase (first_name -> "firstName"),
-		//  * EmitUnpopulated: always output fields, e.g. "breadcrumbs": [] and
-		//    "currentFolder": null, instead of omitting them,
-		//  * DiscardUnknown: ignore JSON fields that are not in the .proto.
 		runtime.WithMarshalerOption(runtime.MIMEWildcard, &runtime.JSONPb{
 			MarshalOptions: protojson.MarshalOptions{
 				EmitUnpopulated: true,
@@ -108,11 +78,8 @@ func main() {
 		}),
 		// Lets services choose the HTTP success code (201 Created) - see response.go.
 		runtime.WithForwardResponseOption(httpStatusFromMetadata),
-		// A quota too large to decode gets the range message - see errors.go.
-		runtime.WithErrorHandler(quotaErrorHandler(limits.QuotaRangeMessage())),
 	)
 
-	// Generated in proto/users/users_service.pb.gw.go and proto/storage/storage_service.pb.gw.go.
 	if err := userspb.RegisterUsersServiceHandler(ctx, gw, usersConn); err != nil {
 		log.Fatalf("Failed to register UsersService routes: %v", err)
 	}
@@ -127,8 +94,7 @@ func main() {
 	}
 
 	// POST /api/files/upload and POST /api/files/{file_id}/version: hand-written routes (multipart -> gRPC stream).
-	up := newUploadHandler(gw, storagepb.NewStorageServiceClient(storageConn), []byte(jwtSecret), limits.MaxUploadBytes)
-	up.settings = cfg.Upload
+	up := newUploadHandler(gw, storagepb.NewStorageServiceClient(storageConn), []byte(jwtSecret), cfg.MaxUploadBytes)
 	if err := gw.HandlePath(http.MethodPost, "/api/files/upload", up.handle); err != nil {
 		log.Fatalf("Failed to register the upload route: %v", err)
 	}
@@ -137,28 +103,26 @@ func main() {
 	}
 
 	limiter := newRateLimiter(rate.Limit(cfg.RateLimitPerSecond), cfg.RateLimitBurst, []byte(jwtSecret))
-	limiter.startCleanup(cfg.RateLimitCleanupInterval, cfg.RateLimitVisitorTTL)
+	limiter.startCleanup()
 
-	routes := limitRequestBody(cfg.MaxJSONBodyBytes, verifyRedirect(gw, frontendURL))
-	handler := securityHeaders(corsMiddleware(cfg.CORSAllowedOrigin, limiter.middleware(routes)))
+	handler := securityHeaders(corsMiddleware(limiter.middleware(gw)))
 
-	// ---- HTTPS server (client -> gateway) ----
 	srv := &http.Server{
 		Addr:    ":" + port,
 		Handler: handler,
 		TLSConfig: &tls.Config{
 			MinVersion: tls.VersionTLS12,
 		},
-		ReadHeaderTimeout: cfg.ReadHeaderTimeout,
-		ReadTimeout:       cfg.ReadTimeout,
-		WriteTimeout:      cfg.WriteTimeout,
-		IdleTimeout:       cfg.IdleTimeout,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	go func() {
 		<-ctx.Done()
 		log.Println("Shutting down API Gateway...")
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		_ = srv.Shutdown(shutdownCtx)
 	}()

@@ -2,7 +2,6 @@ FROM golang:1.27-alpine AS builder
 WORKDIR /src
 
 COPY proto/ ./proto/
-COPY shared/ ./shared/
 COPY notifications-service/go.mod notifications-service/go.sum* ./notifications-service/
 WORKDIR /src/notifications-service
 RUN go mod download

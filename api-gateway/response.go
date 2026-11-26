@@ -9,19 +9,9 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// httpCodeKey is the gRPC response-header metadata key services use to ask
-// for a specific HTTP success status (e.g. users-service Register and
-// storage-service CreateFolder send "x-http-code: 201").
 const httpCodeKey = "x-http-code"
 
-// httpStatusFromMetadata runs for every successful gRPC reply, just before
-// the gateway writes the JSON body.
-//
-// gRPC itself only knows "OK" for success, so by default grpc-gateway
-// answers 200. Here we read the "x-http-code" header the service attached
-// with grpc.SetHeader, remove it so it does not leak to the client
-// (grpc-gateway would otherwise forward it as "Grpc-Metadata-X-Http-Code"),
-// and write it as the HTTP status code.
+// Lets a service answer 201 by sending the "x-http-code" gRPC header.
 func httpStatusFromMetadata(ctx context.Context, w http.ResponseWriter, _ proto.Message) error {
 	md, ok := runtime.ServerMetadataFromContext(ctx)
 	if !ok {

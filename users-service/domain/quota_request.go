@@ -14,9 +14,6 @@ const (
 	QuotaRequestRejected QuotaRequestStatus = "rejected"
 )
 
-// QuotaRequest is a regular user's request for a larger storage quota
-// (collection "quota_requests"). ResolvedAt and ResolvedBy (the administrator)
-// stay empty while it is pending.
 type QuotaRequest struct {
 	ID                  primitive.ObjectID `bson:"_id,omitempty"`
 	UserID              primitive.ObjectID `bson:"userId"`

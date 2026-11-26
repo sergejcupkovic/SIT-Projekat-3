@@ -1,5 +1,3 @@
-# Build context for the Go services is the repository root (they need ../proto).
-# Keep secrets and unrelated folders out of the images.
 .git
 .env
 certs/

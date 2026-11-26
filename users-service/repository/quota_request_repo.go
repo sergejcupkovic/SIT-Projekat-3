@@ -12,20 +12,17 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// ErrPendingQuotaRequestExists: the user already has a request awaiting a decision.
 var ErrPendingQuotaRequestExists = errors.New("a pending quota request already exists")
 
 type QuotaRequestRepository struct {
 	collection *mongo.Collection
 }
 
-// NewQuotaRequestRepository creates the indexes, giving up after setupTimeout.
-func NewQuotaRequestRepository(db *mongo.Database, setupTimeout time.Duration) (*QuotaRequestRepository, error) {
+func NewQuotaRequestRepository(db *mongo.Database) (*QuotaRequestRepository, error) {
 	coll := db.Collection("quota_requests")
 
 	models := []mongo.IndexModel{
-		// At most one pending request per user. The database enforces it, so two
-		// simultaneous submissions cannot both get through.
+		// the database allows only one pending request per user
 		{
 			Keys: bson.D{{Key: "userId", Value: 1}},
 			Options: options.Index().
@@ -37,7 +34,7 @@ func NewQuotaRequestRepository(db *mongo.Database, setupTimeout time.Duration) (
 		{Keys: bson.D{{Key: "status", Value: 1}, {Key: "createdAt", Value: -1}}},
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), setupTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	if _, err := coll.Indexes().CreateMany(ctx, models); err != nil {
@@ -46,7 +43,6 @@ func NewQuotaRequestRepository(db *mongo.Database, setupTimeout time.Duration) (
 	return &QuotaRequestRepository{collection: coll}, nil
 }
 
-// Create stores a new request and sets its ID.
 func (r *QuotaRequestRepository) Create(ctx context.Context, request *domain.QuotaRequest) error {
 	res, err := r.collection.InsertOne(ctx, request)
 	if err != nil {
@@ -73,8 +69,6 @@ func (r *QuotaRequestRepository) FindByUser(ctx context.Context, userID primitiv
 	return r.find(ctx, bson.M{"userId": userID})
 }
 
-// FindAll returns the requests with the given status, or all of them when
-// status is empty, newest first.
 func (r *QuotaRequestRepository) FindAll(ctx context.Context, status domain.QuotaRequestStatus) ([]domain.QuotaRequest, error) {
 	filter := bson.M{}
 	if status != "" {
@@ -98,9 +92,6 @@ func (r *QuotaRequestRepository) find(ctx context.Context, filter bson.M) ([]dom
 	return requests, nil
 }
 
-// Resolve moves a PENDING request to status in one atomic update, so a request
-// can be decided only once. It returns mongo.ErrNoDocuments when there is no
-// pending request with this ID.
 func (r *QuotaRequestRepository) Resolve(ctx context.Context, id primitive.ObjectID, status domain.QuotaRequestStatus, adminID string, at time.Time) (*domain.QuotaRequest, error) {
 	filter := bson.M{"_id": id, "status": domain.QuotaRequestPending}
 	update := bson.M{"$set": bson.M{"status": status, "resolvedAt": at, "resolvedBy": adminID}}
@@ -111,14 +102,4 @@ func (r *QuotaRequestRepository) Resolve(ctx context.Context, id primitive.Objec
 		return nil, err
 	}
 	return &updated, nil
-}
-
-// Reopen puts a request back to pending after applying its approval failed.
-func (r *QuotaRequestRepository) Reopen(ctx context.Context, id primitive.ObjectID) error {
-	update := bson.M{
-		"$set":   bson.M{"status": domain.QuotaRequestPending},
-		"$unset": bson.M{"resolvedAt": "", "resolvedBy": ""},
-	}
-	_, err := r.collection.UpdateOne(ctx, bson.M{"_id": id}, update)
-	return err
 }

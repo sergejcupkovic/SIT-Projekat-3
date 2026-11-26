@@ -29,7 +29,7 @@ Postman ──HTTPS────────────────────�
 | `Unauthenticated` | 401 |
 | `PermissionDenied` | 403 |
 | `NotFound` | 404 |
-| `AlreadyExists` | 409 |
+| `AlreadyExists`, `Aborted` | 409 |
 | `ResourceExhausted` | 429 (the file upload maps it to **413**: storage quota exceeded) |
 | `Internal` | 500 |
 
@@ -90,6 +90,8 @@ docker compose ps
 - `mailpit` (Mailpit SMTP server on 1025, Web UI on 8025) 
 - `users_service` (gRPC UsersService on port 50051)
 - `storage_service` (gRPC StorageService on port 50052)
+- `stashr_object_store` (SeaweedFS, file contents)
+- `notifications_service` (gRPC NotificationsService on port 50053) and `stashr_cassandra` (its database)
 - `api_gateway` (HTTPS REST API Gateway on port 8443)
 - `frontend` (Nginx HTTPS frontend on port 3000)
 
@@ -168,99 +170,42 @@ or `*.pb.gw.go` files by hand.
 
 ## Configuration
 
-There is one rule: **secrets and the ports Docker Compose needs go in `.env`; every other setting goes in
-`config.yaml`.** No environment variable overrides a `config.yaml` setting.
+- **`.env`**: secrets (`JWT_SECRET`, the admin account, object store credentials), plus the ports and names
+  Docker Compose needs.
+- **`config.yaml`**: the limits and timers you may want to change, and a few basic settings.
 
-### `.env` (secrets and ports)
-| Variable | Default | Purpose |
-| :--- | :--- | :--- |
-| `MONGO_PORT` | 27017 | MongoDB |
-| `SMTP_PORT` | 1025 | Mailpit SMTP |
-| `MAILPIT_UI_PORT` | 8025 | Mailpit web UI |
-| `USERS_GRPC_PORT` | 50051 | Users service (gRPC) |
-| `STORAGE_GRPC_PORT` | 50052 | Storage service (gRPC) |
-| `GATEWAY_PORT` | 8443 | API gateway (HTTPS) |
-| `FRONTEND_PORT` | 3000 | Frontend |
-| `OBJECT_STORE_ACCESS_KEY` / `OBJECT_STORE_SECRET_KEY` | stashr-dev / stashr-dev-secret-change-me | Object store credentials. Must match `s3.json`; local development defaults only |
-| `OBJECT_STORE_API_PORT` / `OBJECT_STORE_UI_PORT` | 9000 / 9001 | Object store S3 API / web UI, published on localhost only |
-| `JWT_SECRET` | none | Required, at least 32 chars |
-| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | admin@stashr.com / see `.env.example` | Administrator account created on first start |
+Everything else (timeouts, allowed file types, internal sizes) is a constant in the code.
 
-> **Upgrading an existing `.env`?** `MAX_UPLOAD_BYTES`, `RATE_LIMIT_PER_SECOND`, `RATE_LIMIT_BURST` and
-> `OBJECT_STORE_BUCKET` are no longer read; they are `max_upload_bytes`, `rate_limit_per_second`,
-> `rate_limit_burst` and `object_store_bucket` in `config.yaml`. If you had changed any of them, copy your value
-> there, then delete the lines. (A bucket name that differs would hide the files already uploaded.)
-
-Ports stay in `.env` because Compose uses them to publish and wire the containers and cannot read
-`config.yaml`. Service addresses, certificate paths and the like are set in `docker-compose.yml`.
-
-### `config.yaml` (tunable behavior)
-| Key | Default | Meaning |
+| `config.yaml` key | Default | Meaning |
 | :--- | :--- | :--- |
 | `public_host` | localhost | Host used in links inside emails |
-| `mongo_db_name` | users_db | Database name |
-| `smtp_host` / `smtp_from` / `smtp_timeout` | mailpit / noreply@cloudstorage.local / 10s | Mail settings |
-| `default_quota_bytes` | 104857600 | Storage quota for new users; must lie within the bounds below |
-| `min_quota_bytes` / `max_quota_bytes` | 104857600 / 2199023255552 | Bounds for any quota an admin sets or a user requests (100 MB – 2 TB) |
-| `max_upload_bytes` | 209715200 | Largest single file (200 MB). nginx's upload limit is derived from it |
-| `max_file_name_length` / `max_folder_name_length` / `max_name_length` | 255 / 100 / 100 | File, folder and person name lengths |
-| `allowed_file_types` | txt, md, csv, json, pdf, png, jpg, jpeg, gif | Extension → content types the server may detect for it |
-| `password_min_length` / `password_max_length` | 8 / 72 | New password length; 72 is the bcrypt limit |
-| `password_require_uppercase` / `_lowercase` / `_digit` / `_special` | true | Complexity rules for new passwords |
-| `rate_limit_per_second` / `rate_limit_burst` | 1 / 20 | Request rate per user (per IP when not logged in) |
-| `rate_limit_cleanup_interval` / `rate_limit_visitor_ttl` | 1m / 3m | Cleanup of idle rate limit buckets |
-| `gateway_request_timeout` | 15s | Backend call made for one HTTP request |
-| `gateway_read_header_timeout` / `_read_` / `_write_` / `_idle_` | 10s / 30s / 30s / 120s | HTTPS server timeouts |
-| `max_json_body_bytes` | 1048576 | Request body limit for everything but uploads (`413` above it) |
-| `upload_timeout` | 10m | Upload routes, in the gateway and nginx (whole units: `90s`, `10m`, `1h30m`) |
-| `upload_chunk_bytes` | 65536 | gateway → storage-service stream chunk (at most 3 MB) |
-| `upload_multipart_memory_bytes` / `upload_multipart_overhead_bytes` | 8388608 / 1048576 | Upload memory before spooling to disk / allowance for multipart framing |
-| `quota_service_timeout` | 5s | storage-service → users-service quota call |
-| `gateway_shutdown_timeout` | 10s | Time in-flight requests get when the gateway stops |
-| `cors_allowed_origin` | `*` | Origin browsers may call the gateway from directly |
-| `mongo_connect_timeout` | 10s | Start-up connection (users-service, storage-service) |
-| `quota_request_rollback_timeout` | 5s | Reopening a quota request whose approval failed |
-| `storage_mongo_db_name` / `object_store_bucket` | storage_db / stashr-files | Where file metadata and contents live; renaming leaves existing files behind |
-| `object_store_use_ssl` | false | TLS to the object store |
-| `object_store_connect_attempts` / `_connect_retry_delay` | 10 / 2s | Waiting for the object store at start-up |
-| `upload_cleanup_timeout` | 15s | Undoing a failed upload |
-| `cassandra_keyspace` | stashr_notifications | notifications-service keyspace |
-| `cassandra_connect_attempts` / `_connect_retry_delay` / `cassandra_timeout` | 20 / 3s / 10s | Waiting for Cassandra, and per-query timeout |
-| `cassandra_replication_factor` | 1 | Used only when the keyspace is first created |
-| `cassandra_schema_consistency` / `cassandra_consistency` | quorum / one | Consistency for creating the keyspace / for everything else |
-| `storage_warning_percent` | 90 | Storage bars turn red from this share of the quota |
-| `quota_request_history_items` | 5 | Own past quota requests a user sees |
-| `quota_request_suggestion_factor` | 2 | The request form suggests the current quota times this |
-| `admin_quota_adjust_steps_bytes` | ±100 MB, ±1 GB | "Quick adjust" buttons of the admin quota editor |
-| `mail_ui_url` | http://localhost:8025 | Mailpit inbox linked from the pages; empty hides the links |
-| `password_min_age` | 1m | Minimum time between password changes (reset and change password) |
-| `password_max_age` | 2m | Password expires after this; login locks the account |
-| `account_lock_duration` | 1m | Lock length after password expiry |
-| `reset_token_ttl` | 30m | Password reset link lifetime |
-| `reset_rate_limit_max` / `reset_rate_limit_window` | 3 / 15m | Forgot-password limit (also OTP resends and magic links) |
-| `magic_link_token_ttl` | 15m | Magic link lifetime |
-| `verification_token_ttl` | 24h | Email verification link lifetime |
-| `otp_ttl` | 5m | OTP lifetime |
-| `otp_max_attempts` | 3 | OTP rate limit |
-| `jwt_ttl` | 24h | Session token lifetime |
-| `restricted_token_ttl` | 15m | Token for forced password change |
+| `mongo_db_name` | users_db | Database of users-service |
+| `smtp_host` / `smtp_from` | mailpit / noreply@cloudstorage.local | Mail settings |
 | `bcrypt_cost` | 12 | Password hashing cost |
+| `default_quota_bytes` | 104857600 (100 MB) | Storage quota of a new user |
+| `min_quota_bytes` / `max_quota_bytes` | 100 MB / 2 TB, in bytes | Bounds for any quota an admin sets or a user requests |
+| `max_upload_bytes` | 209715200 (200 MB) | Largest single file. nginx allows 201 MB: if you raise this, raise `client_max_body_size` in `frontend/nginx.conf` too |
+| `password_min_length` | 8 | Shortest new password (the longest is 72, the bcrypt limit) |
+| `password_min_age` | 1m | Minimum time between password changes |
+| `password_max_age` | 1h | A password expires after this and the next login locks the account |
+| `account_lock_duration` | 30s | How long that lock lasts |
+| `jwt_ttl` | 24h | Session lifetime |
+| `restricted_token_ttl` | 15m | Token for the forced password change |
+| `verification_token_ttl` | 24h | Email verification link |
+| `magic_link_token_ttl` | 15m | Magic link |
+| `reset_token_ttl` | 30m | Password reset link |
+| `otp_ttl` | 5m | Login code (OTP) |
+| `reset_rate_limit_max` / `reset_rate_limit_window` | 3 / 15m | Forgot-password limit (also OTP resends and magic links) |
+| `otp_max_attempts` | 3 | Wrong OTP attempts allowed |
+| `rate_limit_per_second` / `rate_limit_burst` | 1 / 20 | Gateway request rate per user (per IP when not logged in) |
 
-Durations use Go syntax (`30m`, `2160h`); there is no `d` unit.
-
-All four services and the frontend container use this file. The limits the services share are defined once, in
-[`shared/appconfig`](shared/appconfig/appconfig.go), and an invalid value stops the service at start-up.
-The browser gets its limits and UI settings from the public `GET /api/config/limits` (reload the page after a
-restart). nginx cannot read YAML, so `frontend/render-nginx-conf.sh` writes its body size limits and upload
-timeout into `frontend/nginx.conf.template` when the container starts.
-
-What stays in code on purpose: protocol and security constants (254-character email, bcrypt's 72 bytes, token and
-6-digit OTP formats, 512-byte content sniffing, TLS 1.2 minimum, the 3 MB ceiling for an upload chunk).
+Durations use Go syntax (`30s`, `15m`, `24h`); there is no `d` unit. The frontend reads the quota bounds, the default
+quota and the minimum password length from `GET /api/config/limits`.
 
 ### Applying changes
-- Edited `config.yaml`: `docker compose restart users-service storage-service notifications-service api-gateway frontend`
+- Edited `config.yaml`: `docker compose restart users-service storage-service api-gateway`, then reload the page
 - Edited `.env`: `docker compose up -d`
-- Edited Go code: `docker compose up -d --build`
+- Edited Go or frontend code: `docker compose up -d --build`
 - Edited a `.proto` file: `bash proto/generate.sh`, then `docker compose up -d --build`
 
 ---
@@ -318,8 +263,8 @@ reserved (there is no reconciliation job); there are no download or delete endpo
 ## Storage quota management
 
 **Administrators** can raise or lower any quota within `min_quota_bytes` – `max_quota_bytes`
-(`PATCH /api/admin/users/{userId}/quota`). A value outside the bounds, including one too large to be a number the
-server can read, is answered with `400` `Storage quota must be between 100 MB and 2 TB`. Lowering a quota below the
+(`PATCH /api/admin/users/{userId}/quota`). A value outside the bounds is answered with `400`
+`Storage quota must be between 100 MB and 2 TB`. Lowering a quota below the
 current usage is allowed: no files are deleted, but uploads are refused until the usage fits again.
 
 **Increase requests** (`users_db.quota_requests`):
@@ -363,7 +308,7 @@ have accounts; the gateway rate limit slows that down but does not prevent it.
 ### Rate limiting (DoS protection)
 The gateway keeps one token bucket per caller: per user ID for requests with a valid JWT (signature verified),
 per IP address otherwise. When the bucket is empty the gateway answers `429` with a `Retry-After` header.
-Limits are set with `rate_limit_per_second` and `rate_limit_burst` in `config.yaml` (see [Configuration](#configyaml-tunable-behavior)).
+Limits are set with `rate_limit_per_second` and `rate_limit_burst` in `config.yaml` (see [Configuration](#configuration)).
 Behind nginx the IP is taken from the last `X-Forwarded-For` entry (the one nginx appends).
 
 ### Input validation
@@ -372,9 +317,9 @@ the browser (`frontend/validation.js`) for quick feedback. The server never trus
 
 | Input | Rule |
 | :--- | :--- |
-| First / last name | Letters, spaces, `'` and `-`; 1–100 characters (`max_name_length`) |
+| First / last name | Letters, spaces, `'` and `-`; 1–100 characters |
 | Email | Format check, max 254 characters |
-| Password | Strength rules (`password_*`) on registration, reset and change; 8–72 characters by default; login only bounds the length to bcrypt's 72 |
+| Password | On registration, reset and change: `password_min_length` (8) to 72 characters, with an uppercase letter, a lowercase letter, a digit and a special character; login only bounds the length to bcrypt's 72 |
 | OTP | Exactly 6 digits |
 | Verification, reset and magic-link tokens | 64 lower-case hex characters |
 | Folder name | Letters, digits, space and `. _ - ( )`; 1–100 characters; not only dots |
@@ -389,17 +334,18 @@ input such as `{"$ne": ""}` from reaching the database.
 
 ### File checks
 `storage-service/filecheck` is applied to every upload (US-2.2): filename and extension whitelist
-(`allowed_file_types`; by default `txt, md, csv, json, pdf, png, jpg, jpeg, gif`), content sniffing so a renamed executable is rejected, and the
+(`txt, md, csv, json, pdf, png, jpg, jpeg, gif`), content sniffing so a renamed executable is rejected, and the
 content type is taken from the sniffed bytes, never from the client's `Content-Type`. The SHA-256 of every stored file
-is saved in its metadata; `filecheck.Verify` is meant for the download endpoint, which does not exist yet.
+is saved in its metadata.
 
-### Running the security tests
+### Running the tests
 ```bash
 cd api-gateway && go test ./...
 cd storage-service && go test ./...
 cd users-service && go test ./...
-cd shared && go test ./...
 ```
+These are plain unit tests of the validation rules, tokens, file checks, the auth check and the rate limiter. They
+need no running database or other service.
 
 ---
 

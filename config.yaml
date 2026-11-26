@@ -1,114 +1,34 @@
-# Every setting that is not a secret. This file is the only place to change one:
-# no environment variable overrides it. .env holds only secrets and the ports
-# Docker Compose itself needs.
-# Durations use Go syntax (30s, 15m, 24h); sizes are in bytes.
-# After editing, restart:
-#   docker compose restart users-service storage-service notifications-service api-gateway frontend
+# Durations: 30s, 15m, 24h. Sizes are in bytes.
 
-# ---------- users-service: mail and database ----------
 public_host: localhost
 mongo_db_name: users_db
-mongo_connect_timeout: 10s          # start-up; users-service and storage-service
 smtp_host: mailpit
 smtp_from: noreply@cloudstorage.local
-smtp_timeout: 10s
+bcrypt_cost: 12
 
-# ---------- storage quota ----------
-quota_request_rollback_timeout: 5s  # reopening a request whose approval failed
-default_quota_bytes: 104857600      # 100 MB, given to new users; must lie within min..max
+# storage
+default_quota_bytes: 104857600      # 100 MB
 min_quota_bytes: 104857600          # 100 MB
 max_quota_bytes: 2199023255552      # 2 TB
+max_upload_bytes: 209715200         # 200 MB (keep nginx.conf above this)
 
-# ---------- files and folders ----------
-# Largest single file; nginx's upload limit is derived from it.
-max_upload_bytes: 209715200         # 200 MB
-max_file_name_length: 255
-max_folder_name_length: 100
-# Extension -> content types the server may detect from the file's first bytes.
-# This list replaces the built-in one.
-allowed_file_types:
-  ".txt": [text/plain]
-  ".md": [text/plain]
-  ".csv": [text/plain]
-  ".json": [text/plain]
-  ".pdf": [application/pdf]
-  ".png": [image/png]
-  ".jpg": [image/jpeg]
-  ".jpeg": [image/jpeg]
-  ".gif": [image/gif]
-
-# ---------- accounts and passwords ----------
-max_name_length: 100                # first name, last name
+# passwords and lockout
 password_min_length: 8
-password_max_length: 72             # bcrypt cannot hash more than 72 bytes
-password_require_uppercase: true
-password_require_lowercase: true
-password_require_digit: true
-password_require_special: true
-
 password_min_age: 1m
 password_max_age: 1h
 account_lock_duration: 30s
-bcrypt_cost: 12
 
-# ---------- tokens, codes and sessions ----------
+# token and code lifetimes
 jwt_ttl: 24h
 restricted_token_ttl: 15m
 verification_token_ttl: 24h
 magic_link_token_ttl: 15m
 reset_token_ttl: 30m
-# Also limits OTP resends and magic-link requests.
-reset_rate_limit_max: 3
-reset_rate_limit_window: 15m
 otp_ttl: 5m
-otp_max_attempts: 3
 
-# ---------- api-gateway ----------
-# nginx also reads max_json_body_bytes, upload_multipart_overhead_bytes and
-# upload_timeout (whole units there: 90s, 10m, 1h30m).
+# attempt and rate limits
+reset_rate_limit_max: 3             # also used for OTP resend and magic link
+reset_rate_limit_window: 15m
+otp_max_attempts: 3
 rate_limit_per_second: 1
 rate_limit_burst: 20
-rate_limit_cleanup_interval: 1m
-rate_limit_visitor_ttl: 3m          # an idle caller's bucket is dropped after this
-gateway_request_timeout: 15s        # backend call made for one HTTP request
-gateway_read_header_timeout: 10s
-gateway_read_timeout: 30s
-gateway_write_timeout: 30s
-gateway_idle_timeout: 120s
-gateway_shutdown_timeout: 10s
-cors_allowed_origin: "*"            # origin browsers may call the gateway from directly
-max_json_body_bytes: 1048576        # every request except the file uploads
-upload_timeout: 10m
-upload_chunk_bytes: 65536           # gateway -> storage-service stream; at most 3 MB
-upload_multipart_memory_bytes: 8388608
-upload_multipart_overhead_bytes: 1048576
-
-# ---------- storage-service ----------
-# Changing either name points the service at a different (empty) database or
-# bucket; files already uploaded stay in the old one.
-storage_mongo_db_name: storage_db
-object_store_bucket: stashr-files
-object_store_use_ssl: false
-object_store_connect_attempts: 10   # the object store may still be starting
-object_store_connect_retry_delay: 2s
-quota_service_timeout: 5s           # storage-service -> users-service quota call
-upload_cleanup_timeout: 15s         # undoing a failed upload
-
-# ---------- notifications-service ----------
-cassandra_keyspace: stashr_notifications
-cassandra_connect_attempts: 20      # Cassandra is slow to start
-cassandra_connect_retry_delay: 3s
-cassandra_timeout: 10s
-cassandra_replication_factor: 1     # only used when the keyspace is first created
-cassandra_schema_consistency: quorum
-cassandra_consistency: one
-
-# ---------- frontend (public: sent to the browser) ----------
-storage_warning_percent: 90         # storage bars turn red from here
-quota_request_history_items: 5      # own past requests a user sees
-quota_request_suggestion_factor: 2  # the request form suggests current quota x this
-# Admin "quick adjust" buttons: -1 GB, -100 MB, +100 MB, +1 GB.
-admin_quota_adjust_steps_bytes: [-1073741824, -104857600, 104857600, 1073741824]
-# Mailpit web inbox linked from the pages (port = MAILPIT_UI_PORT in .env).
-# Empty ("") hides the links.
-mail_ui_url: http://localhost:8025

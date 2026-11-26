@@ -1,8 +1,6 @@
 name: Stashr
 
-# Request path:
-#   browser ──HTTPS──▶ frontend (nginx) ──HTTPS /api──▶ api-gateway ──gRPC──▶ users-service / storage-service
-# Run `bash certs/generate-certs.sh` once before the first `docker compose up`.
+# browser -> nginx -> api-gateway -> (gRPC) services
 services:
   mongodb:
     image: mongo:7.0
@@ -34,9 +32,7 @@ services:
       - "${MAILPIT_UI_PORT}:${MAILPIT_UI_PORT}"
       - "${SMTP_PORT}:${SMTP_PORT}"
 
-  # S3-compatible object store (SeaweedFS) that holds the CONTENT of uploaded files;
-  # file metadata lives in MongoDB. Credentials come from s3.json (keep in sync with .env).
-  # Ports are published on localhost only, for debugging (S3 API and web UI).
+  # stores file contents (S3 API); file metadata is in MongoDB
   object-store:
     image: chrislusf/seaweedfs:4.55
     container_name: stashr_object_store
@@ -79,10 +75,13 @@ services:
     environment:
       STORAGE_GRPC_PORT: ${STORAGE_GRPC_PORT:-50052}
       MONGO_URI: mongodb://mongodb:${MONGO_PORT}
+      MONGO_DB_NAME: storage_db
       USERS_GRPC_ADDR: users-service:${USERS_GRPC_PORT:-50051}
       OBJECT_STORE_ENDPOINT: object-store:9000
       OBJECT_STORE_ACCESS_KEY: ${OBJECT_STORE_ACCESS_KEY:-stashr-dev}
       OBJECT_STORE_SECRET_KEY: ${OBJECT_STORE_SECRET_KEY:-stashr-dev-secret-change-me}
+      OBJECT_STORE_BUCKET: ${OBJECT_STORE_BUCKET:-stashr-files}
+      OBJECT_STORE_USE_SSL: "false"
       CONFIG_PATH: /app/config.yaml
     volumes:
       - ./config.yaml:/app/config.yaml:ro
@@ -103,9 +102,7 @@ services:
     environment:
       NOTIFICATIONS_GRPC_PORT: ${NOTIFICATIONS_GRPC_PORT:-50053}
       CASSANDRA_HOSTS: cassandra
-      CONFIG_PATH: /app/config.yaml
-    volumes:
-      - ./config.yaml:/app/config.yaml:ro
+      CASSANDRA_KEYSPACE: stashr_notifications
     restart: on-failure
     depends_on:
       - cassandra
@@ -126,7 +123,6 @@ services:
       NOTIFICATIONS_GRPC_ADDR: notifications-service:${NOTIFICATIONS_GRPC_PORT:-50053}
       TLS_CERT_FILE: /certs/server.crt
       TLS_KEY_FILE: /certs/server.key
-      FRONTEND_URL: https://localhost:${FRONTEND_PORT}
       CONFIG_PATH: /app/config.yaml
     volumes:
       - ./certs:/certs:ro
@@ -144,8 +140,6 @@ services:
       - "${FRONTEND_PORT}:443"
     volumes:
       - ./certs:/etc/nginx/certs:ro
-      # the upload and body limits of the nginx config come from here
-      - ./config.yaml:/etc/stashr/config.yaml:ro
     depends_on:
       - api-gateway
 
