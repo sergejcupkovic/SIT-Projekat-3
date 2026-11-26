@@ -31,8 +31,9 @@ type QuotaClient struct {
 	timeout time.Duration
 }
 
-func NewQuotaClient(conn grpc.ClientConnInterface) *QuotaClient {
-	return &QuotaClient{client: userspb.NewQuotaServiceClient(conn), timeout: 5 * time.Second}
+// NewQuotaClient: timeout bounds every call (quota_service_timeout).
+func NewQuotaClient(conn grpc.ClientConnInterface, timeout time.Duration) *QuotaClient {
+	return &QuotaClient{client: userspb.NewQuotaServiceClient(conn), timeout: timeout}
 }
 
 func (c *QuotaClient) Get(ctx context.Context) (Quota, error) {

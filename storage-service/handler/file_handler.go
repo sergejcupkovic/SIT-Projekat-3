@@ -61,12 +61,17 @@ type FileHandler struct {
 	objects      objectStore
 	quota        quotaService
 	maxFileBytes int64
+	// upload_cleanup_timeout
+	cleanupTimeout time.Duration
 }
 
 // NewFileHandler: maxFileBytes <= 0 means "no per-file limit" (the quota still applies).
 func NewFileHandler(files fileRepository, folders folderLookup, objects objectStore, quota quotaService, maxFileBytes int64) *FileHandler {
-	return &FileHandler{files: files, folders: folders, objects: objects, quota: quota, maxFileBytes: maxFileBytes}
+	return &FileHandler{files: files, folders: folders, objects: objects, quota: quota, maxFileBytes: maxFileBytes, cleanupTimeout: 15 * time.Second}
 }
+
+// SetCleanupTimeout applies upload_cleanup_timeout.
+func (h *FileHandler) SetCleanupTimeout(d time.Duration) { h.cleanupTimeout = d }
 
 // headSize is how many leading bytes filecheck needs to sniff the content type.
 const headSize = 512
@@ -168,7 +173,7 @@ func (h *FileHandler) UploadFile(stream storagepb.StorageService_UploadFileServe
 		if committed {
 			return
 		}
-		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), h.cleanupTimeout)
 		defer cancel()
 		if err := h.objects.Delete(cleanupCtx, objectKey); err != nil {
 			log.Printf("WARNING: could not remove object %s after a failed upload: %v", objectKey, err)
@@ -407,7 +412,7 @@ func (h *FileHandler) UploadNewFileVersion(stream storagepb.StorageService_Uploa
 		if committed {
 			return
 		}
-		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), h.cleanupTimeout)
 		defer cancel()
 		if err := h.objects.Delete(cleanupCtx, newObjectKey); err != nil {
 			log.Printf("WARNING: could not remove object %s after a failed version upload: %v", newObjectKey, err)
@@ -462,7 +467,7 @@ func (h *FileHandler) UploadNewFileVersion(stream storagepb.StorageService_Uploa
 
 	// Best-effort removal of the superseded S3 object after MongoDB is updated.
 	if oldObjectKey != "" && oldObjectKey != newObjectKey {
-		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), h.cleanupTimeout)
 		defer cancel()
 		if err := h.objects.Delete(cleanupCtx, oldObjectKey); err != nil {
 			log.Printf("WARNING: could not remove superseded object %s: %v", oldObjectKey, err)

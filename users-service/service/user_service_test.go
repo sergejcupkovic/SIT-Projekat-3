@@ -7,6 +7,8 @@ import (
 
 	"users-service/config"
 
+	"stashr/shared/appconfig"
+
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -14,6 +16,7 @@ import (
 func TestMain(m *testing.M) {
 	Init(&config.Config{
 		JWTSecret:          "test-secret-test-secret-test-secret-test",
+		Limits:             appconfig.DefaultLimits(),
 		BcryptCost:         bcrypt.MinCost,
 		JWTTTL:             24 * time.Hour,
 		RestrictedTokenTTL: 15 * time.Minute,

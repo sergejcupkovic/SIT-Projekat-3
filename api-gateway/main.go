@@ -22,13 +22,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
-	"time"
 
 	storagepb "stashr/proto/storage"
 	userspb "stashr/proto/users"
 	notificationspb "stashr/proto/notifications"
+
+	"stashr/shared/appconfig"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"golang.org/x/time/rate"
@@ -60,18 +60,10 @@ func main() {
 	if len(jwtSecret) < 32 {
 		log.Fatal("JWT_SECRET must be set and at least 32 chars")
 	}
-	ratePerSecond, err := strconv.ParseFloat(env("RATE_LIMIT_PER_SECOND", "1"), 64)
-	if err != nil || ratePerSecond <= 0 {
-		log.Fatal("RATE_LIMIT_PER_SECOND must be a positive number")
-	}
-	rateBurst, err := strconv.Atoi(env("RATE_LIMIT_BURST", "20"))
-	if err != nil || rateBurst < 1 {
-		log.Fatal("RATE_LIMIT_BURST must be a positive integer")
-	}
-
-	maxUploadBytes, err := strconv.ParseInt(env("MAX_UPLOAD_BYTES", "209715200"), 10, 64)
-	if err != nil || maxUploadBytes <= 0 {
-		log.Fatal("MAX_UPLOAD_BYTES must be a positive integer")
+	// Every tunable comes from config.yaml (CONFIG_PATH).
+	limits, cfg, err := loadConfig(appconfig.Path())
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// ---- gRPC clients (gateway -> services) ----
@@ -97,7 +89,7 @@ func main() {
 	defer notificationsConn.Close()
 
 	// Upper bound for every backend call made on behalf of an HTTP request.
-	runtime.DefaultContextTimeout = 15 * time.Second
+	runtime.DefaultContextTimeout = cfg.RequestTimeout
 
 	// ---- REST <-> gRPC translator ----
 	gw := runtime.NewServeMux(
@@ -116,11 +108,16 @@ func main() {
 		}),
 		// Lets services choose the HTTP success code (201 Created) - see response.go.
 		runtime.WithForwardResponseOption(httpStatusFromMetadata),
+		// A quota too large to decode gets the range message - see errors.go.
+		runtime.WithErrorHandler(quotaErrorHandler(limits.QuotaRangeMessage())),
 	)
 
 	// Generated in proto/users/users_service.pb.gw.go and proto/storage/storage_service.pb.gw.go.
 	if err := userspb.RegisterUsersServiceHandler(ctx, gw, usersConn); err != nil {
 		log.Fatalf("Failed to register UsersService routes: %v", err)
+	}
+	if err := userspb.RegisterQuotaRequestServiceHandler(ctx, gw, usersConn); err != nil {
+		log.Fatalf("Failed to register QuotaRequestService routes: %v", err)
 	}
 	if err := storagepb.RegisterStorageServiceHandler(ctx, gw, storageConn); err != nil {
 		log.Fatalf("Failed to register StorageService routes: %v", err)
@@ -130,7 +127,8 @@ func main() {
 	}
 
 	// POST /api/files/upload and POST /api/files/{file_id}/version: hand-written routes (multipart -> gRPC stream).
-	up := newUploadHandler(gw, storagepb.NewStorageServiceClient(storageConn), []byte(jwtSecret), maxUploadBytes)
+	up := newUploadHandler(gw, storagepb.NewStorageServiceClient(storageConn), []byte(jwtSecret), limits.MaxUploadBytes)
+	up.settings = cfg.Upload
 	if err := gw.HandlePath(http.MethodPost, "/api/files/upload", up.handle); err != nil {
 		log.Fatalf("Failed to register the upload route: %v", err)
 	}
@@ -138,10 +136,11 @@ func main() {
 		log.Fatalf("Failed to register the file version upload route: %v", err)
 	}
 
-	limiter := newRateLimiter(rate.Limit(ratePerSecond), rateBurst, []byte(jwtSecret))
-	limiter.startCleanup()
+	limiter := newRateLimiter(rate.Limit(cfg.RateLimitPerSecond), cfg.RateLimitBurst, []byte(jwtSecret))
+	limiter.startCleanup(cfg.RateLimitCleanupInterval, cfg.RateLimitVisitorTTL)
 
-	handler := securityHeaders(corsMiddleware(limiter.middleware(verifyRedirect(gw, frontendURL))))
+	routes := limitRequestBody(cfg.MaxJSONBodyBytes, verifyRedirect(gw, frontendURL))
+	handler := securityHeaders(corsMiddleware(cfg.CORSAllowedOrigin, limiter.middleware(routes)))
 
 	// ---- HTTPS server (client -> gateway) ----
 	srv := &http.Server{
@@ -150,16 +149,16 @@ func main() {
 		TLSConfig: &tls.Config{
 			MinVersion: tls.VersionTLS12,
 		},
-		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       120 * time.Second,
+		ReadHeaderTimeout: cfg.ReadHeaderTimeout,
+		ReadTimeout:       cfg.ReadTimeout,
+		WriteTimeout:      cfg.WriteTimeout,
+		IdleTimeout:       cfg.IdleTimeout,
 	}
 
 	go func() {
 		<-ctx.Done()
 		log.Println("Shutting down API Gateway...")
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 		defer cancel()
 		_ = srv.Shutdown(shutdownCtx)
 	}()

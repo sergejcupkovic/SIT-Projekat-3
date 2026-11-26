@@ -419,6 +419,66 @@ func local_request_UsersService_ChangeExpiredPassword_0(ctx context.Context, mar
 	return msg, metadata, err
 }
 
+func request_UsersService_ChangePassword_0(ctx context.Context, marshaler runtime.Marshaler, client UsersServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ChangePasswordRequest
+		metadata runtime.ServerMetadata
+	)
+	dec := marshaler.NewDecoder(req.Body)
+	if err := dec.Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if td, ok := dec.(interface{ Token() (json.Token, error) }); ok {
+		if _, err := td.Token(); !errors.Is(err, io.EOF) {
+			return nil, metadata, status.Error(codes.InvalidArgument, "unexpected data after request body")
+		}
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	msg, err := client.ChangePassword(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_UsersService_ChangePassword_0(ctx context.Context, marshaler runtime.Marshaler, server UsersServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ChangePasswordRequest
+		metadata runtime.ServerMetadata
+	)
+	dec := marshaler.NewDecoder(req.Body)
+	if err := dec.Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if td, ok := dec.(interface{ Token() (json.Token, error) }); ok {
+		if _, err := td.Token(); !errors.Is(err, io.EOF) {
+			return nil, metadata, status.Error(codes.InvalidArgument, "unexpected data after request body")
+		}
+	}
+	msg, err := server.ChangePassword(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+func request_UsersService_GetLimits_0(ctx context.Context, marshaler runtime.Marshaler, client UsersServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq GetLimitsRequest
+		metadata runtime.ServerMetadata
+	)
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	msg, err := client.GetLimits(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_UsersService_GetLimits_0(ctx context.Context, marshaler runtime.Marshaler, server UsersServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq GetLimitsRequest
+		metadata runtime.ServerMetadata
+	)
+	msg, err := server.GetLimits(ctx, &protoReq)
+	return msg, metadata, err
+}
+
 func request_UsersService_RequestMagicLink_0(ctx context.Context, marshaler runtime.Marshaler, client UsersServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
 		protoReq MagicLinkRequest
@@ -572,6 +632,215 @@ func local_request_UsersService_UpdateUserQuota_0(ctx context.Context, marshaler
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "user_id", err)
 	}
 	msg, err := server.UpdateUserQuota(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+func request_QuotaRequestService_CreateQuotaRequest_0(ctx context.Context, marshaler runtime.Marshaler, client QuotaRequestServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq CreateQuotaRequestRequest
+		metadata runtime.ServerMetadata
+	)
+	dec := marshaler.NewDecoder(req.Body)
+	if err := dec.Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if td, ok := dec.(interface{ Token() (json.Token, error) }); ok {
+		if _, err := td.Token(); !errors.Is(err, io.EOF) {
+			return nil, metadata, status.Error(codes.InvalidArgument, "unexpected data after request body")
+		}
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	msg, err := client.CreateQuotaRequest(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_QuotaRequestService_CreateQuotaRequest_0(ctx context.Context, marshaler runtime.Marshaler, server QuotaRequestServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq CreateQuotaRequestRequest
+		metadata runtime.ServerMetadata
+	)
+	dec := marshaler.NewDecoder(req.Body)
+	if err := dec.Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if td, ok := dec.(interface{ Token() (json.Token, error) }); ok {
+		if _, err := td.Token(); !errors.Is(err, io.EOF) {
+			return nil, metadata, status.Error(codes.InvalidArgument, "unexpected data after request body")
+		}
+	}
+	msg, err := server.CreateQuotaRequest(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+func request_QuotaRequestService_ListMyQuotaRequests_0(ctx context.Context, marshaler runtime.Marshaler, client QuotaRequestServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ListMyQuotaRequestsRequest
+		metadata runtime.ServerMetadata
+	)
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	msg, err := client.ListMyQuotaRequests(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_QuotaRequestService_ListMyQuotaRequests_0(ctx context.Context, marshaler runtime.Marshaler, server QuotaRequestServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ListMyQuotaRequestsRequest
+		metadata runtime.ServerMetadata
+	)
+	msg, err := server.ListMyQuotaRequests(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+var filter_QuotaRequestService_ListQuotaRequests_0 = &utilities.DoubleArray{Encoding: map[string]int{}, Base: []int(nil), Check: []int(nil)}
+
+func request_QuotaRequestService_ListQuotaRequests_0(ctx context.Context, marshaler runtime.Marshaler, client QuotaRequestServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ListQuotaRequestsRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_QuotaRequestService_ListQuotaRequests_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	msg, err := client.ListQuotaRequests(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_QuotaRequestService_ListQuotaRequests_0(ctx context.Context, marshaler runtime.Marshaler, server QuotaRequestServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ListQuotaRequestsRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_QuotaRequestService_ListQuotaRequests_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := server.ListQuotaRequests(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+func request_QuotaRequestService_ApproveQuotaRequest_0(ctx context.Context, marshaler runtime.Marshaler, client QuotaRequestServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ResolveQuotaRequestRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	dec := marshaler.NewDecoder(req.Body)
+	if err := dec.Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if td, ok := dec.(interface{ Token() (json.Token, error) }); ok {
+		if _, err := td.Token(); !errors.Is(err, io.EOF) {
+			return nil, metadata, status.Error(codes.InvalidArgument, "unexpected data after request body")
+		}
+	}
+	val, ok := pathParams["request_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "request_id")
+	}
+	protoReq.RequestId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "request_id", err)
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	msg, err := client.ApproveQuotaRequest(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_QuotaRequestService_ApproveQuotaRequest_0(ctx context.Context, marshaler runtime.Marshaler, server QuotaRequestServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ResolveQuotaRequestRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	dec := marshaler.NewDecoder(req.Body)
+	if err := dec.Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if td, ok := dec.(interface{ Token() (json.Token, error) }); ok {
+		if _, err := td.Token(); !errors.Is(err, io.EOF) {
+			return nil, metadata, status.Error(codes.InvalidArgument, "unexpected data after request body")
+		}
+	}
+	val, ok := pathParams["request_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "request_id")
+	}
+	protoReq.RequestId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "request_id", err)
+	}
+	msg, err := server.ApproveQuotaRequest(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+func request_QuotaRequestService_RejectQuotaRequest_0(ctx context.Context, marshaler runtime.Marshaler, client QuotaRequestServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ResolveQuotaRequestRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	dec := marshaler.NewDecoder(req.Body)
+	if err := dec.Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if td, ok := dec.(interface{ Token() (json.Token, error) }); ok {
+		if _, err := td.Token(); !errors.Is(err, io.EOF) {
+			return nil, metadata, status.Error(codes.InvalidArgument, "unexpected data after request body")
+		}
+	}
+	val, ok := pathParams["request_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "request_id")
+	}
+	protoReq.RequestId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "request_id", err)
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	msg, err := client.RejectQuotaRequest(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_QuotaRequestService_RejectQuotaRequest_0(ctx context.Context, marshaler runtime.Marshaler, server QuotaRequestServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ResolveQuotaRequestRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	dec := marshaler.NewDecoder(req.Body)
+	if err := dec.Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if td, ok := dec.(interface{ Token() (json.Token, error) }); ok {
+		if _, err := td.Token(); !errors.Is(err, io.EOF) {
+			return nil, metadata, status.Error(codes.InvalidArgument, "unexpected data after request body")
+		}
+	}
+	val, ok := pathParams["request_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "request_id")
+	}
+	protoReq.RequestId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "request_id", err)
+	}
+	msg, err := server.RejectQuotaRequest(ctx, &protoReq)
 	return msg, metadata, err
 }
 
@@ -781,6 +1050,46 @@ func RegisterUsersServiceHandlerServer(ctx context.Context, mux *runtime.ServeMu
 		}
 		forward_UsersService_ChangeExpiredPassword_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodPost, pattern_UsersService_ChangePassword_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/users.UsersService/ChangePassword", runtime.WithHTTPPathPattern("/api/users/change-password"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_UsersService_ChangePassword_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_UsersService_ChangePassword_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_UsersService_GetLimits_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/users.UsersService/GetLimits", runtime.WithHTTPPathPattern("/api/config/limits"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_UsersService_GetLimits_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_UsersService_GetLimits_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	mux.Handle(http.MethodPost, pattern_UsersService_RequestMagicLink_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
@@ -860,6 +1169,116 @@ func RegisterUsersServiceHandlerServer(ctx context.Context, mux *runtime.ServeMu
 			return
 		}
 		forward_UsersService_UpdateUserQuota_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+
+	return nil
+}
+
+// RegisterQuotaRequestServiceHandlerServer registers the http handlers for service QuotaRequestService to "mux".
+// UnaryRPC     :call QuotaRequestServiceServer directly.
+// StreamingRPC :currently unsupported pending https://github.com/grpc/grpc-go/issues/906.
+// Note that using this registration option will cause many gRPC library features to stop working. Consider using RegisterQuotaRequestServiceHandlerFromEndpoint instead.
+// GRPC interceptors will not work for this type of registration. To use interceptors, you must use the "runtime.WithMiddlewares" option in the "runtime.NewServeMux" call.
+func RegisterQuotaRequestServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux, server QuotaRequestServiceServer) error {
+	mux.Handle(http.MethodPost, pattern_QuotaRequestService_CreateQuotaRequest_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/users.QuotaRequestService/CreateQuotaRequest", runtime.WithHTTPPathPattern("/api/users/quota-requests"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_QuotaRequestService_CreateQuotaRequest_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_QuotaRequestService_CreateQuotaRequest_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_QuotaRequestService_ListMyQuotaRequests_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/users.QuotaRequestService/ListMyQuotaRequests", runtime.WithHTTPPathPattern("/api/users/quota-requests"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_QuotaRequestService_ListMyQuotaRequests_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_QuotaRequestService_ListMyQuotaRequests_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_QuotaRequestService_ListQuotaRequests_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/users.QuotaRequestService/ListQuotaRequests", runtime.WithHTTPPathPattern("/api/admin/quota-requests"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_QuotaRequestService_ListQuotaRequests_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_QuotaRequestService_ListQuotaRequests_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_QuotaRequestService_ApproveQuotaRequest_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/users.QuotaRequestService/ApproveQuotaRequest", runtime.WithHTTPPathPattern("/api/admin/quota-requests/{request_id}/approve"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_QuotaRequestService_ApproveQuotaRequest_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_QuotaRequestService_ApproveQuotaRequest_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_QuotaRequestService_RejectQuotaRequest_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/users.QuotaRequestService/RejectQuotaRequest", runtime.WithHTTPPathPattern("/api/admin/quota-requests/{request_id}/reject"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_QuotaRequestService_RejectQuotaRequest_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_QuotaRequestService_RejectQuotaRequest_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 
 	return nil
@@ -1071,6 +1490,40 @@ func RegisterUsersServiceHandlerClient(ctx context.Context, mux *runtime.ServeMu
 		}
 		forward_UsersService_ChangeExpiredPassword_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodPost, pattern_UsersService_ChangePassword_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/users.UsersService/ChangePassword", runtime.WithHTTPPathPattern("/api/users/change-password"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_UsersService_ChangePassword_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_UsersService_ChangePassword_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_UsersService_GetLimits_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/users.UsersService/GetLimits", runtime.WithHTTPPathPattern("/api/config/limits"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_UsersService_GetLimits_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_UsersService_GetLimits_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	mux.Handle(http.MethodPost, pattern_UsersService_RequestMagicLink_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
@@ -1153,6 +1606,8 @@ var (
 	pattern_UsersService_ValidateResetToken_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "users", "reset-password"}, ""))
 	pattern_UsersService_ResetPassword_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "users", "reset-password"}, ""))
 	pattern_UsersService_ChangeExpiredPassword_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "users", "change-expired-password"}, ""))
+	pattern_UsersService_ChangePassword_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "users", "change-password"}, ""))
+	pattern_UsersService_GetLimits_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "config", "limits"}, ""))
 	pattern_UsersService_RequestMagicLink_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "users", "magic-link-request"}, ""))
 	pattern_UsersService_MagicLinkLogin_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "users", "magic-link-login"}, ""))
 	pattern_UsersService_ListUsers_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "admin", "users"}, ""))
@@ -1170,8 +1625,150 @@ var (
 	forward_UsersService_ValidateResetToken_0    = runtime.ForwardResponseMessage
 	forward_UsersService_ResetPassword_0         = runtime.ForwardResponseMessage
 	forward_UsersService_ChangeExpiredPassword_0 = runtime.ForwardResponseMessage
+	forward_UsersService_ChangePassword_0        = runtime.ForwardResponseMessage
+	forward_UsersService_GetLimits_0             = runtime.ForwardResponseMessage
 	forward_UsersService_RequestMagicLink_0      = runtime.ForwardResponseMessage
 	forward_UsersService_MagicLinkLogin_0        = runtime.ForwardResponseMessage
 	forward_UsersService_ListUsers_0             = runtime.ForwardResponseMessage
 	forward_UsersService_UpdateUserQuota_0       = runtime.ForwardResponseMessage
+)
+
+// RegisterQuotaRequestServiceHandlerFromEndpoint is same as RegisterQuotaRequestServiceHandler but
+// automatically dials to "endpoint" and closes the connection when "ctx" gets done.
+func RegisterQuotaRequestServiceHandlerFromEndpoint(ctx context.Context, mux *runtime.ServeMux, endpoint string, opts []grpc.DialOption) (err error) {
+	conn, err := grpc.NewClient(endpoint, opts...)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			if cerr := conn.Close(); cerr != nil {
+				grpclog.Errorf("Failed to close conn to %s: %v", endpoint, cerr)
+			}
+			return
+		}
+		go func() {
+			<-ctx.Done()
+			if cerr := conn.Close(); cerr != nil {
+				grpclog.Errorf("Failed to close conn to %s: %v", endpoint, cerr)
+			}
+		}()
+	}()
+	return RegisterQuotaRequestServiceHandler(ctx, mux, conn)
+}
+
+// RegisterQuotaRequestServiceHandler registers the http handlers for service QuotaRequestService to "mux".
+// The handlers forward requests to the grpc endpoint over "conn".
+func RegisterQuotaRequestServiceHandler(ctx context.Context, mux *runtime.ServeMux, conn *grpc.ClientConn) error {
+	return RegisterQuotaRequestServiceHandlerClient(ctx, mux, NewQuotaRequestServiceClient(conn))
+}
+
+// RegisterQuotaRequestServiceHandlerClient registers the http handlers for service QuotaRequestService
+// to "mux". The handlers forward requests to the grpc endpoint over the given implementation of "QuotaRequestServiceClient".
+// Note: the gRPC framework executes interceptors within the gRPC handler. If the passed in "QuotaRequestServiceClient"
+// doesn't go through the normal gRPC flow (creating a gRPC client etc.) then it will be up to the passed in
+// "QuotaRequestServiceClient" to call the correct interceptors. This client ignores the HTTP middlewares.
+func RegisterQuotaRequestServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux, client QuotaRequestServiceClient) error {
+	mux.Handle(http.MethodPost, pattern_QuotaRequestService_CreateQuotaRequest_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/users.QuotaRequestService/CreateQuotaRequest", runtime.WithHTTPPathPattern("/api/users/quota-requests"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_QuotaRequestService_CreateQuotaRequest_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_QuotaRequestService_CreateQuotaRequest_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_QuotaRequestService_ListMyQuotaRequests_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/users.QuotaRequestService/ListMyQuotaRequests", runtime.WithHTTPPathPattern("/api/users/quota-requests"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_QuotaRequestService_ListMyQuotaRequests_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_QuotaRequestService_ListMyQuotaRequests_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_QuotaRequestService_ListQuotaRequests_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/users.QuotaRequestService/ListQuotaRequests", runtime.WithHTTPPathPattern("/api/admin/quota-requests"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_QuotaRequestService_ListQuotaRequests_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_QuotaRequestService_ListQuotaRequests_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_QuotaRequestService_ApproveQuotaRequest_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/users.QuotaRequestService/ApproveQuotaRequest", runtime.WithHTTPPathPattern("/api/admin/quota-requests/{request_id}/approve"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_QuotaRequestService_ApproveQuotaRequest_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_QuotaRequestService_ApproveQuotaRequest_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_QuotaRequestService_RejectQuotaRequest_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/users.QuotaRequestService/RejectQuotaRequest", runtime.WithHTTPPathPattern("/api/admin/quota-requests/{request_id}/reject"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_QuotaRequestService_RejectQuotaRequest_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_QuotaRequestService_RejectQuotaRequest_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	return nil
+}
+
+var (
+	pattern_QuotaRequestService_CreateQuotaRequest_0  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "users", "quota-requests"}, ""))
+	pattern_QuotaRequestService_ListMyQuotaRequests_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "users", "quota-requests"}, ""))
+	pattern_QuotaRequestService_ListQuotaRequests_0   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "admin", "quota-requests"}, ""))
+	pattern_QuotaRequestService_ApproveQuotaRequest_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "admin", "quota-requests", "request_id", "approve"}, ""))
+	pattern_QuotaRequestService_RejectQuotaRequest_0  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "admin", "quota-requests", "request_id", "reject"}, ""))
+)
+
+var (
+	forward_QuotaRequestService_CreateQuotaRequest_0  = runtime.ForwardResponseMessage
+	forward_QuotaRequestService_ListMyQuotaRequests_0 = runtime.ForwardResponseMessage
+	forward_QuotaRequestService_ListQuotaRequests_0   = runtime.ForwardResponseMessage
+	forward_QuotaRequestService_ApproveQuotaRequest_0 = runtime.ForwardResponseMessage
+	forward_QuotaRequestService_RejectQuotaRequest_0  = runtime.ForwardResponseMessage
 )

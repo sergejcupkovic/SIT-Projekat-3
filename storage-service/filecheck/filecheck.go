@@ -15,9 +15,9 @@ import (
 	"sort"
 	"strings"
 	"unicode/utf8"
-)
 
-const maxFileNameLen = 255
+	"stashr/shared/appconfig"
+)
 
 var (
 	ErrBadName         = errors.New("file name contains invalid characters")
@@ -28,17 +28,18 @@ var (
 
 var fileNameRegex = regexp.MustCompile(`^[\p{L}\p{N} ._()\-]+$`)
 
-// extension -> content types http.DetectContentType may report for it
-var allowedTypes = map[string][]string{
-	".txt":  {"text/plain"},
-	".md":   {"text/plain"},
-	".csv":  {"text/plain"},
-	".json": {"text/plain"},
-	".pdf":  {"application/pdf"},
-	".png":  {"image/png"},
-	".jpg":  {"image/jpeg"},
-	".jpeg": {"image/jpeg"},
-	".gif":  {"image/gif"},
+// The configured rules; the defaults apply until Configure is called.
+var (
+	// extension -> content types http.DetectContentType may report for it
+	allowedTypes   = appconfig.DefaultLimits().AllowedFileTypes
+	maxFileNameLen = appconfig.DefaultLimits().MaxFileNameLength
+)
+
+// Configure applies allowed_file_types and max_file_name_length from
+// config.yaml. Call it once at start-up, before files are checked.
+func Configure(limits appconfig.Limits) {
+	allowedTypes = limits.AllowedFileTypes
+	maxFileNameLen = limits.MaxFileNameLength
 }
 
 // ValidateUpload checks the file name against the whitelist of characters and

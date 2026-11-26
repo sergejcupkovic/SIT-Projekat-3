@@ -31,30 +31,20 @@ import (
 //	     folderId  target folder; omit for the root "My Drive"
 //
 // It turns the request into the client-streaming rpc StorageService.UploadFile:
-// one message with name, size and folder, then the content in 64 KiB chunks.
+// one message with name, size and folder, then the content in upload_chunk_bytes chunks.
 // The size sent up front is the REAL size of the received file, which is what
 // lets storage-service check the quota before it stores a single byte.
-
-const (
-	uploadChunkSize = 64 << 10
-	// Room for the multipart framing and the folderId field on top of the file itself.
-	multipartOverhead = 1 << 20
-	// Parts bigger than this are spooled to temporary files instead of RAM.
-	multipartMemory = 8 << 20
-	// A big upload over a slow link may legitimately take a while; this replaces
-	// the server-wide 30 s read/write timeouts for this one route.
-	uploadTimeout = 10 * time.Minute
-)
 
 type uploadHandler struct {
 	gw        *runtime.ServeMux
 	storage   storagepb.StorageServiceClient
 	jwtSecret []byte
 	maxBytes  int64
+	settings  uploadSettings // chunk size, memory and time limits (config.yaml)
 }
 
 func newUploadHandler(gw *runtime.ServeMux, storage storagepb.StorageServiceClient, jwtSecret []byte, maxFileBytes int64) *uploadHandler {
-	return &uploadHandler{gw: gw, storage: storage, jwtSecret: jwtSecret, maxBytes: maxFileBytes}
+	return &uploadHandler{gw: gw, storage: storage, jwtSecret: jwtSecret, maxBytes: maxFileBytes, settings: defaultUploadSettings()}
 }
 
 // handle serves POST /api/files/upload.
@@ -81,7 +71,7 @@ func (u *uploadHandler) handle(w http.ResponseWriter, r *http.Request, _ map[str
 		meta.FolderId = &folderID
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), uploadTimeout)
+	ctx, cancel := context.WithTimeout(r.Context(), u.settings.Timeout)
 	defer cancel()
 	ctx = metadata.AppendToOutgoingContext(ctx, "authorization", authHeader)
 
@@ -121,7 +111,7 @@ func (u *uploadHandler) handleVersion(w http.ResponseWriter, r *http.Request, pa
 		SizeBytes: header.Size,
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), uploadTimeout)
+	ctx, cancel := context.WithTimeout(r.Context(), u.settings.Timeout)
 	defer cancel()
 	ctx = metadata.AppendToOutgoingContext(ctx, "authorization", authHeader)
 
@@ -136,11 +126,11 @@ func (u *uploadHandler) handleVersion(w http.ResponseWriter, r *http.Request, pa
 
 func (u *uploadHandler) parseMultipartFile(w http.ResponseWriter, r *http.Request) (multipart.File, *multipart.FileHeader, func(), bool) {
 	rc := http.NewResponseController(w)
-	_ = rc.SetReadDeadline(time.Now().Add(uploadTimeout))
-	_ = rc.SetWriteDeadline(time.Now().Add(uploadTimeout))
+	_ = rc.SetReadDeadline(time.Now().Add(u.settings.Timeout))
+	_ = rc.SetWriteDeadline(time.Now().Add(u.settings.Timeout))
 
-	r.Body = http.MaxBytesReader(w, r.Body, u.maxBytes+multipartOverhead)
-	if err := r.ParseMultipartForm(multipartMemory); err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, u.maxBytes+u.settings.MultipartOverheadBytes)
+	if err := r.ParseMultipartForm(u.settings.MultipartMemoryBytes); err != nil {
 		var tooBig *http.MaxBytesError
 		switch {
 		case errors.As(err, &tooBig):
@@ -193,7 +183,7 @@ func (u *uploadHandler) stream(ctx context.Context, meta *storagepb.UploadFileMe
 	send := func(m *storagepb.UploadFileRequest) bool { return stream.Send(m) == nil }
 
 	if send(&storagepb.UploadFileRequest{Payload: &storagepb.UploadFileRequest_Metadata{Metadata: meta}}) {
-		buf := make([]byte, uploadChunkSize)
+		buf := make([]byte, u.settings.ChunkBytes)
 		for {
 			n, readErr := file.Read(buf)
 			if n > 0 {
@@ -226,7 +216,7 @@ func (u *uploadHandler) streamVersion(ctx context.Context, meta *storagepb.Uploa
 	send := func(m *storagepb.UploadNewFileVersionRequest) bool { return stream.Send(m) == nil }
 
 	if send(&storagepb.UploadNewFileVersionRequest{Payload: &storagepb.UploadNewFileVersionRequest_Metadata{Metadata: meta}}) {
-		buf := make([]byte, uploadChunkSize)
+		buf := make([]byte, u.settings.ChunkBytes)
 		for {
 			n, readErr := file.Read(buf)
 			if n > 0 {

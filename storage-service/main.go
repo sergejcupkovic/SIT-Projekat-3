@@ -6,15 +6,16 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"storage-service/filecheck"
 	"storage-service/handler"
 	"storage-service/middleware"
 	"storage-service/repository"
 	"storage-service/service"
-	"strconv"
 	"syscall"
-	"time"
 
 	storagepb "stashr/proto/storage"
+
+	"stashr/shared/appconfig"
 
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -31,11 +32,6 @@ func main() {
 		mongoURI = "mongodb://mongodb:27017"
 	}
 
-	dbName := os.Getenv("MONGO_DB_NAME")
-	if dbName == "" {
-		dbName = "storage_db"
-	}
-
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
 		log.Fatal("JWT_SECRET environment variable is required")
@@ -49,17 +45,17 @@ func main() {
 	if objAccessKey == "" || objSecretKey == "" {
 		log.Fatal("OBJECT_STORE_ACCESS_KEY and OBJECT_STORE_SECRET_KEY environment variables are required")
 	}
-	objBucket := envOr("OBJECT_STORE_BUCKET", "stashr-files")
-	objUseSSL := os.Getenv("OBJECT_STORE_USE_SSL") == "true"
-
 	usersAddr := envOr("USERS_GRPC_ADDR", "users-service:50051")
 
-	maxUploadBytes, err := strconv.ParseInt(envOr("MAX_UPLOAD_BYTES", "209715200"), 10, 64)
-	if err != nil || maxUploadBytes <= 0 {
-		log.Fatal("MAX_UPLOAD_BYTES must be a positive integer")
+	// Every tunable comes from config.yaml (CONFIG_PATH).
+	limits, cfg, err := loadConfig(appconfig.Path())
+	if err != nil {
+		log.Fatal(err)
 	}
+	filecheck.Configure(limits)
+	handler.SetMaxFolderNameLength(limits.MaxFolderNameLength)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.MongoConnectTimeout)
 	defer cancel()
 
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
@@ -75,11 +71,12 @@ func main() {
 	}
 	log.Println("Storage service connected to MongoDB")
 
-	objectStore, err := service.NewObjectStore(objEndpoint, objAccessKey, objSecretKey, objBucket, objUseSSL)
+	objectStore, err := service.NewObjectStore(objEndpoint, objAccessKey, objSecretKey, cfg.ObjectStoreBucket,
+		cfg.ObjectStoreUseSSL, cfg.ObjectStoreConnectAttempts, cfg.ObjectStoreConnectRetryDelay)
 	if err != nil {
 		log.Fatalf("Failed to initialize the object store: %v", err)
 	}
-	log.Printf("Storage service connected to object store %s (bucket %q)", objEndpoint, objBucket)
+	log.Printf("Storage service connected to object store %s (bucket %q)", objEndpoint, cfg.ObjectStoreBucket)
 
 	// Client of users-service's internal QuotaService. grpc.NewClient connects
 	// lazily and reconnects on its own, so start-up order does not matter.
@@ -89,12 +86,14 @@ func main() {
 	}
 	defer usersConn.Close()
 
-	db := client.Database(dbName)
+	db := client.Database(cfg.MongoDBName)
 	folderRepo := repository.NewFolderRepository(db)
 	fileRepo := repository.NewFileRepository(db)
 
 	folderHandler := handler.NewFolderHandler(folderRepo, fileRepo)
-	fileHandler := handler.NewFileHandler(fileRepo, folderRepo, objectStore, service.NewQuotaClient(usersConn), maxUploadBytes)
+	quotaClient := service.NewQuotaClient(usersConn, cfg.QuotaServiceTimeout)
+	fileHandler := handler.NewFileHandler(fileRepo, folderRepo, objectStore, quotaClient, limits.MaxUploadBytes)
+	fileHandler.SetCleanupTimeout(cfg.UploadCleanupTimeout)
 
 	port := os.Getenv("STORAGE_GRPC_PORT")
 	if port == "" {

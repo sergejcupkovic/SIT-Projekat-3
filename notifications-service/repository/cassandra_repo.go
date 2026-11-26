@@ -16,11 +16,21 @@ type CassandraNotificationRepository struct {
 	session *gocql.Session
 }
 
-func NewCassandraNotificationRepository(hosts []string, keyspace string) (*CassandraNotificationRepository, error) {
+// Options are the cassandra_* settings of config.yaml.
+type Options struct {
+	Timeout           time.Duration // per query, and for connecting
+	ReplicationFactor int
+	SchemaConsistency gocql.Consistency // creating the keyspace
+	Consistency       gocql.Consistency // everything else
+}
+
+// NewCassandraNotificationRepository: keyspace is written into CQL statements,
+// so the caller must have checked that it is a plain identifier.
+func NewCassandraNotificationRepository(hosts []string, keyspace string, opts Options) (*CassandraNotificationRepository, error) {
 	sysCluster := gocql.NewCluster(hosts...)
-	sysCluster.Consistency = gocql.Quorum
-	sysCluster.Timeout = 10 * time.Second
-	sysCluster.ConnectTimeout = 10 * time.Second
+	sysCluster.Consistency = opts.SchemaConsistency
+	sysCluster.Timeout = opts.Timeout
+	sysCluster.ConnectTimeout = opts.Timeout
 
 	sysSession, err := sysCluster.CreateSession()
 	if err != nil {
@@ -29,8 +39,8 @@ func NewCassandraNotificationRepository(hosts []string, keyspace string) (*Cassa
 
 	createKS := fmt.Sprintf(`
 		CREATE KEYSPACE IF NOT EXISTS %s
-		WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1}
-	`, keyspace)
+		WITH replication = {'class': 'SimpleStrategy', 'replication_factor': %d}
+	`, keyspace, opts.ReplicationFactor)
 	if err := sysSession.Query(createKS).Exec(); err != nil {
 		sysSession.Close()
 		return nil, fmt.Errorf("create keyspace: %w", err)
@@ -39,9 +49,9 @@ func NewCassandraNotificationRepository(hosts []string, keyspace string) (*Cassa
 
 	ksCluster := gocql.NewCluster(hosts...)
 	ksCluster.Keyspace = keyspace
-	ksCluster.Consistency = gocql.One
-	ksCluster.Timeout = 10 * time.Second
-	ksCluster.ConnectTimeout = 10 * time.Second
+	ksCluster.Consistency = opts.Consistency
+	ksCluster.Timeout = opts.Timeout
+	ksCluster.ConnectTimeout = opts.Timeout
 
 	session, err := ksCluster.CreateSession()
 	if err != nil {
@@ -99,7 +109,7 @@ func (r *CassandraNotificationRepository) seedIfEmpty(ctx context.Context) error
 		{
 			ID:        "seed-1",
 			Title:     "Welcome to Stashr Cloud Storage",
-			Message:   "Your personal 100 MB storage vault is active. Upload files, organize folders, and manage file versions anytime.",
+			Message:   "Your personal storage vault is active. Upload files, organize folders, and manage file versions anytime.",
 			Type:      "success",
 			IsRead:    false,
 			CreatedAt: now.Add(-2 * time.Hour),
@@ -115,7 +125,7 @@ func (r *CassandraNotificationRepository) seedIfEmpty(ctx context.Context) error
 		{
 			ID:        "seed-3",
 			Title:     "Supported File Types & Limits",
-			Message:   "You can store .txt, .md, .csv, .json, .pdf, .png, .jpg, and .gif files. Need more space? Contact an administrator.",
+			Message:   "You can store .txt, .md, .csv, .json, .pdf, .png, .jpg, and .gif files. Need more space? Use \"Request More Storage\".",
 			Type:      "warning",
 			IsRead:    false,
 			CreatedAt: now.Add(-10 * time.Minute),

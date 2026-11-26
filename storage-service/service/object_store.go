@@ -21,8 +21,9 @@ type ObjectStore struct {
 }
 
 // NewObjectStore connects to the store and makes sure the bucket exists. The
-// store may still be starting when the service boots, so it retries for ~20s.
-func NewObjectStore(endpoint, accessKey, secretKey, bucket string, useSSL bool) (*ObjectStore, error) {
+// store may still be starting when the service boots, so it makes up to
+// attempts tries, retryDelay apart.
+func NewObjectStore(endpoint, accessKey, secretKey, bucket string, useSSL bool, attempts int, retryDelay time.Duration) (*ObjectStore, error) {
 	client, err := minio.New(endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
 		Secure: useSSL,
@@ -33,7 +34,7 @@ func NewObjectStore(endpoint, accessKey, secretKey, bucket string, useSSL bool) 
 
 	ctx := context.Background()
 	var lastErr error
-	for attempt := 1; attempt <= 10; attempt++ {
+	for attempt := 1; attempt <= attempts; attempt++ {
 		exists, err := client.BucketExists(ctx, bucket)
 		if err == nil && !exists {
 			err = client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{})
@@ -42,9 +43,9 @@ func NewObjectStore(endpoint, accessKey, secretKey, bucket string, useSSL bool) 
 			return &ObjectStore{client: client, bucket: bucket}, nil
 		}
 
-		lastErr = fmt.Errorf("waiting for object store (attempt %d/10): %w", attempt, err)
+		lastErr = fmt.Errorf("waiting for object store (attempt %d/%d): %w", attempt, attempts, err)
 		log.Println(lastErr)
-		time.Sleep(2 * time.Second)
+		time.Sleep(retryDelay)
 	}
 	return nil, lastErr
 }

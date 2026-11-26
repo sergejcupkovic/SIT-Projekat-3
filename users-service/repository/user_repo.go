@@ -18,7 +18,7 @@ type UserRepository struct {
 }
 
 // returnuje pointer na novi userrepo ili error
-func NewUserRepository(db *mongo.Database) (*UserRepository, error) {
+func NewUserRepository(db *mongo.Database, setupTimeout time.Duration) (*UserRepository, error) {
 	coll := db.Collection("users")
 
 	// indeksi: unikatan email + sparse indeksi za tokene (da upiti ne rade full scan)
@@ -29,7 +29,7 @@ func NewUserRepository(db *mongo.Database) (*UserRepository, error) {
 		{Keys: bson.D{{Key: "magicLinkTokenHash", Value: 1}}, Options: options.Index().SetSparse(true)},
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), setupTimeout)
 	defer cancel()
 
 	if _, err := coll.Indexes().CreateMany(ctx, models); err != nil {
@@ -362,6 +362,43 @@ func (r *UserRepository) UpdateStorageQuota(ctx context.Context, userID primitiv
 		return nil, err
 	}
 	return &updated, nil
+}
+
+// RaiseStorageQuota sets the quota only if that makes it larger than it is now,
+// in one atomic update. It returns (nil, false, nil) when the user does not
+// exist or already has at least newQuotaBytes.
+func (r *UserRepository) RaiseStorageQuota(ctx context.Context, userID primitive.ObjectID, newQuotaBytes int64) (*domain.User, bool, error) {
+	filter := bson.M{"_id": userID, "storageQuotaBytes": bson.M{"$lt": newQuotaBytes}}
+	update := bson.M{"$set": bson.M{"storageQuotaBytes": newQuotaBytes}}
+	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
+
+	var updated domain.User
+	err := r.collection.FindOneAndUpdate(ctx, filter, update, opts).Decode(&updated)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	return &updated, true, nil
+}
+
+// FindByIDs returns the users that exist among ids, in no particular order.
+func (r *UserRepository) FindByIDs(ctx context.Context, ids []primitive.ObjectID) ([]domain.User, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	cursor, err := r.collection.Find(ctx, bson.M{"_id": bson.M{"$in": ids}})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var users []domain.User
+	if err := cursor.All(ctx, &users); err != nil {
+		return nil, err
+	}
+	return users, nil
 }
 
 // #endregion

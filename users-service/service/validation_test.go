@@ -128,3 +128,39 @@ func TestValidateToken(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateChangePassword(t *testing.T) {
+	if err := ValidateChangePassword("OldValidPass1!", "NewValidPass2!", "NewValidPass2!"); err != nil {
+		t.Errorf("expected valid input to pass, got: %v", err)
+	}
+	for name, in := range map[string][3]string{
+		"missing current":     {"", "NewValidPass2!", "NewValidPass2!"},
+		"current over bcrypt": {strings.Repeat("a", 73), "NewValidPass2!", "NewValidPass2!"},
+		"missing new":         {"OldValidPass1!", "", ""},
+		"mismatch":            {"OldValidPass1!", "NewValidPass2!", "NewValidPass3!"},
+		"same as current":     {"OldValidPass1!", "OldValidPass1!", "OldValidPass1!"},
+		"weak new password":   {"OldValidPass1!", "weak", "weak"},
+	} {
+		if err := ValidateChangePassword(in[0], in[1], in[2]); err == nil {
+			t.Errorf("%s: expected an error", name)
+		}
+	}
+}
+
+func TestValidatePasswordFollowsConfiguredRules(t *testing.T) {
+	saved := Cfg.Limits
+	defer func() { Cfg.Limits = saved }()
+
+	Cfg.PasswordMinLength = 12
+	Cfg.PasswordRequireSpecial = false
+	if err := ValidatePassword("Abcdefgh1"); err == nil || err.Error() != "password must be 12-72 characters long" {
+		t.Errorf("configured length not applied: %v", err)
+	}
+	if err := ValidatePassword("Abcdefghijk1"); err != nil {
+		t.Errorf("special character is not required any more: %v", err)
+	}
+	if err := ValidatePassword("abcdefghijk1"); err == nil ||
+		err.Error() != "password must contain an uppercase letter, a lowercase letter, and a digit" {
+		t.Errorf("unexpected message: %v", err)
+	}
+}

@@ -128,6 +128,16 @@ func (h *UserHandler) Register(ctx context.Context, in *userspb.RegisterRequest)
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
+	// A taken address is reported right away: no account is created and no
+	// verification email is sent.
+	switch _, err := h.repo.FindByEmail(ctx, req.Email); {
+	case err == nil:
+		return nil, emailTakenError()
+	case !errors.Is(err, mongo.ErrNoDocuments):
+		log.Printf("register: email lookup: %v", err)
+		return nil, status.Error(codes.Internal, "Error creating account in database")
+	}
+
 	passwordHash, err := service.HashPassword(req.Password)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "Error processing password")
@@ -155,9 +165,9 @@ func (h *UserHandler) Register(ctx context.Context, in *userspb.RegisterRequest)
 	}
 
 	if err := h.repo.Create(ctx, newUser); err != nil {
+		// Another registration of the same address won the race since the lookup.
 		if mongo.IsDuplicateKeyError(err) {
-			// Same reply as success so the endpoint can't be used to enumerate emails.
-			return registerSuccess(ctx), nil
+			return nil, emailTakenError()
 		}
 		return nil, status.Error(codes.Internal, "Error creating account in database")
 	}
@@ -479,6 +489,83 @@ func (h *UserHandler) ChangeExpiredPassword(ctx context.Context, in *userspb.Cha
 	}, nil
 }
 
+// ChangePassword  <-  POST /api/users/change-password
+// A signed-in user (any role) replaces their password. The user comes from the
+// session JWT; the current password must be supplied again.
+func (h *UserHandler) ChangePassword(ctx context.Context, in *userspb.ChangePasswordRequest) (*userspb.MessageResponse, error) {
+	tokenStr, ok := bearerFromMetadata(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "Missing or invalid authorization token")
+	}
+	userID, err := service.VerifyAccountToken(tokenStr)
+	if err != nil {
+		return nil, status.Error(codes.Unauthenticated, err.Error())
+	}
+	oid, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return nil, status.Error(codes.Unauthenticated, "Invalid user identity in token")
+	}
+
+	newPassword := in.GetNewPassword()
+	if err := service.ValidateChangePassword(in.GetCurrentPassword(), newPassword, in.GetConfirmPassword()); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	user, err := h.repo.FindByID(ctx, oid)
+	if err != nil {
+		return nil, userLookupError(err)
+	}
+	// Changing the password clears a lock, so a session that is still open must
+	// not be a way to end an active one early.
+	if time.Now().Before(user.AccountLockedUntil) {
+		return nil, accountLockedError(user.AccountLockedUntil)
+	}
+	// Not Unauthenticated: the session is fine, only this input is wrong.
+	if !service.CheckPasswordHash(in.GetCurrentPassword(), user.PasswordHash) {
+		return nil, status.Error(codes.InvalidArgument, "Current password is incorrect")
+	}
+	if ok, retryAt := service.PasswordChangeAllowed(user.PasswordLastChanged); !ok {
+		return nil, passwordTooYoungError(retryAt)
+	}
+
+	newHash, err := service.HashPassword(newPassword)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "Error processing password")
+	}
+	if err := h.repo.UpdatePassword(ctx, user.Email, newHash, time.Now()); err != nil {
+		return nil, status.Error(codes.Internal, "Error updating password")
+	}
+
+	return &userspb.MessageResponse{Message: "Password changed successfully."}, nil
+}
+
+// GetLimits  <-  GET /api/config/limits (public)
+func (h *UserHandler) GetLimits(_ context.Context, _ *userspb.GetLimitsRequest) (*userspb.LimitsResponse, error) {
+	l := service.Cfg.Limits
+	return &userspb.LimitsResponse{
+		MinQuotaBytes:            l.MinQuotaBytes,
+		MaxQuotaBytes:            l.MaxQuotaBytes,
+		DefaultQuotaBytes:        l.DefaultQuotaBytes,
+		MaxUploadBytes:           l.MaxUploadBytes,
+		MaxFileNameLength:        int32(l.MaxFileNameLength),
+		MaxFolderNameLength:      int32(l.MaxFolderNameLength),
+		MaxNameLength:            int32(l.MaxNameLength),
+		PasswordMinLength:        int32(l.PasswordMinLength),
+		PasswordMaxLength:        int32(l.PasswordMaxLength),
+		PasswordRequireUppercase: l.PasswordRequireUppercase,
+		PasswordRequireLowercase: l.PasswordRequireLowercase,
+		PasswordRequireDigit:     l.PasswordRequireDigit,
+		PasswordRequireSpecial:   l.PasswordRequireSpecial,
+		AllowedFileExtensions:    l.AllowedExtensions(),
+
+		StorageWarningPercent:        int32(service.Cfg.StorageWarningPercent),
+		QuotaRequestHistoryItems:     int32(service.Cfg.QuotaRequestHistoryItems),
+		QuotaRequestSuggestionFactor: service.Cfg.QuotaRequestSuggestionFactor,
+		AdminQuotaAdjustStepsBytes:   service.Cfg.AdminQuotaAdjustStepsBytes,
+		MailUiUrl:                    service.Cfg.MailUIURL,
+	}, nil
+}
+
 // RequestMagicLink  <-  POST /api/users/magic-link-request
 func (h *UserHandler) RequestMagicLink(ctx context.Context, in *userspb.MagicLinkRequest) (*userspb.MessageResponse, error) {
 	email := service.NormalizeEmail(in.GetEmail())
@@ -581,6 +668,10 @@ func (h *UserHandler) ListUsers(ctx context.Context, _ *userspb.ListUsersRequest
 }
 
 // UpdateUserQuota  <-  PATCH /api/admin/users/{user_id}/quota
+//
+// The quota may be raised or lowered anywhere within the configured bounds.
+// Lowering it below the current usage is allowed: nothing is deleted, but new
+// uploads are refused until the usage fits again.
 func (h *UserHandler) UpdateUserQuota(ctx context.Context, in *userspb.UpdateUserQuotaRequest) (*userspb.AdminUserInfo, error) {
 	if err := requireAdmin(ctx); err != nil {
 		return nil, err
@@ -592,16 +683,8 @@ func (h *UserHandler) UpdateUserQuota(ctx context.Context, in *userspb.UpdateUse
 	}
 
 	newQuota := in.GetStorageQuotaBytes()
-	if newQuota <= 0 {
-		return nil, status.Error(codes.InvalidArgument, "Storage quota must be greater than 0")
-	}
-
-	existing, err := h.repo.FindByID(ctx, oid)
-	if err != nil {
-		return nil, userLookupError(err)
-	}
-	if newQuota <= existing.StorageQuotaBytes {
-		return nil, status.Error(codes.InvalidArgument, "New storage quota must be greater than current quota")
+	if !service.Cfg.QuotaInRange(newQuota) {
+		return nil, status.Error(codes.InvalidArgument, service.Cfg.QuotaRangeMessage())
 	}
 
 	updated, err := h.repo.UpdateStorageQuota(ctx, oid, newQuota)
@@ -612,17 +695,25 @@ func (h *UserHandler) UpdateUserQuota(ctx context.Context, in *userspb.UpdateUse
 }
 
 func requireAdmin(ctx context.Context) error {
+	_, err := adminCallerID(ctx)
+	return err
+}
+
+// adminCallerID verifies that the caller is an administrator and returns their
+// user ID.
+func adminCallerID(ctx context.Context) (string, error) {
 	tokenStr, ok := bearerFromMetadata(ctx)
 	if !ok {
-		return status.Error(codes.Unauthenticated, "Missing or invalid authorization token")
+		return "", status.Error(codes.Unauthenticated, "Missing or invalid authorization token")
 	}
-	if _, err := service.VerifyAdminToken(tokenStr); err != nil {
+	id, err := service.VerifyAdminToken(tokenStr)
+	if err != nil {
 		if errors.Is(err, service.ErrAdminRequired) {
-			return status.Error(codes.PermissionDenied, err.Error())
+			return "", status.Error(codes.PermissionDenied, err.Error())
 		}
-		return status.Error(codes.Unauthenticated, err.Error())
+		return "", status.Error(codes.Unauthenticated, err.Error())
 	}
-	return nil
+	return id, nil
 }
 
 func toAdminUserInfo(u *domain.User) *userspb.AdminUserInfo {
@@ -672,6 +763,10 @@ func registerSuccess(ctx context.Context) *userspb.MessageResponse {
 	return &userspb.MessageResponse{
 		Message: "Registration successful. Check your email to verify your account.",
 	}
+}
+
+func emailTakenError() error {
+	return status.Error(codes.AlreadyExists, "An account with this email already exists.")
 }
 
 // restrictedLogin issues a short-lived token that only allows changing the

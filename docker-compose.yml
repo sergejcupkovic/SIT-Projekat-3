@@ -79,14 +79,13 @@ services:
     environment:
       STORAGE_GRPC_PORT: ${STORAGE_GRPC_PORT:-50052}
       MONGO_URI: mongodb://mongodb:${MONGO_PORT}
-      MONGO_DB_NAME: storage_db
       USERS_GRPC_ADDR: users-service:${USERS_GRPC_PORT:-50051}
       OBJECT_STORE_ENDPOINT: object-store:9000
       OBJECT_STORE_ACCESS_KEY: ${OBJECT_STORE_ACCESS_KEY:-stashr-dev}
       OBJECT_STORE_SECRET_KEY: ${OBJECT_STORE_SECRET_KEY:-stashr-dev-secret-change-me}
-      OBJECT_STORE_BUCKET: ${OBJECT_STORE_BUCKET:-stashr-files}
-      OBJECT_STORE_USE_SSL: "false"
-      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-209715200}
+      CONFIG_PATH: /app/config.yaml
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
     restart: on-failure
     depends_on:
       - mongodb
@@ -104,7 +103,9 @@ services:
     environment:
       NOTIFICATIONS_GRPC_PORT: ${NOTIFICATIONS_GRPC_PORT:-50053}
       CASSANDRA_HOSTS: cassandra
-      CASSANDRA_KEYSPACE: stashr_notifications
+      CONFIG_PATH: /app/config.yaml
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
     restart: on-failure
     depends_on:
       - cassandra
@@ -126,9 +127,10 @@ services:
       TLS_CERT_FILE: /certs/server.crt
       TLS_KEY_FILE: /certs/server.key
       FRONTEND_URL: https://localhost:${FRONTEND_PORT}
-      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-209715200}
+      CONFIG_PATH: /app/config.yaml
     volumes:
       - ./certs:/certs:ro
+      - ./config.yaml:/app/config.yaml:ro
     depends_on:
       - users-service
       - storage-service
@@ -142,6 +144,8 @@ services:
       - "${FRONTEND_PORT}:443"
     volumes:
       - ./certs:/etc/nginx/certs:ro
+      # the upload and body limits of the nginx config come from here
+      - ./config.yaml:/etc/stashr/config.yaml:ro
     depends_on:
       - api-gateway
 

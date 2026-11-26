@@ -1,3 +1,5 @@
+# Template of the nginx site config. When the container starts,
+# render-nginx-conf.sh replaces each __NAME__ with a value from config.yaml.
 server {
     # Browser -> nginx is HTTPS. Certificates are mounted from ./certs (see docker-compose.yml).
     listen 443 ssl;
@@ -24,18 +26,20 @@ server {
         try_files $uri $uri/ /index.html;
     }
 
-    # File upload (US-2.2). Only this route may carry a large body: every other
-    # /api/ route keeps nginx's default 1 MB limit, since the gateway reads their
-    # JSON bodies into memory. client_max_body_size must be a little larger than
-    # MAX_UPLOAD_BYTES (200 MiB by default, see .env) so the gateway/storage-service
-    # can answer with their own clear "too large" message instead of nginx's bare 413.
-    # The body is streamed through instead of being spooled to disk a second time, and
-    # the timeouts allow a slow connection to finish a big file.
+    # Only the upload routes may carry a large body: every other request is capped
+    # at max_json_body_bytes, since the gateway reads JSON bodies into memory.
+    client_max_body_size __MAX_JSON_BODY_BYTES__;
+
+    # File upload (US-2.2). The upload limit is max_upload_bytes plus room for the
+    # multipart framing, and a little more, so the gateway answers an oversized file
+    # with its own clear "too large" message instead of nginx's bare 413.
+    # The body is streamed through instead of being spooled to disk a second time,
+    # and upload_timeout lets a slow connection finish a big file.
     location = /api/files/upload {
-        client_max_body_size 201m;
+        client_max_body_size __MAX_UPLOAD_REQUEST_BYTES__;
         proxy_request_buffering off;
-        proxy_read_timeout 600s;
-        proxy_send_timeout 600s;
+        proxy_read_timeout __UPLOAD_TIMEOUT__;
+        proxy_send_timeout __UPLOAD_TIMEOUT__;
 
         proxy_pass https://api-gateway:8443/api/files/upload;
         proxy_http_version 1.1;
@@ -51,10 +55,10 @@ server {
     }
 
     location ~ ^/api/files/[^/]+/version$ {
-        client_max_body_size 201m;
+        client_max_body_size __MAX_UPLOAD_REQUEST_BYTES__;
         proxy_request_buffering off;
-        proxy_read_timeout 600s;
-        proxy_send_timeout 600s;
+        proxy_read_timeout __UPLOAD_TIMEOUT__;
+        proxy_send_timeout __UPLOAD_TIMEOUT__;
 
         proxy_pass https://api-gateway:8443;
         proxy_http_version 1.1;

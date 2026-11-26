@@ -11,6 +11,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"regexp"
 	"strconv"
@@ -23,6 +24,8 @@ import (
 	"storage-service/repository"
 
 	storagepb "stashr/proto/storage"
+
+	"stashr/shared/appconfig"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -282,7 +285,11 @@ func (h *FolderHandler) buildBreadcrumbs(ctx context.Context, current *domain.Fo
 
 // #region helperi
 
-const maxFolderNameLen = 100
+// max_folder_name_length of config.yaml; set once at start-up.
+var maxFolderNameLen = appconfig.DefaultLimits().MaxFolderNameLength
+
+// SetMaxFolderNameLength applies the configured folder name limit.
+func SetMaxFolderNameLength(n int) { maxFolderNameLen = n }
 
 // letters, digits, space and . _ - ( ); everything else is rejected
 var folderNameRegex = regexp.MustCompile(`^[\p{L}\p{N} ._()\-]+$`)
@@ -292,7 +299,7 @@ func validateFolderName(name string) error {
 		return errors.New("folder name is required")
 	}
 	if utf8.RuneCountInString(name) > maxFolderNameLen {
-		return errors.New("folder name must not exceed 100 characters")
+		return fmt.Errorf("folder name must not exceed %d characters", maxFolderNameLen)
 	}
 	if !folderNameRegex.MatchString(name) || strings.Trim(name, ". ") == "" {
 		return errors.New("folder name contains invalid characters")

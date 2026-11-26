@@ -30,7 +30,7 @@ func main() {
 	cfg := config.LoadConfig()
 	service.Init(cfg)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.MongoConnectTimeout)
 	defer cancel()
 
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(cfg.MongoURI))
@@ -45,9 +45,13 @@ func main() {
 	log.Println("Successfully connected to MongoDB database!")
 
 	db := client.Database(cfg.MongoDBName)
-	userRepo, err := repository.NewUserRepository(db)
+	userRepo, err := repository.NewUserRepository(db, cfg.MongoConnectTimeout)
 	if err != nil {
 		log.Fatalf("Failed to initialize repository: %v", err)
+	}
+	quotaRequestRepo, err := repository.NewQuotaRequestRepository(db, cfg.MongoConnectTimeout)
+	if err != nil {
+		log.Fatalf("Failed to initialize quota request repository: %v", err)
 	}
 
 	userHandler := handler.NewUserHandler(
@@ -91,6 +95,10 @@ func main() {
 	srv := grpc.NewServer()
 	userspb.RegisterUsersServiceServer(srv, userHandler) // generated in users_service_grpc.pb.go
 
+	quotaRequestHandler := handler.NewQuotaRequestHandler(quotaRequestRepo, userRepo, cfg.Limits)
+	quotaRequestHandler.SetRollbackTimeout(cfg.QuotaRequestRollbackTimeout)
+	userspb.RegisterQuotaRequestServiceServer(srv, quotaRequestHandler)
+
 	// Internal quota rpcs for storage-service (no REST binding, see users_service.proto).
 	userspb.RegisterQuotaServiceServer(srv, handler.NewQuotaHandler(userRepo))
 
@@ -99,6 +107,7 @@ func main() {
 	healthpb.RegisterHealthServer(srv, healthSrv)
 	healthSrv.SetServingStatus(userspb.UsersService_ServiceDesc.ServiceName, healthpb.HealthCheckResponse_SERVING)
 	healthSrv.SetServingStatus(userspb.QuotaService_ServiceDesc.ServiceName, healthpb.HealthCheckResponse_SERVING)
+	healthSrv.SetServingStatus(userspb.QuotaRequestService_ServiceDesc.ServiceName, healthpb.HealthCheckResponse_SERVING)
 
 	// Server reflection lets tools like grpcurl list and call services
 	// without having the .proto files locally.

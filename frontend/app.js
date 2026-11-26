@@ -1,5 +1,3 @@
-const MAILPIT_URL = "http://localhost:8025";
-
 const tabLogin = document.getElementById("tabLogin");
 const tabRegister = document.getElementById("tabRegister");
 const loginSection = document.getElementById("loginSection");
@@ -10,6 +8,9 @@ const registerSection = document.getElementById("registerSection");
 const forceChangePasswordSection = document.getElementById(
   "forceChangePasswordSection",
 );
+const forgotPasswordSection = document.getElementById("forgotPasswordSection");
+const resetPasswordSection = document.getElementById("resetPasswordSection");
+const changePasswordSection = document.getElementById("changePasswordSection");
 
 const forceChangePasswordForm = document.getElementById(
   "forceChangePasswordForm",
@@ -30,15 +31,7 @@ const toggleForceNewPasswordBtn = document.getElementById(
 const toggleForceConfirmPasswordBtn = document.getElementById(
   "toggleForceConfirmPasswordBtn",
 );
-const forceStrengthBarFill = document.getElementById("forceStrengthBarFill");
-const forceStrengthLabelText = document.getElementById(
-  "forceStrengthLabelText",
-);
-const forceRuleLength = document.getElementById("force-rule-length");
-const forceRuleUppercase = document.getElementById("force-rule-uppercase");
-const forceRuleLowercase = document.getElementById("force-rule-lowercase");
-const forceRuleNumber = document.getElementById("force-rule-number");
-const forceRuleSpecial = document.getElementById("force-rule-special");
+let forceStrengthMeter = null; // created in init()
 const forcePasswordMatchStatus = document.getElementById(
   "forcePasswordMatchStatus",
 );
@@ -137,13 +130,7 @@ const alertMessage = document.getElementById("alertMessage");
 const alertAction = document.getElementById("alertAction");
 const alertCloseBtn = document.getElementById("alertCloseBtn");
 
-const strengthBarFill = document.getElementById("strengthBarFill");
-const strengthLabelText = document.getElementById("strengthLabelText");
-const ruleLength = document.getElementById("rule-length");
-const ruleUppercase = document.getElementById("rule-uppercase");
-const ruleLowercase = document.getElementById("rule-lowercase");
-const ruleNumber = document.getElementById("rule-number");
-const ruleSpecial = document.getElementById("rule-special");
+let registerStrengthMeter = null; // created in init()
 
 const togglePasswordBtn = document.getElementById("togglePasswordBtn");
 const toggleConfirmPasswordBtn = document.getElementById(
@@ -151,7 +138,6 @@ const toggleConfirmPasswordBtn = document.getElementById(
 );
 
 const EMAIL_REGEX = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
-const SPECIAL_CHAR_REGEX = /[!@#~$%^&*()+|_.,<>?/{}\-]/;
 
 const renameFileForm = document.getElementById("renameFileForm");
 const renameFileLabel = document.getElementById("renameFileLabel");
@@ -216,8 +202,60 @@ async function fetchWithFallback(path, options) {
   throw lastError;
 }
 
+// Puts the configured limits into labels and input attributes.
+function applyLimitsToUi(limits) {
+  const setMaxLength = (inputs, max) => {
+    inputs.forEach((input) => {
+      if (input && max) input.maxLength = max;
+    });
+  };
+  setMaxLength([firstNameInput, lastNameInput], limits.maxNameLength);
+  setMaxLength([newFolderNameInput, renameFolderNameInput], limits.maxFolderNameLength);
+  setMaxLength([renameFileNameInput], limits.maxFileNameLength);
+  setMaxLength(
+    document.querySelectorAll("input[data-new-password]"),
+    limits.passwordMaxLength,
+  );
+
+  const accept = limits.allowedFileExtensions.join(",");
+  fileUploadInput.accept = accept;
+  fileVersionUploadInput.accept = accept;
+
+  document.getElementById("registerSubtitle").textContent =
+    `Sign up to get ${formatBytes(limits.defaultQuotaBytes)} of secure cloud storage`;
+
+  strengthMeters.forEach((meter) => meter.refresh());
+
+  const mailUrl = limits.mailUiUrl;
+  document.querySelectorAll("[data-mail-ui-link]").forEach((link) => {
+    if (mailUrl) link.href = mailUrl;
+    link.classList.toggle("hidden", !mailUrl);
+  });
+  document.querySelectorAll("[data-mail-ui-only]").forEach((el) => {
+    el.classList.toggle("hidden", !mailUrl);
+  });
+
+  // Storage bars drawn before the limits arrived get their warning colour now.
+  if (lastQuotaShown) updateQuotaDisplay(...lastQuotaShown);
+  if (adminUsers.length) renderAdminUsers();
+}
+
 async function init() {
+  // Read it first: handling the link removes the token from the address bar.
+  const openedFromResetLink = Boolean(readResetTokenFromUrl());
+
   await session.load();
+
+  registerStrengthMeter = createStrengthMeter(
+    document.getElementById("strengthContainer"),
+  );
+  forceStrengthMeter = createStrengthMeter(
+    document.getElementById("forceStrengthContainer"),
+  );
+  initAccountFeatures();
+  initQuotaRequestFeatures();
+  AppLimits.onLoad(applyLimitsToUi);
+  AppLimits.load();
 
   firstNameInput.addEventListener("input", () =>
     validateNameField(firstNameInput, firstNameError, "First name"),
@@ -325,7 +363,12 @@ async function init() {
     });
   }
 
-  checkExistingSession();
+  // A reset link must not be replaced by the dashboard of a saved session.
+  if (openedFromResetLink) {
+    checkResetTokenInUrl();
+  } else {
+    checkExistingSession();
+  }
 }
 
 function togglePasswordVisibility(inputEl, btnEl) {
@@ -375,28 +418,9 @@ function handleEmailInput() {
   return true;
 }
 
-function checkPasswordRules(password) {
-  return {
-    length: password.length >= 8,
-    uppercase: /[A-Z]/.test(password),
-    lowercase: /[a-z]/.test(password),
-    number: /[0-9]/.test(password),
-    special: SPECIAL_CHAR_REGEX.test(password),
-  };
-}
-
 function evaluatePasswordInput(pwInput, pwError, confirmInput, ui) {
   const password = pwInput.value;
-  const rules = checkPasswordRules(password);
-
-  updateRuleItem(ui.length, rules.length);
-  updateRuleItem(ui.uppercase, rules.uppercase);
-  updateRuleItem(ui.lowercase, rules.lowercase);
-  updateRuleItem(ui.number, rules.number);
-  updateRuleItem(ui.special, rules.special);
-
-  const score = Object.values(rules).filter(Boolean).length;
-  updateStrengthMeterUI(ui.barFill, ui.labelText, score, password.length === 0);
+  const meetsRules = ui.meter.update(password);
 
   if (confirmInput.value.length > 0) {
     evaluateConfirmPasswordInput(
@@ -413,7 +437,7 @@ function evaluatePasswordInput(pwInput, pwError, confirmInput, ui) {
     return false;
   }
 
-  if (score === 5) {
+  if (meetsRules) {
     pwInput.classList.remove("is-invalid");
     pwInput.classList.add("is-valid");
     pwError.textContent = "";
@@ -460,13 +484,7 @@ function evaluateConfirmPasswordInput(
 
 function handlePasswordInput() {
   return evaluatePasswordInput(passwordInput, passwordError, confirmPasswordInput, {
-    barFill: strengthBarFill,
-    labelText: strengthLabelText,
-    length: ruleLength,
-    uppercase: ruleUppercase,
-    lowercase: ruleLowercase,
-    number: ruleNumber,
-    special: ruleSpecial,
+    meter: registerStrengthMeter,
     confirmError: confirmPasswordError,
     matchStatus: passwordMatchStatus,
   });
@@ -478,13 +496,7 @@ function handleForcePasswordInput() {
     forceNewPasswordError,
     forceConfirmPasswordInput,
     {
-      barFill: forceStrengthBarFill,
-      labelText: forceStrengthLabelText,
-      length: forceRuleLength,
-      uppercase: forceRuleUppercase,
-      lowercase: forceRuleLowercase,
-      number: forceRuleNumber,
-      special: forceRuleSpecial,
+      meter: forceStrengthMeter,
       confirmError: forceConfirmPasswordError,
       matchStatus: forcePasswordMatchStatus,
     },
@@ -498,58 +510,6 @@ function handleForceConfirmPasswordInput() {
     forceConfirmPasswordError,
     forcePasswordMatchStatus,
   );
-}
-
-function updateRuleItem(element, isValid) {
-  if (isValid) {
-    element.classList.add("valid");
-    element.classList.remove("invalid-touched");
-  } else {
-    element.classList.remove("valid");
-  }
-}
-
-function updateStrengthMeterUI(barFill, labelText, score, isEmpty) {
-  barFill.className = "strength-meter-fill";
-
-  if (isEmpty) {
-    barFill.style.width = "0%";
-    labelText.textContent = "None";
-    labelText.style.color = "var(--text-subtle)";
-    return;
-  }
-
-  switch (score) {
-    case 1:
-    case 2:
-      barFill.classList.add("strength-weak");
-      labelText.textContent = "Weak";
-      labelText.style.color = "var(--danger)";
-      break;
-    case 3:
-      barFill.classList.add("strength-fair");
-      labelText.textContent = "Fair";
-      labelText.style.color = "var(--warning)";
-      break;
-    case 4:
-      barFill.classList.add("strength-good");
-      labelText.textContent = "Good";
-      labelText.style.color = "#3b82f6";
-      break;
-    case 5:
-      barFill.classList.add("strength-strong");
-      labelText.textContent = "Strong (Ready)";
-      labelText.style.color = "var(--success)";
-      break;
-    default:
-      barFill.classList.add("strength-weak");
-      labelText.textContent = "Very Weak";
-      labelText.style.color = "var(--danger)";
-  }
-}
-
-function updateStrengthMeter(score, isEmpty) {
-  updateStrengthMeterUI(strengthBarFill, strengthLabelText, score, isEmpty);
 }
 
 function handleConfirmPasswordInput() {
@@ -601,18 +561,10 @@ function validateFullForm() {
   }
 
   const password = passwordInput.value;
-  const rules = checkPasswordRules(password);
-  const isPasswordValid = Object.values(rules).every(Boolean);
-
-  if (Validation.password(password)) {
+  const passwordProblem = Validation.newPassword(password);
+  if (passwordProblem) {
     passwordInput.classList.add("is-invalid");
-    passwordError.textContent = Validation.password(password);
-    isValid = false;
-    if (!firstInvalidEl) firstInvalidEl = passwordInput;
-  } else if (!isPasswordValid) {
-    passwordInput.classList.add("is-invalid");
-    passwordError.textContent =
-      "Password does not meet all security requirements listed below";
+    passwordError.textContent = passwordProblem;
     isValid = false;
     if (!firstInvalidEl) firstInvalidEl = passwordInput;
   }
@@ -686,9 +638,7 @@ async function handleFormSubmit(event) {
         "success",
         "Registration Successful!",
         successMsg,
-        `<a href="${MAILPIT_URL}" target="_blank" rel="noopener noreferrer" class="btn-mailpit">
-          Open Mailpit Inbox (:8025) ↗
-        </a>`,
+        mailInboxAction(),
       );
 
       form.reset();
@@ -812,7 +762,7 @@ async function handleMagicLinkRequest() {
       showAlert(
         "success",
         "Magic Link Sent!",
-        data.message || "Check Mailpit (:8025) for your direct login link.",
+        data.message || "Check your email for your direct login link.",
       );
     } else {
       showAlert(
@@ -978,13 +928,7 @@ function resetFormValidationVisuals() {
   passwordMatchStatus.textContent = "";
   passwordMatchStatus.className = "password-match-status";
 
-  updateStrengthMeter(0, true);
-
-  [ruleLength, ruleUppercase, ruleLowercase, ruleNumber, ruleSpecial].forEach(
-    (rule) => {
-      rule.classList.remove("valid", "invalid-touched");
-    },
-  );
+  registerStrengthMeter.reset();
 }
 
 document.addEventListener("DOMContentLoaded", init);
@@ -1021,6 +965,9 @@ function switchSection(sectionToDisplay) {
   if (sectionToDisplay === adminSection && !canOpenAdminPanel()) {
     sectionToDisplay = loginSection;
   }
+  if (sectionToDisplay === changePasswordSection && !session.token) {
+    sectionToDisplay = loginSection;
+  }
   [
     loginSection,
     otpSection,
@@ -1028,6 +975,9 @@ function switchSection(sectionToDisplay) {
     adminSection,
     registerSection,
     forceChangePasswordSection,
+    forgotPasswordSection,
+    resetPasswordSection,
+    changePasswordSection,
   ].forEach((sec) => {
     if (sec) sec.classList.add("hidden");
   });
@@ -1039,7 +989,25 @@ function switchSection(sectionToDisplay) {
     authCard.classList.toggle("dashboard-wide", isDashboard);
     authCard.classList.toggle("admin-wide", isAdmin);
   }
-  if (authTabs) authTabs.classList.toggle("hidden", isDashboard || isAdmin);
+  const isSignedInView =
+    isDashboard || isAdmin || sectionToDisplay === changePasswordSection;
+  if (authTabs) authTabs.classList.toggle("hidden", isSignedInView);
+}
+
+// Forgets everything shown for the previous session.
+function clearSessionViews() {
+  closeQuotaRequestPanel();
+  clearChangePasswordForm();
+  clearAdminQuotaRequests();
+  closeAdminQuotaForm();
+}
+
+// The API refused the session token: back to the login form.
+function handleSessionExpired() {
+  session.end();
+  clearSessionViews();
+  switchSection(loginSection);
+  showAlert("warning", "Session Expired", "Please sign in again.");
 }
 
 async function handleLoginSubmit(event) {
@@ -1255,18 +1223,7 @@ function resetForceChangePasswordUI() {
     forcePasswordMatchStatus.textContent = "";
     forcePasswordMatchStatus.className = "password-match-status";
   }
-  if (forceStrengthBarFill && forceStrengthLabelText) {
-    updateStrengthMeterUI(forceStrengthBarFill, forceStrengthLabelText, 0, true);
-  }
-  [
-    forceRuleLength,
-    forceRuleUppercase,
-    forceRuleLowercase,
-    forceRuleNumber,
-    forceRuleSpecial,
-  ].forEach((rule) => {
-    if (rule) rule.classList.remove("valid", "invalid-touched");
-  });
+  forceStrengthMeter.reset();
 }
 
 async function handleLogout() {
@@ -1280,6 +1237,7 @@ async function handleLogout() {
     if (notificationsPopover) notificationsPopover.classList.add("hidden");
     if (notificationsBellBtn) notificationsBellBtn.setAttribute("aria-expanded", "false");
     session.end();
+    clearSessionViews();
     resetOtpForm();
     currentFolderId = null;
     currentBreadcrumbs = [];
@@ -1302,16 +1260,10 @@ async function handleForceChangePasswordSubmit(event) {
   const newPassword = forceNewPasswordInput.value;
   const confirmPassword = forceConfirmPasswordInput.value;
 
-  const newPasswordProblem = Validation.password(newPassword);
+  const newPasswordProblem = Validation.newPassword(newPassword);
   if (newPasswordProblem) {
     forceNewPasswordInput.classList.add("is-invalid");
     forceNewPasswordError.textContent = newPasswordProblem;
-    return;
-  }
-  if (!handleForcePasswordInput()) {
-    forceNewPasswordInput.classList.add("is-invalid");
-    forceNewPasswordError.textContent =
-      "Password does not meet all security requirements";
     return;
   }
   forceNewPasswordInput.classList.remove("is-invalid");
@@ -1402,6 +1354,7 @@ function showDashboard(email, token) {
   }
   userEmailDisplay.textContent = email;
   if (jwtTokenDisplay) jwtTokenDisplay.value = token;
+  closeQuotaRequestPanel();
   switchSection(dashboardSection);
   loadUserQuota();
   loadUserNotifications();
@@ -1879,20 +1832,29 @@ function formatBytes(bytes) {
   const units = ["B", "KB", "MB", "GB", "TB"];
   const idx = Math.min(Math.floor(Math.log(n) / Math.log(1024)), units.length - 1);
   const value = n / Math.pow(1024, idx);
-  return `${idx === 0 ? value : value.toFixed(1)} ${units[idx]}`;
+  // "100 MB", not "100.0 MB" - the same form the server uses in its messages.
+  return `${idx === 0 ? value : value.toFixed(1).replace(/\.0$/, "")} ${units[idx]}`;
 }
+
+let lastQuotaShown = null; // [used, total] of the storage bar
 
 function updateQuotaDisplay(usedBytes, totalBytes) {
   if (!quotaUsageText) return;
+  lastQuotaShown = [usedBytes, totalBytes];
   const used = Number(usedBytes) || 0;
   const total = Number(totalBytes) || 0;
   if (total <= 0) return;
 
-  quotaUsageText.textContent = `${formatBytes(used)} of ${formatBytes(total)} used`;
+  // Possible after an administrator lowered the quota below the usage.
+  const overQuota = used > total;
+  quotaUsageText.textContent =
+    `${formatBytes(used)} of ${formatBytes(total)} used` +
+    (overQuota ? " — over quota, new uploads are blocked" : "");
+  quotaUsageText.classList.toggle("is-over-quota", overQuota);
   if (quotaBar && quotaBarFill) {
     const pct = Math.min(100, (used / total) * 100);
     quotaBarFill.style.width = `${pct}%`;
-    quotaBarFill.classList.toggle("is-nearly-full", pct >= 90);
+    quotaBarFill.classList.toggle("is-nearly-full", isNearlyFull(pct));
     quotaBar.classList.remove("hidden");
   }
 }
@@ -1982,13 +1944,22 @@ function renderNotifications(items) {
   });
 }
 
+// Saves sending a file the server would refuse for its size.
+function fileSizeProblem(size) {
+  const max = AppLimits.current?.maxUploadBytes;
+  return max && size > max
+    ? `File is too large: the maximum size of a single file is ${formatBytes(max)}`
+    : "";
+}
+
 // 2.2.1: the user picked a file; it goes into the folder that is open right now.
 async function handleFileUploadChange(event) {
   const file = event.target.files && event.target.files[0];
   if (!file) return;
 
   hideAlert();
-  const problem = Validation.fileName(file.name, file.size);
+  const problem =
+    Validation.fileName(file.name, file.size) || fileSizeProblem(file.size);
   if (problem) {
     showAlert("danger", "Cannot Upload File", problem);
     fileUploadInput.value = "";
@@ -2077,7 +2048,8 @@ function startFileVersionUpload(file, btnEl) {
   versionTargetBtn = btnEl;
 
   const ext = getFileExtension(file.name);
-  fileVersionUploadInput.accept = ext || ".txt,.md,.csv,.json,.pdf,.png,.jpg,.jpeg,.gif";
+  fileVersionUploadInput.accept =
+    ext || (AppLimits.current?.allowedFileExtensions.join(",") ?? "");
   fileVersionUploadInput.value = "";
   fileVersionUploadInput.click();
 }
@@ -2090,7 +2062,9 @@ async function handleFileVersionUploadChange(event) {
   if (!selectedFile || !targetFile) return;
 
   hideAlert();
-  const problem = Validation.fileName(selectedFile.name, selectedFile.size);
+  const problem =
+    Validation.fileName(selectedFile.name, selectedFile.size) ||
+    fileSizeProblem(selectedFile.size);
   if (problem) {
     showAlert("danger", "Cannot Upload New Version", problem);
     fileVersionUploadInput.value = "";
@@ -2200,12 +2174,21 @@ const adminJwtTokenDisplay = document.getElementById("adminJwtTokenDisplay");
 const adminLogoutBtn = document.getElementById("adminLogoutBtn");
 const adminLogoutSpinner = document.getElementById("adminLogoutSpinner");
 
-const adminTabUsers = document.getElementById("adminTabUsers");
-const adminTabNotifications = document.getElementById("adminTabNotifications");
-const adminUsersPanel = document.getElementById("adminUsersPanel");
-const adminNotificationsPanel = document.getElementById("adminNotificationsPanel");
+const adminTabs = {
+  users: {
+    button: document.getElementById("adminTabUsers"),
+    panel: document.getElementById("adminUsersPanel"),
+  },
+  quotaRequests: {
+    button: document.getElementById("adminTabQuotaRequests"),
+    panel: document.getElementById("adminQuotaRequestsPanel"),
+  },
+  notifications: {
+    button: document.getElementById("adminTabNotifications"),
+    panel: document.getElementById("adminNotificationsPanel"),
+  },
+};
 
-const adminPreviewBanner = document.getElementById("adminPreviewBanner");
 const adminStatUsers = document.getElementById("adminStatUsers");
 const adminStatUsed = document.getElementById("adminStatUsed");
 const adminStatQuota = document.getElementById("adminStatQuota");
@@ -2215,56 +2198,24 @@ const adminRefreshUsersBtn = document.getElementById("adminRefreshUsersBtn");
 const adminQuotaForm = document.getElementById("adminQuotaForm");
 const adminQuotaTargetTitle = document.getElementById("adminQuotaTargetTitle");
 const adminQuotaTargetMeta = document.getElementById("adminQuotaTargetMeta");
-const adminNewQuotaMbInput = document.getElementById("adminNewQuotaMbInput");
+const adminNewQuotaInput = document.getElementById("adminNewQuotaInput");
+const adminNewQuotaUnit = document.getElementById("adminNewQuotaUnit");
 const adminQuotaSubmitBtn = document.getElementById("adminQuotaSubmitBtn");
-const adminQuotaSpinner = document.getElementById("adminQuotaSpinner");
 const adminQuotaCancelBtn = document.getElementById("adminQuotaCancelBtn");
+const adminQuotaHint = document.getElementById("adminQuotaHint");
+const adminQuotaWarning = document.getElementById("adminQuotaWarning");
 const adminQuotaError = document.getElementById("adminQuotaError");
-const adminPresetBtns = document.querySelectorAll(".admin-preset-btn");
+const adminQuotaMinBtn = document.getElementById("adminQuotaMinBtn");
+const adminQuotaMaxBtn = document.getElementById("adminQuotaMaxBtn");
+const adminQuotaSteps = document.getElementById("adminQuotaSteps");
+const adminBoundBtns = document.querySelectorAll(".admin-bound-btn");
 
 const adminUsersLoading = document.getElementById("adminUsersLoading");
 const adminUsersEmpty = document.getElementById("adminUsersEmpty");
 const adminUsersList = document.getElementById("adminUsersList");
 
-const MB_BYTES = 1024 * 1024;
 let adminUsers = [];
-let adminPreviewMode = false;
 let adminQuotaTargetUser = null;
-
-function createPreviewAdminUsers() {
-  return [
-    {
-      id: "preview-1",
-      firstName: "Petar",
-      lastName: "Petrovic",
-      email: "petar@example.com",
-      role: "RK",
-      isVerified: true,
-      usedStorageBytes: 72 * MB_BYTES,
-      storageQuotaBytes: 100 * MB_BYTES,
-    },
-    {
-      id: "preview-2",
-      firstName: "Milica",
-      lastName: "Jovanovic",
-      email: "milica@example.com",
-      role: "RK",
-      isVerified: true,
-      usedStorageBytes: 94 * MB_BYTES,
-      storageQuotaBytes: 100 * MB_BYTES,
-    },
-    {
-      id: "preview-3",
-      firstName: "Marko",
-      lastName: "Nikolic",
-      email: "marko@example.com",
-      role: "RK",
-      isVerified: false,
-      usedStorageBytes: 0,
-      storageQuotaBytes: 100 * MB_BYTES,
-    },
-  ];
-}
 
 function showAdminPanel(email, token) {
   activeLoginPassword = "";
@@ -2276,25 +2227,20 @@ function showAdminPanel(email, token) {
   }
   if (adminEmailDisplay) adminEmailDisplay.textContent = email;
   if (adminJwtTokenDisplay) adminJwtTokenDisplay.value = token;
+  clearAdminQuotaRequests();
   switchSection(adminSection);
   switchAdminTab("users");
   loadAdminUsers();
+  refreshPendingQuotaRequestCount();
 }
 
 function switchAdminTab(tab) {
-  const showUsers = tab === "users";
-  if (adminTabUsers) {
-    adminTabUsers.classList.toggle("active", showUsers);
-    adminTabUsers.setAttribute("aria-selected", String(showUsers));
-  }
-  if (adminTabNotifications) {
-    adminTabNotifications.classList.toggle("active", !showUsers);
-    adminTabNotifications.setAttribute("aria-selected", String(!showUsers));
-  }
-  if (adminUsersPanel) adminUsersPanel.classList.toggle("hidden", !showUsers);
-  if (adminNotificationsPanel) {
-    adminNotificationsPanel.classList.toggle("hidden", showUsers);
-  }
+  Object.entries(adminTabs).forEach(([name, { button, panel }]) => {
+    const active = name === tab;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+    panel.classList.toggle("hidden", !active);
+  });
 }
 
 async function loadAdminUsers() {
@@ -2305,66 +2251,31 @@ async function loadAdminUsers() {
   }
 
   closeAdminQuotaForm();
-  if (adminUsersLoading) adminUsersLoading.classList.remove("hidden");
-  if (adminUsersEmpty) adminUsersEmpty.classList.add("hidden");
-  if (adminUsersList) adminUsersList.innerHTML = "";
+  adminUsersLoading.classList.remove("hidden");
+  adminUsersEmpty.classList.add("hidden");
+  adminUsersList.innerHTML = "";
 
   try {
-    const { response } = await fetchWithFallback("/api/admin/users", {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
-      },
-    });
+    const { ok, status, data } = await apiJson("/api/admin/users", { token });
 
-    if (response.status === 401) {
-      session.end();
-      switchSection(loginSection);
-      showAlert("warning", "Session Expired", "Please sign in again.");
+    if (status === 401) {
+      handleSessionExpired();
       return;
     }
-
-    if (response.status === 404 || response.status === 501) {
-      adminPreviewMode = true;
-      if (adminUsers.length === 0) {
-        adminUsers = createPreviewAdminUsers();
+    if (!ok) {
+      if (status !== 429) {
+        showAlert("danger", "Error Loading Users", data.message || "Could not load users.");
       }
-      if (adminPreviewBanner) adminPreviewBanner.classList.remove("hidden");
-      renderAdminUsers();
       return;
     }
 
-    const text = await response.text();
-    let data = {};
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { message: text.trim() };
-    }
-
-    if (!response.ok) {
-      showAlert(
-        "danger",
-        "Error Loading Users",
-        data.message || "Could not load users.",
-      );
-      return;
-    }
-
-    adminPreviewMode = false;
-    if (adminPreviewBanner) adminPreviewBanner.classList.add("hidden");
-    adminUsers = Array.isArray(data) ? data : data.users || [];
+    adminUsers = data.users || [];
     renderAdminUsers();
   } catch (err) {
-    adminPreviewMode = true;
-    if (adminUsers.length === 0) {
-      adminUsers = createPreviewAdminUsers();
-    }
-    if (adminPreviewBanner) adminPreviewBanner.classList.remove("hidden");
-    renderAdminUsers();
+    console.warn("Could not load users:", err);
+    showAlert("danger", "Connection Error", "Could not load users.");
   } finally {
-    if (adminUsersLoading) adminUsersLoading.classList.add("hidden");
+    adminUsersLoading.classList.add("hidden");
   }
 }
 
@@ -2425,6 +2336,7 @@ function renderAdminUsers() {
           <span class="status-pill ${user.isVerified ? "verified" : "unverified"}">
             ${user.isVerified ? "Verified" : "Unverified"}
           </span>
+          ${used > quota ? '<span class="status-pill request-rejected">Over quota</span>' : ""}
         </div>
         <div class="admin-user-email"></div>
       </div>
@@ -2433,12 +2345,12 @@ function renderAdminUsers() {
           ${Validation.escapeHtml(formatBytes(used))} / ${Validation.escapeHtml(formatBytes(quota))}
         </div>
         <div class="quota-bar" aria-hidden="true">
-          <div class="quota-bar-fill ${pct >= 90 ? "is-nearly-full" : ""}" style="width: ${pct}%"></div>
+          <div class="quota-bar-fill ${isNearlyFull(pct) ? "is-nearly-full" : ""}" style="width: ${pct}%"></div>
         </div>
       </div>
       <div class="admin-user-actions">
-        <button type="button" class="btn-outline-sm admin-increase-quota-btn">
-          + Increase Storage
+        <button type="button" class="btn-outline-sm admin-edit-quota-btn">
+          Edit Quota
         </button>
       </div>
     `;
@@ -2446,142 +2358,162 @@ function renderAdminUsers() {
     row.querySelector(".admin-user-name").textContent = fullName;
     row.querySelector(".admin-user-email").textContent = user.email || "";
 
-    const increaseBtn = row.querySelector(".admin-increase-quota-btn");
-    increaseBtn.addEventListener("click", () => openAdminQuotaForm(user));
+    row
+      .querySelector(".admin-edit-quota-btn")
+      .addEventListener("click", () => openAdminQuotaForm(user));
 
     adminUsersList.appendChild(row);
   });
 }
 
-function openAdminQuotaForm(user) {
+function setAdminQuotaInput(bytes, unit = bestSizeUnit(bytes)) {
+  adminNewQuotaUnit.value = unit;
+  adminNewQuotaInput.value = sizeInUnit(bytes, unit);
+  adminQuotaShown = { text: adminNewQuotaInput.value, unit, bytes };
+  validateAdminQuotaInput();
+}
+
+// What the field was last filled with. While it is unchanged the exact byte
+// value is used, even if the unit could only show it rounded.
+let adminQuotaShown = null;
+
+// The size currently entered, in bytes, or null.
+function adminQuotaInputBytes() {
+  if (
+    adminQuotaShown &&
+    adminNewQuotaInput.value === adminQuotaShown.text &&
+    adminNewQuotaUnit.value === adminQuotaShown.unit
+  ) {
+    return adminQuotaShown.bytes;
+  }
+  return readSizeInput(adminNewQuotaInput, adminNewQuotaUnit);
+}
+
+// Why the entered quota cannot be saved, or "".
+function adminQuotaProblem(bytes, limits) {
+  if (bytes === null) {
+    // badInput: something was typed that is not a number the browser can hold.
+    return adminNewQuotaInput.validity.badInput && limits
+      ? quotaRangeMessage(limits)
+      : "Enter the new quota";
+  }
+  if (limits && (bytes < limits.minQuotaBytes || bytes > limits.maxQuotaBytes))
+    return quotaRangeMessage(limits);
+  if (!limits && bytes <= 0) return "The quota must be greater than 0";
+  return "";
+}
+
+// Live feedback while the administrator types.
+function validateAdminQuotaInput() {
+  if (!adminQuotaTargetUser) return;
+  const bytes = adminQuotaInputBytes();
+  const problem = adminQuotaProblem(bytes, AppLimits.current);
+  setFieldError(adminNewQuotaInput, adminQuotaError, problem);
+
+  const used = Number(adminQuotaTargetUser.usedStorageBytes) || 0;
+  const belowUsage = !problem && bytes < used;
+  adminQuotaWarning.textContent = belowUsage
+    ? `This is below the current usage of ${formatBytes(used)}. No files are deleted, ` +
+      "but the user cannot upload until the usage fits the new quota."
+    : "";
+  adminQuotaWarning.classList.toggle("hidden", !belowUsage);
+}
+
+async function openAdminQuotaForm(user) {
   hideAlert();
   adminQuotaTargetUser = user;
-  const currentMb = Math.round((Number(user.storageQuotaBytes) || 0) / MB_BYTES);
+  const limits = await AppLimits.load();
+  // Another user may have been picked (or the form closed) while loading.
+  if (adminQuotaTargetUser !== user) return;
+
   const usedStr = formatBytes(user.usedStorageBytes);
   const quotaStr = formatBytes(user.storageQuotaBytes);
   const fullName =
     `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email;
 
-  if (adminQuotaTargetTitle) {
-    adminQuotaTargetTitle.textContent = `Increase Storage for ${fullName}`;
-  }
-  if (adminQuotaTargetMeta) {
-    adminQuotaTargetMeta.textContent = `${user.email} • Current usage: ${usedStr} / ${quotaStr}`;
-  }
-  if (adminNewQuotaMbInput) {
-    adminNewQuotaMbInput.min = String(currentMb + 1);
-    adminNewQuotaMbInput.value = String(currentMb + 100);
-    adminNewQuotaMbInput.classList.remove("is-invalid");
-    adminNewQuotaMbInput.focus();
-  }
-  if (adminQuotaError) adminQuotaError.textContent = "";
-  if (adminQuotaForm) adminQuotaForm.classList.remove("hidden");
+  adminQuotaTargetTitle.textContent = `Edit Storage Quota for ${fullName}`;
+  adminQuotaTargetMeta.textContent = `${user.email} • Current usage: ${usedStr} / ${quotaStr}`;
+  adminQuotaHint.textContent = limits
+    ? `Allowed: ${formatBytes(limits.minQuotaBytes)} to ${formatBytes(limits.maxQuotaBytes)}. The quota can be raised or lowered.`
+    : "";
+  adminQuotaMinBtn.textContent = limits ? `Min (${formatBytes(limits.minQuotaBytes)})` : "Minimum";
+  adminQuotaMaxBtn.textContent = limits ? `Max (${formatBytes(limits.maxQuotaBytes)})` : "Maximum";
+  adminBoundBtns.forEach((btn) => btn.classList.toggle("hidden", !limits));
+  renderAdminQuotaSteps(limits?.adminQuotaAdjustStepsBytes || []);
+
+  adminQuotaForm.classList.remove("hidden");
+  setAdminQuotaInput(Number(user.storageQuotaBytes) || 0);
+  adminNewQuotaInput.focus();
 }
 
 function closeAdminQuotaForm() {
   adminQuotaTargetUser = null;
-  if (adminQuotaForm) adminQuotaForm.classList.add("hidden");
-  if (adminNewQuotaMbInput) {
-    adminNewQuotaMbInput.value = "";
-    adminNewQuotaMbInput.classList.remove("is-invalid");
-  }
-  if (adminQuotaError) adminQuotaError.textContent = "";
+  adminQuotaShown = null;
+  adminQuotaForm.classList.add("hidden");
+  adminNewQuotaInput.value = "";
+  setFieldError(adminNewQuotaInput, adminQuotaError, "");
+  adminQuotaWarning.classList.add("hidden");
 }
 
 async function handleAdminQuotaSubmit(event) {
   event.preventDefault();
   hideAlert();
-  if (!adminQuotaTargetUser) return;
+  const user = adminQuotaTargetUser;
+  if (!user) return;
 
-  const currentQuotaBytes = Number(adminQuotaTargetUser.storageQuotaBytes) || 0;
-  const currentMb = Math.round(currentQuotaBytes / MB_BYTES);
-  const newMb = Number(adminNewQuotaMbInput.value);
+  const limits = await AppLimits.load();
+  if (adminQuotaTargetUser !== user) return;
+  const bytes = adminQuotaInputBytes();
+  const currentBytes = Number(user.storageQuotaBytes) || 0;
+  const problem =
+    adminQuotaProblem(bytes, limits) ||
+    (bytes === currentBytes ? "That is already the current quota" : "");
+  setFieldError(adminNewQuotaInput, adminQuotaError, problem);
+  if (problem) return;
 
-  if (!Number.isFinite(newMb) || newMb <= currentMb) {
-    adminNewQuotaMbInput.classList.add("is-invalid");
-    adminQuotaError.textContent = `New quota must be greater than current ${currentMb} MB.`;
-    return;
-  }
-
-  adminNewQuotaMbInput.classList.remove("is-invalid");
-  adminQuotaError.textContent = "";
-
-  const newQuotaBytes = Math.round(newMb * MB_BYTES);
   const token = session.token;
   if (!token) {
     switchSection(loginSection);
     return;
   }
 
-  adminQuotaSubmitBtn.disabled = true;
-  adminQuotaSpinner.classList.remove("hidden");
-
+  setButtonBusy(adminQuotaSubmitBtn, true);
   try {
-    if (!adminPreviewMode) {
-      const { response } = await fetchWithFallback(
-        `/api/admin/users/${encodeURIComponent(adminQuotaTargetUser.id)}/quota`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ storageQuotaBytes: newQuotaBytes }),
-        },
-      );
+    const { ok, status, data } = await apiJson(
+      `/api/admin/users/${encodeURIComponent(user.id)}/quota`,
+      { method: "PATCH", token, body: { storageQuotaBytes: bytes } },
+    );
 
-      if (response.status === 401) {
-        session.end();
-        switchSection(loginSection);
-        showAlert("warning", "Session Expired", "Please sign in again.");
-        return;
+    if (status === 401) {
+      handleSessionExpired();
+      return;
+    }
+    if (!ok) {
+      if (status !== 429) {
+        setFieldError(adminNewQuotaInput, adminQuotaError, data.message || "Failed to update storage quota.");
       }
-
-      if (response.status !== 404 && response.status !== 501 && !response.ok) {
-        const text = await response.text();
-        let data = {};
-        try {
-          data = JSON.parse(text);
-        } catch {
-          data = { message: text.trim() };
-        }
-        adminNewQuotaMbInput.classList.add("is-invalid");
-        adminQuotaError.textContent =
-          data.message || "Failed to update storage quota.";
-        return;
-      }
+      return;
     }
 
-    const updatedEmail = adminQuotaTargetUser.email;
-    adminUsers = adminUsers.map((u) =>
-      u.id === adminQuotaTargetUser.id
-        ? { ...u, storageQuotaBytes: newQuotaBytes }
-        : u,
-    );
+    adminUsers = adminUsers.map((u) => (u.id === user.id ? data : u));
     closeAdminQuotaForm();
     renderAdminUsers();
+    const overQuota = Number(data.usedStorageBytes) > Number(data.storageQuotaBytes);
     showAlert(
-      "success",
+      overQuota ? "warning" : "success",
       "Storage Quota Updated",
-      `Storage quota for ${updatedEmail} increased to ${formatBytes(newQuotaBytes)}.`,
+      `Storage quota for ${user.email} ${bytes > currentBytes ? "increased" : "decreased"} to ${formatBytes(bytes)}.` +
+        (overQuota ? " The usage is above it, so new uploads are blocked for now." : ""),
     );
   } catch (err) {
-    const updatedEmail = adminQuotaTargetUser.email;
-    adminUsers = adminUsers.map((u) =>
-      u.id === adminQuotaTargetUser.id
-        ? { ...u, storageQuotaBytes: newQuotaBytes }
-        : u,
-    );
-    closeAdminQuotaForm();
-    renderAdminUsers();
+    console.warn("Could not update the quota:", err);
     showAlert(
-      "success",
-      "Storage Quota Updated (Preview)",
-      `Storage quota for ${updatedEmail} increased to ${formatBytes(newQuotaBytes)}.`,
+      "danger",
+      "Connection Error",
+      "Could not reach the server. Refresh the list to see the current quota.",
     );
   } finally {
-    adminQuotaSubmitBtn.disabled = false;
-    adminQuotaSpinner.classList.add("hidden");
+    setButtonBusy(adminQuotaSubmitBtn, false);
   }
 }
 
@@ -2596,42 +2528,58 @@ if (adminLogoutBtn) {
     if (adminLogoutSpinner) adminLogoutSpinner.classList.remove("hidden");
     await handleLogout();
     adminUsers = [];
-    closeAdminQuotaForm();
     adminLogoutBtn.disabled = false;
     if (adminLogoutSpinner) adminLogoutSpinner.classList.add("hidden");
   });
 }
-if (adminTabUsers) {
-  adminTabUsers.addEventListener("click", () => switchAdminTab("users"));
-}
-if (adminTabNotifications) {
-  adminTabNotifications.addEventListener("click", () =>
-    switchAdminTab("notifications"),
-  );
-}
+Object.entries(adminTabs).forEach(([name, { button }]) => {
+  button.addEventListener("click", () => {
+    hideAlert();
+    switchAdminTab(name);
+    if (name === "quotaRequests") loadAdminQuotaRequests();
+  });
+});
 if (adminUserSearchInput) {
   adminUserSearchInput.addEventListener("input", renderAdminUsers);
 }
 if (adminRefreshUsersBtn) {
   adminRefreshUsersBtn.addEventListener("click", loadAdminUsers);
 }
-if (adminQuotaCancelBtn) {
-  adminQuotaCancelBtn.addEventListener("click", closeAdminQuotaForm);
+adminQuotaCancelBtn.addEventListener("click", closeAdminQuotaForm);
+adminQuotaForm.addEventListener("submit", handleAdminQuotaSubmit);
+adminNewQuotaInput.addEventListener("input", validateAdminQuotaInput);
+adminNewQuotaUnit.addEventListener("change", validateAdminQuotaInput);
+
+// The "quick adjust" buttons (admin_quota_adjust_steps_bytes).
+function renderAdminQuotaSteps(steps) {
+  adminQuotaSteps.innerHTML = "";
+  steps.forEach((step) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "btn-outline-sm admin-preset-btn";
+    button.textContent = `${step < 0 ? "−" : "+"}${formatBytes(Math.abs(step))}`;
+    button.addEventListener("click", () => adjustAdminQuota(step));
+    adminQuotaSteps.appendChild(button);
+  });
 }
-if (adminQuotaForm) {
-  adminQuotaForm.addEventListener("submit", handleAdminQuotaSubmit);
+
+function adjustAdminQuota(step) {
+  if (!adminQuotaTargetUser) return;
+  const base = adminQuotaInputBytes() ?? Number(adminQuotaTargetUser.storageQuotaBytes);
+  let next = base + step;
+  const limits = AppLimits.current;
+  // The buttons stop at the bounds instead of producing an invalid value.
+  if (limits) next = Math.min(limits.maxQuotaBytes, Math.max(limits.minQuotaBytes, next));
+  setAdminQuotaInput(Math.max(next, 0));
 }
-adminPresetBtns.forEach((btn) => {
+
+adminBoundBtns.forEach((btn) => {
   btn.addEventListener("click", () => {
-    if (!adminQuotaTargetUser || !adminNewQuotaMbInput) return;
-    const addMb = Number(btn.dataset.addMb) || 0;
-    const currentMb = Math.round(
-      (Number(adminQuotaTargetUser.storageQuotaBytes) || 0) / MB_BYTES,
+    const limits = AppLimits.current;
+    if (!adminQuotaTargetUser || !limits) return;
+    setAdminQuotaInput(
+      btn.dataset.bound === "min" ? limits.minQuotaBytes : limits.maxQuotaBytes,
     );
-    const baseMb = Math.max(currentMb, Number(adminNewQuotaMbInput.value) || 0);
-    adminNewQuotaMbInput.value = String(baseMb + addMb);
-    adminNewQuotaMbInput.classList.remove("is-invalid");
-    if (adminQuotaError) adminQuotaError.textContent = "";
   });
 });
 

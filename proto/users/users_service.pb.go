@@ -24,6 +24,7 @@ import (
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -680,6 +681,270 @@ func (x *ChangeExpiredPasswordRequest) GetConfirmPassword() string {
 	return ""
 }
 
+type ChangePasswordRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	CurrentPassword string                 `protobuf:"bytes,1,opt,name=current_password,json=currentPassword,proto3" json:"current_password,omitempty"`
+	NewPassword     string                 `protobuf:"bytes,2,opt,name=new_password,json=newPassword,proto3" json:"new_password,omitempty"`
+	ConfirmPassword string                 `protobuf:"bytes,3,opt,name=confirm_password,json=confirmPassword,proto3" json:"confirm_password,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ChangePasswordRequest) Reset() {
+	*x = ChangePasswordRequest{}
+	mi := &file_users_users_service_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ChangePasswordRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ChangePasswordRequest) ProtoMessage() {}
+
+func (x *ChangePasswordRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_users_users_service_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ChangePasswordRequest.ProtoReflect.Descriptor instead.
+func (*ChangePasswordRequest) Descriptor() ([]byte, []int) {
+	return file_users_users_service_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *ChangePasswordRequest) GetCurrentPassword() string {
+	if x != nil {
+		return x.CurrentPassword
+	}
+	return ""
+}
+
+func (x *ChangePasswordRequest) GetNewPassword() string {
+	if x != nil {
+		return x.NewPassword
+	}
+	return ""
+}
+
+func (x *ChangePasswordRequest) GetConfirmPassword() string {
+	if x != nil {
+		return x.ConfirmPassword
+	}
+	return ""
+}
+
+type GetLimitsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetLimitsRequest) Reset() {
+	*x = GetLimitsRequest{}
+	mi := &file_users_users_service_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetLimitsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetLimitsRequest) ProtoMessage() {}
+
+func (x *GetLimitsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_users_users_service_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetLimitsRequest.ProtoReflect.Descriptor instead.
+func (*GetLimitsRequest) Descriptor() ([]byte, []int) {
+	return file_users_users_service_proto_rawDescGZIP(), []int{14}
+}
+
+type CreateQuotaRequestRequest struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	RequestedQuotaBytes int64                  `protobuf:"varint,1,opt,name=requested_quota_bytes,json=requestedQuotaBytes,proto3" json:"requested_quota_bytes,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *CreateQuotaRequestRequest) Reset() {
+	*x = CreateQuotaRequestRequest{}
+	mi := &file_users_users_service_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateQuotaRequestRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateQuotaRequestRequest) ProtoMessage() {}
+
+func (x *CreateQuotaRequestRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_users_users_service_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateQuotaRequestRequest.ProtoReflect.Descriptor instead.
+func (*CreateQuotaRequestRequest) Descriptor() ([]byte, []int) {
+	return file_users_users_service_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *CreateQuotaRequestRequest) GetRequestedQuotaBytes() int64 {
+	if x != nil {
+		return x.RequestedQuotaBytes
+	}
+	return 0
+}
+
+type ListMyQuotaRequestsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListMyQuotaRequestsRequest) Reset() {
+	*x = ListMyQuotaRequestsRequest{}
+	mi := &file_users_users_service_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListMyQuotaRequestsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListMyQuotaRequestsRequest) ProtoMessage() {}
+
+func (x *ListMyQuotaRequestsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_users_users_service_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListMyQuotaRequestsRequest.ProtoReflect.Descriptor instead.
+func (*ListMyQuotaRequestsRequest) Descriptor() ([]byte, []int) {
+	return file_users_users_service_proto_rawDescGZIP(), []int{16}
+}
+
+type ListQuotaRequestsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Status        string                 `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListQuotaRequestsRequest) Reset() {
+	*x = ListQuotaRequestsRequest{}
+	mi := &file_users_users_service_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListQuotaRequestsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListQuotaRequestsRequest) ProtoMessage() {}
+
+func (x *ListQuotaRequestsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_users_users_service_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListQuotaRequestsRequest.ProtoReflect.Descriptor instead.
+func (*ListQuotaRequestsRequest) Descriptor() ([]byte, []int) {
+	return file_users_users_service_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *ListQuotaRequestsRequest) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+type ResolveQuotaRequestRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RequestId     string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResolveQuotaRequestRequest) Reset() {
+	*x = ResolveQuotaRequestRequest{}
+	mi := &file_users_users_service_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResolveQuotaRequestRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResolveQuotaRequestRequest) ProtoMessage() {}
+
+func (x *ResolveQuotaRequestRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_users_users_service_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResolveQuotaRequestRequest.ProtoReflect.Descriptor instead.
+func (*ResolveQuotaRequestRequest) Descriptor() ([]byte, []int) {
+	return file_users_users_service_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *ResolveQuotaRequestRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
 type MagicLinkRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Email         string                 `protobuf:"bytes,1,opt,name=email,proto3" json:"email,omitempty"`
@@ -689,7 +954,7 @@ type MagicLinkRequest struct {
 
 func (x *MagicLinkRequest) Reset() {
 	*x = MagicLinkRequest{}
-	mi := &file_users_users_service_proto_msgTypes[13]
+	mi := &file_users_users_service_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -701,7 +966,7 @@ func (x *MagicLinkRequest) String() string {
 func (*MagicLinkRequest) ProtoMessage() {}
 
 func (x *MagicLinkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_users_users_service_proto_msgTypes[13]
+	mi := &file_users_users_service_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -714,7 +979,7 @@ func (x *MagicLinkRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MagicLinkRequest.ProtoReflect.Descriptor instead.
 func (*MagicLinkRequest) Descriptor() ([]byte, []int) {
-	return file_users_users_service_proto_rawDescGZIP(), []int{13}
+	return file_users_users_service_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *MagicLinkRequest) GetEmail() string {
@@ -733,7 +998,7 @@ type MagicLinkLoginRequest struct {
 
 func (x *MagicLinkLoginRequest) Reset() {
 	*x = MagicLinkLoginRequest{}
-	mi := &file_users_users_service_proto_msgTypes[14]
+	mi := &file_users_users_service_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -745,7 +1010,7 @@ func (x *MagicLinkLoginRequest) String() string {
 func (*MagicLinkLoginRequest) ProtoMessage() {}
 
 func (x *MagicLinkLoginRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_users_users_service_proto_msgTypes[14]
+	mi := &file_users_users_service_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -758,7 +1023,7 @@ func (x *MagicLinkLoginRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MagicLinkLoginRequest.ProtoReflect.Descriptor instead.
 func (*MagicLinkLoginRequest) Descriptor() ([]byte, []int) {
-	return file_users_users_service_proto_rawDescGZIP(), []int{14}
+	return file_users_users_service_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *MagicLinkLoginRequest) GetToken() string {
@@ -776,7 +1041,7 @@ type ListUsersRequest struct {
 
 func (x *ListUsersRequest) Reset() {
 	*x = ListUsersRequest{}
-	mi := &file_users_users_service_proto_msgTypes[15]
+	mi := &file_users_users_service_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -788,7 +1053,7 @@ func (x *ListUsersRequest) String() string {
 func (*ListUsersRequest) ProtoMessage() {}
 
 func (x *ListUsersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_users_users_service_proto_msgTypes[15]
+	mi := &file_users_users_service_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -801,7 +1066,7 @@ func (x *ListUsersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListUsersRequest.ProtoReflect.Descriptor instead.
 func (*ListUsersRequest) Descriptor() ([]byte, []int) {
-	return file_users_users_service_proto_rawDescGZIP(), []int{15}
+	return file_users_users_service_proto_rawDescGZIP(), []int{21}
 }
 
 type UpdateUserQuotaRequest struct {
@@ -814,7 +1079,7 @@ type UpdateUserQuotaRequest struct {
 
 func (x *UpdateUserQuotaRequest) Reset() {
 	*x = UpdateUserQuotaRequest{}
-	mi := &file_users_users_service_proto_msgTypes[16]
+	mi := &file_users_users_service_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -826,7 +1091,7 @@ func (x *UpdateUserQuotaRequest) String() string {
 func (*UpdateUserQuotaRequest) ProtoMessage() {}
 
 func (x *UpdateUserQuotaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_users_users_service_proto_msgTypes[16]
+	mi := &file_users_users_service_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -839,7 +1104,7 @@ func (x *UpdateUserQuotaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateUserQuotaRequest.ProtoReflect.Descriptor instead.
 func (*UpdateUserQuotaRequest) Descriptor() ([]byte, []int) {
-	return file_users_users_service_proto_rawDescGZIP(), []int{16}
+	return file_users_users_service_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *UpdateUserQuotaRequest) GetUserId() string {
@@ -866,7 +1131,7 @@ type MessageResponse struct {
 
 func (x *MessageResponse) Reset() {
 	*x = MessageResponse{}
-	mi := &file_users_users_service_proto_msgTypes[17]
+	mi := &file_users_users_service_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -878,7 +1143,7 @@ func (x *MessageResponse) String() string {
 func (*MessageResponse) ProtoMessage() {}
 
 func (x *MessageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_users_users_service_proto_msgTypes[17]
+	mi := &file_users_users_service_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -891,7 +1156,7 @@ func (x *MessageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MessageResponse.ProtoReflect.Descriptor instead.
 func (*MessageResponse) Descriptor() ([]byte, []int) {
-	return file_users_users_service_proto_rawDescGZIP(), []int{17}
+	return file_users_users_service_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *MessageResponse) GetMessage() string {
@@ -914,7 +1179,7 @@ type UserInfo struct {
 
 func (x *UserInfo) Reset() {
 	*x = UserInfo{}
-	mi := &file_users_users_service_proto_msgTypes[18]
+	mi := &file_users_users_service_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -926,7 +1191,7 @@ func (x *UserInfo) String() string {
 func (*UserInfo) ProtoMessage() {}
 
 func (x *UserInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_users_users_service_proto_msgTypes[18]
+	mi := &file_users_users_service_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -939,7 +1204,7 @@ func (x *UserInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UserInfo.ProtoReflect.Descriptor instead.
 func (*UserInfo) Descriptor() ([]byte, []int) {
-	return file_users_users_service_proto_rawDescGZIP(), []int{18}
+	return file_users_users_service_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *UserInfo) GetId() string {
@@ -993,7 +1258,7 @@ type AdminUserInfo struct {
 
 func (x *AdminUserInfo) Reset() {
 	*x = AdminUserInfo{}
-	mi := &file_users_users_service_proto_msgTypes[19]
+	mi := &file_users_users_service_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1005,7 +1270,7 @@ func (x *AdminUserInfo) String() string {
 func (*AdminUserInfo) ProtoMessage() {}
 
 func (x *AdminUserInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_users_users_service_proto_msgTypes[19]
+	mi := &file_users_users_service_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1018,7 +1283,7 @@ func (x *AdminUserInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminUserInfo.ProtoReflect.Descriptor instead.
 func (*AdminUserInfo) Descriptor() ([]byte, []int) {
-	return file_users_users_service_proto_rawDescGZIP(), []int{19}
+	return file_users_users_service_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *AdminUserInfo) GetId() string {
@@ -1086,7 +1351,7 @@ type ListUsersResponse struct {
 
 func (x *ListUsersResponse) Reset() {
 	*x = ListUsersResponse{}
-	mi := &file_users_users_service_proto_msgTypes[20]
+	mi := &file_users_users_service_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1098,7 +1363,7 @@ func (x *ListUsersResponse) String() string {
 func (*ListUsersResponse) ProtoMessage() {}
 
 func (x *ListUsersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_users_users_service_proto_msgTypes[20]
+	mi := &file_users_users_service_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1111,12 +1376,383 @@ func (x *ListUsersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListUsersResponse.ProtoReflect.Descriptor instead.
 func (*ListUsersResponse) Descriptor() ([]byte, []int) {
-	return file_users_users_service_proto_rawDescGZIP(), []int{20}
+	return file_users_users_service_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *ListUsersResponse) GetUsers() []*AdminUserInfo {
 	if x != nil {
 		return x.Users
+	}
+	return nil
+}
+
+// The config.yaml limits the frontend mirrors.
+type LimitsResponse struct {
+	state                    protoimpl.MessageState `protogen:"open.v1"`
+	MinQuotaBytes            int64                  `protobuf:"varint,1,opt,name=min_quota_bytes,json=minQuotaBytes,proto3" json:"min_quota_bytes,omitempty"`
+	MaxQuotaBytes            int64                  `protobuf:"varint,2,opt,name=max_quota_bytes,json=maxQuotaBytes,proto3" json:"max_quota_bytes,omitempty"`
+	DefaultQuotaBytes        int64                  `protobuf:"varint,3,opt,name=default_quota_bytes,json=defaultQuotaBytes,proto3" json:"default_quota_bytes,omitempty"`
+	MaxUploadBytes           int64                  `protobuf:"varint,4,opt,name=max_upload_bytes,json=maxUploadBytes,proto3" json:"max_upload_bytes,omitempty"`
+	MaxFileNameLength        int32                  `protobuf:"varint,5,opt,name=max_file_name_length,json=maxFileNameLength,proto3" json:"max_file_name_length,omitempty"`
+	MaxFolderNameLength      int32                  `protobuf:"varint,6,opt,name=max_folder_name_length,json=maxFolderNameLength,proto3" json:"max_folder_name_length,omitempty"`
+	MaxNameLength            int32                  `protobuf:"varint,7,opt,name=max_name_length,json=maxNameLength,proto3" json:"max_name_length,omitempty"`
+	PasswordMinLength        int32                  `protobuf:"varint,8,opt,name=password_min_length,json=passwordMinLength,proto3" json:"password_min_length,omitempty"`
+	PasswordMaxLength        int32                  `protobuf:"varint,9,opt,name=password_max_length,json=passwordMaxLength,proto3" json:"password_max_length,omitempty"`
+	PasswordRequireUppercase bool                   `protobuf:"varint,10,opt,name=password_require_uppercase,json=passwordRequireUppercase,proto3" json:"password_require_uppercase,omitempty"`
+	PasswordRequireLowercase bool                   `protobuf:"varint,11,opt,name=password_require_lowercase,json=passwordRequireLowercase,proto3" json:"password_require_lowercase,omitempty"`
+	PasswordRequireDigit     bool                   `protobuf:"varint,12,opt,name=password_require_digit,json=passwordRequireDigit,proto3" json:"password_require_digit,omitempty"`
+	PasswordRequireSpecial   bool                   `protobuf:"varint,13,opt,name=password_require_special,json=passwordRequireSpecial,proto3" json:"password_require_special,omitempty"`
+	AllowedFileExtensions    []string               `protobuf:"bytes,14,rep,name=allowed_file_extensions,json=allowedFileExtensions,proto3" json:"allowed_file_extensions,omitempty"`
+	// Frontend settings.
+	StorageWarningPercent        int32   `protobuf:"varint,15,opt,name=storage_warning_percent,json=storageWarningPercent,proto3" json:"storage_warning_percent,omitempty"`
+	QuotaRequestHistoryItems     int32   `protobuf:"varint,16,opt,name=quota_request_history_items,json=quotaRequestHistoryItems,proto3" json:"quota_request_history_items,omitempty"`
+	QuotaRequestSuggestionFactor float64 `protobuf:"fixed64,17,opt,name=quota_request_suggestion_factor,json=quotaRequestSuggestionFactor,proto3" json:"quota_request_suggestion_factor,omitempty"`
+	AdminQuotaAdjustStepsBytes   []int64 `protobuf:"varint,18,rep,packed,name=admin_quota_adjust_steps_bytes,json=adminQuotaAdjustStepsBytes,proto3" json:"admin_quota_adjust_steps_bytes,omitempty"`
+	// Empty when there is no mail inbox to link to.
+	MailUiUrl     string `protobuf:"bytes,19,opt,name=mail_ui_url,json=mailUiUrl,proto3" json:"mail_ui_url,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LimitsResponse) Reset() {
+	*x = LimitsResponse{}
+	mi := &file_users_users_service_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LimitsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LimitsResponse) ProtoMessage() {}
+
+func (x *LimitsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_users_users_service_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LimitsResponse.ProtoReflect.Descriptor instead.
+func (*LimitsResponse) Descriptor() ([]byte, []int) {
+	return file_users_users_service_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *LimitsResponse) GetMinQuotaBytes() int64 {
+	if x != nil {
+		return x.MinQuotaBytes
+	}
+	return 0
+}
+
+func (x *LimitsResponse) GetMaxQuotaBytes() int64 {
+	if x != nil {
+		return x.MaxQuotaBytes
+	}
+	return 0
+}
+
+func (x *LimitsResponse) GetDefaultQuotaBytes() int64 {
+	if x != nil {
+		return x.DefaultQuotaBytes
+	}
+	return 0
+}
+
+func (x *LimitsResponse) GetMaxUploadBytes() int64 {
+	if x != nil {
+		return x.MaxUploadBytes
+	}
+	return 0
+}
+
+func (x *LimitsResponse) GetMaxFileNameLength() int32 {
+	if x != nil {
+		return x.MaxFileNameLength
+	}
+	return 0
+}
+
+func (x *LimitsResponse) GetMaxFolderNameLength() int32 {
+	if x != nil {
+		return x.MaxFolderNameLength
+	}
+	return 0
+}
+
+func (x *LimitsResponse) GetMaxNameLength() int32 {
+	if x != nil {
+		return x.MaxNameLength
+	}
+	return 0
+}
+
+func (x *LimitsResponse) GetPasswordMinLength() int32 {
+	if x != nil {
+		return x.PasswordMinLength
+	}
+	return 0
+}
+
+func (x *LimitsResponse) GetPasswordMaxLength() int32 {
+	if x != nil {
+		return x.PasswordMaxLength
+	}
+	return 0
+}
+
+func (x *LimitsResponse) GetPasswordRequireUppercase() bool {
+	if x != nil {
+		return x.PasswordRequireUppercase
+	}
+	return false
+}
+
+func (x *LimitsResponse) GetPasswordRequireLowercase() bool {
+	if x != nil {
+		return x.PasswordRequireLowercase
+	}
+	return false
+}
+
+func (x *LimitsResponse) GetPasswordRequireDigit() bool {
+	if x != nil {
+		return x.PasswordRequireDigit
+	}
+	return false
+}
+
+func (x *LimitsResponse) GetPasswordRequireSpecial() bool {
+	if x != nil {
+		return x.PasswordRequireSpecial
+	}
+	return false
+}
+
+func (x *LimitsResponse) GetAllowedFileExtensions() []string {
+	if x != nil {
+		return x.AllowedFileExtensions
+	}
+	return nil
+}
+
+func (x *LimitsResponse) GetStorageWarningPercent() int32 {
+	if x != nil {
+		return x.StorageWarningPercent
+	}
+	return 0
+}
+
+func (x *LimitsResponse) GetQuotaRequestHistoryItems() int32 {
+	if x != nil {
+		return x.QuotaRequestHistoryItems
+	}
+	return 0
+}
+
+func (x *LimitsResponse) GetQuotaRequestSuggestionFactor() float64 {
+	if x != nil {
+		return x.QuotaRequestSuggestionFactor
+	}
+	return 0
+}
+
+func (x *LimitsResponse) GetAdminQuotaAdjustStepsBytes() []int64 {
+	if x != nil {
+		return x.AdminQuotaAdjustStepsBytes
+	}
+	return nil
+}
+
+func (x *LimitsResponse) GetMailUiUrl() string {
+	if x != nil {
+		return x.MailUiUrl
+	}
+	return ""
+}
+
+type QuotaRequestInfo struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Id        string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	UserId    string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Email     string                 `protobuf:"bytes,3,opt,name=email,proto3" json:"email,omitempty"`
+	FirstName string                 `protobuf:"bytes,4,opt,name=first_name,json=firstName,proto3" json:"first_name,omitempty"`
+	LastName  string                 `protobuf:"bytes,5,opt,name=last_name,json=lastName,proto3" json:"last_name,omitempty"`
+	// The user's quota and usage right now.
+	CurrentQuotaBytes int64 `protobuf:"varint,6,opt,name=current_quota_bytes,json=currentQuotaBytes,proto3" json:"current_quota_bytes,omitempty"`
+	UsedStorageBytes  int64 `protobuf:"varint,7,opt,name=used_storage_bytes,json=usedStorageBytes,proto3" json:"used_storage_bytes,omitempty"`
+	// The user's quota at the time the request was made.
+	QuotaAtRequestBytes int64 `protobuf:"varint,8,opt,name=quota_at_request_bytes,json=quotaAtRequestBytes,proto3" json:"quota_at_request_bytes,omitempty"`
+	RequestedQuotaBytes int64 `protobuf:"varint,9,opt,name=requested_quota_bytes,json=requestedQuotaBytes,proto3" json:"requested_quota_bytes,omitempty"`
+	// "pending", "approved" or "rejected".
+	Status    string                 `protobuf:"bytes,10,opt,name=status,proto3" json:"status,omitempty"`
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	// Unset while the request is pending.
+	ResolvedAt    *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=resolved_at,json=resolvedAt,proto3" json:"resolved_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *QuotaRequestInfo) Reset() {
+	*x = QuotaRequestInfo{}
+	mi := &file_users_users_service_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *QuotaRequestInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*QuotaRequestInfo) ProtoMessage() {}
+
+func (x *QuotaRequestInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_users_users_service_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use QuotaRequestInfo.ProtoReflect.Descriptor instead.
+func (*QuotaRequestInfo) Descriptor() ([]byte, []int) {
+	return file_users_users_service_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *QuotaRequestInfo) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *QuotaRequestInfo) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *QuotaRequestInfo) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *QuotaRequestInfo) GetFirstName() string {
+	if x != nil {
+		return x.FirstName
+	}
+	return ""
+}
+
+func (x *QuotaRequestInfo) GetLastName() string {
+	if x != nil {
+		return x.LastName
+	}
+	return ""
+}
+
+func (x *QuotaRequestInfo) GetCurrentQuotaBytes() int64 {
+	if x != nil {
+		return x.CurrentQuotaBytes
+	}
+	return 0
+}
+
+func (x *QuotaRequestInfo) GetUsedStorageBytes() int64 {
+	if x != nil {
+		return x.UsedStorageBytes
+	}
+	return 0
+}
+
+func (x *QuotaRequestInfo) GetQuotaAtRequestBytes() int64 {
+	if x != nil {
+		return x.QuotaAtRequestBytes
+	}
+	return 0
+}
+
+func (x *QuotaRequestInfo) GetRequestedQuotaBytes() int64 {
+	if x != nil {
+		return x.RequestedQuotaBytes
+	}
+	return 0
+}
+
+func (x *QuotaRequestInfo) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *QuotaRequestInfo) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *QuotaRequestInfo) GetResolvedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ResolvedAt
+	}
+	return nil
+}
+
+type ListQuotaRequestsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Requests      []*QuotaRequestInfo    `protobuf:"bytes,1,rep,name=requests,proto3" json:"requests,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListQuotaRequestsResponse) Reset() {
+	*x = ListQuotaRequestsResponse{}
+	mi := &file_users_users_service_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListQuotaRequestsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListQuotaRequestsResponse) ProtoMessage() {}
+
+func (x *ListQuotaRequestsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_users_users_service_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListQuotaRequestsResponse.ProtoReflect.Descriptor instead.
+func (*ListQuotaRequestsResponse) Descriptor() ([]byte, []int) {
+	return file_users_users_service_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *ListQuotaRequestsResponse) GetRequests() []*QuotaRequestInfo {
+	if x != nil {
+		return x.Requests
 	}
 	return nil
 }
@@ -1135,7 +1771,7 @@ type QuotaResponse struct {
 
 func (x *QuotaResponse) Reset() {
 	*x = QuotaResponse{}
-	mi := &file_users_users_service_proto_msgTypes[21]
+	mi := &file_users_users_service_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1147,7 +1783,7 @@ func (x *QuotaResponse) String() string {
 func (*QuotaResponse) ProtoMessage() {}
 
 func (x *QuotaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_users_users_service_proto_msgTypes[21]
+	mi := &file_users_users_service_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1160,7 +1796,7 @@ func (x *QuotaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QuotaResponse.ProtoReflect.Descriptor instead.
 func (*QuotaResponse) Descriptor() ([]byte, []int) {
-	return file_users_users_service_proto_rawDescGZIP(), []int{21}
+	return file_users_users_service_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *QuotaResponse) GetAllowed() bool {
@@ -1207,7 +1843,7 @@ type AuthResponse struct {
 
 func (x *AuthResponse) Reset() {
 	*x = AuthResponse{}
-	mi := &file_users_users_service_proto_msgTypes[22]
+	mi := &file_users_users_service_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1219,7 +1855,7 @@ func (x *AuthResponse) String() string {
 func (*AuthResponse) ProtoMessage() {}
 
 func (x *AuthResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_users_users_service_proto_msgTypes[22]
+	mi := &file_users_users_service_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1232,7 +1868,7 @@ func (x *AuthResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuthResponse.ProtoReflect.Descriptor instead.
 func (*AuthResponse) Descriptor() ([]byte, []int) {
-	return file_users_users_service_proto_rawDescGZIP(), []int{22}
+	return file_users_users_service_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *AuthResponse) GetMessage() string {
@@ -1267,7 +1903,7 @@ var File_users_users_service_proto protoreflect.FileDescriptor
 
 const file_users_users_service_proto_rawDesc = "" +
 	"\n" +
-	"\x19users/users_service.proto\x12\x05users\x1a\x1cgoogle/api/annotations.proto\"\x11\n" +
+	"\x19users/users_service.proto\x12\x05users\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x11\n" +
 	"\x0fGetQuotaRequest\"4\n" +
 	"\x13ReserveQuotaRequest\x12\x1d\n" +
 	"\n" +
@@ -1305,7 +1941,20 @@ const file_users_users_service_proto_rawDesc = "" +
 	"\x10confirm_password\x18\x03 \x01(\tR\x0fconfirmPassword\"e\n" +
 	"\x1cChangeExpiredPasswordRequest\x12\x1a\n" +
 	"\bpassword\x18\x01 \x01(\tR\bpassword\x12)\n" +
-	"\x10confirm_password\x18\x02 \x01(\tR\x0fconfirmPassword\"(\n" +
+	"\x10confirm_password\x18\x02 \x01(\tR\x0fconfirmPassword\"\x90\x01\n" +
+	"\x15ChangePasswordRequest\x12)\n" +
+	"\x10current_password\x18\x01 \x01(\tR\x0fcurrentPassword\x12!\n" +
+	"\fnew_password\x18\x02 \x01(\tR\vnewPassword\x12)\n" +
+	"\x10confirm_password\x18\x03 \x01(\tR\x0fconfirmPassword\"\x12\n" +
+	"\x10GetLimitsRequest\"O\n" +
+	"\x19CreateQuotaRequestRequest\x122\n" +
+	"\x15requested_quota_bytes\x18\x01 \x01(\x03R\x13requestedQuotaBytes\"\x1c\n" +
+	"\x1aListMyQuotaRequestsRequest\"2\n" +
+	"\x18ListQuotaRequestsRequest\x12\x16\n" +
+	"\x06status\x18\x01 \x01(\tR\x06status\";\n" +
+	"\x1aResolveQuotaRequestRequest\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\"(\n" +
 	"\x10MagicLinkRequest\x12\x14\n" +
 	"\x05email\x18\x01 \x01(\tR\x05email\"-\n" +
 	"\x15MagicLinkLoginRequest\x12\x14\n" +
@@ -1335,7 +1984,47 @@ const file_users_users_service_proto_rawDesc = "" +
 	"\x13storage_quota_bytes\x18\a \x01(\x03R\x11storageQuotaBytes\x12,\n" +
 	"\x12used_storage_bytes\x18\b \x01(\x03R\x10usedStorageBytes\"?\n" +
 	"\x11ListUsersResponse\x12*\n" +
-	"\x05users\x18\x01 \x03(\v2\x14.users.AdminUserInfoR\x05users\"\xb0\x01\n" +
+	"\x05users\x18\x01 \x03(\v2\x14.users.AdminUserInfoR\x05users\"\xee\a\n" +
+	"\x0eLimitsResponse\x12&\n" +
+	"\x0fmin_quota_bytes\x18\x01 \x01(\x03R\rminQuotaBytes\x12&\n" +
+	"\x0fmax_quota_bytes\x18\x02 \x01(\x03R\rmaxQuotaBytes\x12.\n" +
+	"\x13default_quota_bytes\x18\x03 \x01(\x03R\x11defaultQuotaBytes\x12(\n" +
+	"\x10max_upload_bytes\x18\x04 \x01(\x03R\x0emaxUploadBytes\x12/\n" +
+	"\x14max_file_name_length\x18\x05 \x01(\x05R\x11maxFileNameLength\x123\n" +
+	"\x16max_folder_name_length\x18\x06 \x01(\x05R\x13maxFolderNameLength\x12&\n" +
+	"\x0fmax_name_length\x18\a \x01(\x05R\rmaxNameLength\x12.\n" +
+	"\x13password_min_length\x18\b \x01(\x05R\x11passwordMinLength\x12.\n" +
+	"\x13password_max_length\x18\t \x01(\x05R\x11passwordMaxLength\x12<\n" +
+	"\x1apassword_require_uppercase\x18\n" +
+	" \x01(\bR\x18passwordRequireUppercase\x12<\n" +
+	"\x1apassword_require_lowercase\x18\v \x01(\bR\x18passwordRequireLowercase\x124\n" +
+	"\x16password_require_digit\x18\f \x01(\bR\x14passwordRequireDigit\x128\n" +
+	"\x18password_require_special\x18\r \x01(\bR\x16passwordRequireSpecial\x126\n" +
+	"\x17allowed_file_extensions\x18\x0e \x03(\tR\x15allowedFileExtensions\x126\n" +
+	"\x17storage_warning_percent\x18\x0f \x01(\x05R\x15storageWarningPercent\x12=\n" +
+	"\x1bquota_request_history_items\x18\x10 \x01(\x05R\x18quotaRequestHistoryItems\x12E\n" +
+	"\x1fquota_request_suggestion_factor\x18\x11 \x01(\x01R\x1cquotaRequestSuggestionFactor\x12B\n" +
+	"\x1eadmin_quota_adjust_steps_bytes\x18\x12 \x03(\x03R\x1aadminQuotaAdjustStepsBytes\x12\x1e\n" +
+	"\vmail_ui_url\x18\x13 \x01(\tR\tmailUiUrl\"\xe4\x03\n" +
+	"\x10QuotaRequestInfo\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x14\n" +
+	"\x05email\x18\x03 \x01(\tR\x05email\x12\x1d\n" +
+	"\n" +
+	"first_name\x18\x04 \x01(\tR\tfirstName\x12\x1b\n" +
+	"\tlast_name\x18\x05 \x01(\tR\blastName\x12.\n" +
+	"\x13current_quota_bytes\x18\x06 \x01(\x03R\x11currentQuotaBytes\x12,\n" +
+	"\x12used_storage_bytes\x18\a \x01(\x03R\x10usedStorageBytes\x123\n" +
+	"\x16quota_at_request_bytes\x18\b \x01(\x03R\x13quotaAtRequestBytes\x122\n" +
+	"\x15requested_quota_bytes\x18\t \x01(\x03R\x13requestedQuotaBytes\x12\x16\n" +
+	"\x06status\x18\n" +
+	" \x01(\tR\x06status\x129\n" +
+	"\n" +
+	"created_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12;\n" +
+	"\vresolved_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"resolvedAt\"P\n" +
+	"\x19ListQuotaRequestsResponse\x123\n" +
+	"\brequests\x18\x01 \x03(\v2\x17.users.QuotaRequestInfoR\brequests\"\xb0\x01\n" +
 	"\rQuotaResponse\x12\x18\n" +
 	"\aallowed\x18\x01 \x01(\bR\aallowed\x12.\n" +
 	"\x13storage_quota_bytes\x18\x02 \x01(\x03R\x11storageQuotaBytes\x12,\n" +
@@ -1347,7 +2036,7 @@ const file_users_users_service_proto_rawDesc = "" +
 	"\n" +
 	"restricted\x18\x03 \x01(\bR\n" +
 	"restricted\x12#\n" +
-	"\x04user\x18\x04 \x01(\v2\x0f.users.UserInfoR\x04user2\xa9\v\n" +
+	"\x04user\x18\x04 \x01(\v2\x0f.users.UserInfoR\x04user2\xf1\f\n" +
 	"\fUsersService\x12Z\n" +
 	"\bRegister\x12\x16.users.RegisterRequest\x1a\x16.users.MessageResponse\"\x1e\x82\xd3\xe4\x93\x02\x18:\x01*\"\x13/api/users/register\x12[\n" +
 	"\vVerifyEmail\x12\x19.users.VerifyEmailRequest\x1a\x16.users.MessageResponse\"\x19\x82\xd3\xe4\x93\x02\x13\x12\x11/api/users/verify\x12N\n" +
@@ -1359,10 +2048,18 @@ const file_users_users_service_proto_rawDesc = "" +
 	"\x12ValidateResetToken\x12 .users.ValidateResetTokenRequest\x1a\x16.users.MessageResponse\"!\x82\xd3\xe4\x93\x02\x1b\x12\x19/api/users/reset-password\x12j\n" +
 	"\rResetPassword\x12\x1b.users.ResetPasswordRequest\x1a\x16.users.MessageResponse\"$\x82\xd3\xe4\x93\x02\x1e:\x01*\"\x19/api/users/reset-password\x12\x83\x01\n" +
 	"\x15ChangeExpiredPassword\x12#.users.ChangeExpiredPasswordRequest\x1a\x16.users.MessageResponse\"-\x82\xd3\xe4\x93\x02':\x01*\"\"/api/users/change-expired-password\x12m\n" +
+	"\x0eChangePassword\x12\x1c.users.ChangePasswordRequest\x1a\x16.users.MessageResponse\"%\x82\xd3\xe4\x93\x02\x1f:\x01*\"\x1a/api/users/change-password\x12W\n" +
+	"\tGetLimits\x12\x17.users.GetLimitsRequest\x1a\x15.users.LimitsResponse\"\x1a\x82\xd3\xe4\x93\x02\x14\x12\x12/api/config/limits\x12m\n" +
 	"\x10RequestMagicLink\x12\x17.users.MagicLinkRequest\x1a\x16.users.MessageResponse\"(\x82\xd3\xe4\x93\x02\":\x01*\"\x1d/api/users/magic-link-request\x12k\n" +
 	"\x0eMagicLinkLogin\x12\x1c.users.MagicLinkLoginRequest\x1a\x13.users.AuthResponse\"&\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/api/users/magic-link-login\x12X\n" +
 	"\tListUsers\x12\x17.users.ListUsersRequest\x1a\x18.users.ListUsersResponse\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/api/admin/users\x12s\n" +
-	"\x0fUpdateUserQuota\x12\x1d.users.UpdateUserQuotaRequest\x1a\x14.users.AdminUserInfo\"+\x82\xd3\xe4\x93\x02%:\x01*2 /api/admin/users/{user_id}/quota2\xcc\x01\n" +
+	"\x0fUpdateUserQuota\x12\x1d.users.UpdateUserQuotaRequest\x1a\x14.users.AdminUserInfo\"+\x82\xd3\xe4\x93\x02%:\x01*2 /api/admin/users/{user_id}/quota2\xa2\x05\n" +
+	"\x13QuotaRequestService\x12u\n" +
+	"\x12CreateQuotaRequest\x12 .users.CreateQuotaRequestRequest\x1a\x17.users.QuotaRequestInfo\"$\x82\xd3\xe4\x93\x02\x1e:\x01*\"\x19/api/users/quota-requests\x12}\n" +
+	"\x13ListMyQuotaRequests\x12!.users.ListMyQuotaRequestsRequest\x1a .users.ListQuotaRequestsResponse\"!\x82\xd3\xe4\x93\x02\x1b\x12\x19/api/users/quota-requests\x12y\n" +
+	"\x11ListQuotaRequests\x12\x1f.users.ListQuotaRequestsRequest\x1a .users.ListQuotaRequestsResponse\"!\x82\xd3\xe4\x93\x02\x1b\x12\x19/api/admin/quota-requests\x12\x8c\x01\n" +
+	"\x13ApproveQuotaRequest\x12!.users.ResolveQuotaRequestRequest\x1a\x17.users.QuotaRequestInfo\"9\x82\xd3\xe4\x93\x023:\x01*\"./api/admin/quota-requests/{request_id}/approve\x12\x8a\x01\n" +
+	"\x12RejectQuotaRequest\x12!.users.ResolveQuotaRequestRequest\x1a\x17.users.QuotaRequestInfo\"8\x82\xd3\xe4\x93\x022:\x01*\"-/api/admin/quota-requests/{request_id}/reject2\xcc\x01\n" +
 	"\fQuotaService\x128\n" +
 	"\bGetQuota\x12\x16.users.GetQuotaRequest\x1a\x14.users.QuotaResponse\x12@\n" +
 	"\fReserveQuota\x12\x1a.users.ReserveQuotaRequest\x1a\x14.users.QuotaResponse\x12@\n" +
@@ -1380,7 +2077,7 @@ func file_users_users_service_proto_rawDescGZIP() []byte {
 	return file_users_users_service_proto_rawDescData
 }
 
-var file_users_users_service_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
+var file_users_users_service_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
 var file_users_users_service_proto_goTypes = []any{
 	(*GetQuotaRequest)(nil),              // 0: users.GetQuotaRequest
 	(*ReserveQuotaRequest)(nil),          // 1: users.ReserveQuotaRequest
@@ -1395,59 +2092,86 @@ var file_users_users_service_proto_goTypes = []any{
 	(*ValidateResetTokenRequest)(nil),    // 10: users.ValidateResetTokenRequest
 	(*ResetPasswordRequest)(nil),         // 11: users.ResetPasswordRequest
 	(*ChangeExpiredPasswordRequest)(nil), // 12: users.ChangeExpiredPasswordRequest
-	(*MagicLinkRequest)(nil),             // 13: users.MagicLinkRequest
-	(*MagicLinkLoginRequest)(nil),        // 14: users.MagicLinkLoginRequest
-	(*ListUsersRequest)(nil),             // 15: users.ListUsersRequest
-	(*UpdateUserQuotaRequest)(nil),       // 16: users.UpdateUserQuotaRequest
-	(*MessageResponse)(nil),              // 17: users.MessageResponse
-	(*UserInfo)(nil),                     // 18: users.UserInfo
-	(*AdminUserInfo)(nil),                // 19: users.AdminUserInfo
-	(*ListUsersResponse)(nil),            // 20: users.ListUsersResponse
-	(*QuotaResponse)(nil),                // 21: users.QuotaResponse
-	(*AuthResponse)(nil),                 // 22: users.AuthResponse
+	(*ChangePasswordRequest)(nil),        // 13: users.ChangePasswordRequest
+	(*GetLimitsRequest)(nil),             // 14: users.GetLimitsRequest
+	(*CreateQuotaRequestRequest)(nil),    // 15: users.CreateQuotaRequestRequest
+	(*ListMyQuotaRequestsRequest)(nil),   // 16: users.ListMyQuotaRequestsRequest
+	(*ListQuotaRequestsRequest)(nil),     // 17: users.ListQuotaRequestsRequest
+	(*ResolveQuotaRequestRequest)(nil),   // 18: users.ResolveQuotaRequestRequest
+	(*MagicLinkRequest)(nil),             // 19: users.MagicLinkRequest
+	(*MagicLinkLoginRequest)(nil),        // 20: users.MagicLinkLoginRequest
+	(*ListUsersRequest)(nil),             // 21: users.ListUsersRequest
+	(*UpdateUserQuotaRequest)(nil),       // 22: users.UpdateUserQuotaRequest
+	(*MessageResponse)(nil),              // 23: users.MessageResponse
+	(*UserInfo)(nil),                     // 24: users.UserInfo
+	(*AdminUserInfo)(nil),                // 25: users.AdminUserInfo
+	(*ListUsersResponse)(nil),            // 26: users.ListUsersResponse
+	(*LimitsResponse)(nil),               // 27: users.LimitsResponse
+	(*QuotaRequestInfo)(nil),             // 28: users.QuotaRequestInfo
+	(*ListQuotaRequestsResponse)(nil),    // 29: users.ListQuotaRequestsResponse
+	(*QuotaResponse)(nil),                // 30: users.QuotaResponse
+	(*AuthResponse)(nil),                 // 31: users.AuthResponse
+	(*timestamppb.Timestamp)(nil),        // 32: google.protobuf.Timestamp
 }
 var file_users_users_service_proto_depIdxs = []int32{
-	19, // 0: users.ListUsersResponse.users:type_name -> users.AdminUserInfo
-	18, // 1: users.AuthResponse.user:type_name -> users.UserInfo
-	3,  // 2: users.UsersService.Register:input_type -> users.RegisterRequest
-	4,  // 3: users.UsersService.VerifyEmail:input_type -> users.VerifyEmailRequest
-	5,  // 4: users.UsersService.Login:input_type -> users.LoginRequest
-	6,  // 5: users.UsersService.VerifyOTP:input_type -> users.VerifyOTPRequest
-	7,  // 6: users.UsersService.ResendOTP:input_type -> users.ResendOTPRequest
-	8,  // 7: users.UsersService.Logout:input_type -> users.LogoutRequest
-	9,  // 8: users.UsersService.ForgotPassword:input_type -> users.ForgotPasswordRequest
-	10, // 9: users.UsersService.ValidateResetToken:input_type -> users.ValidateResetTokenRequest
-	11, // 10: users.UsersService.ResetPassword:input_type -> users.ResetPasswordRequest
-	12, // 11: users.UsersService.ChangeExpiredPassword:input_type -> users.ChangeExpiredPasswordRequest
-	13, // 12: users.UsersService.RequestMagicLink:input_type -> users.MagicLinkRequest
-	14, // 13: users.UsersService.MagicLinkLogin:input_type -> users.MagicLinkLoginRequest
-	15, // 14: users.UsersService.ListUsers:input_type -> users.ListUsersRequest
-	16, // 15: users.UsersService.UpdateUserQuota:input_type -> users.UpdateUserQuotaRequest
-	0,  // 16: users.QuotaService.GetQuota:input_type -> users.GetQuotaRequest
-	1,  // 17: users.QuotaService.ReserveQuota:input_type -> users.ReserveQuotaRequest
-	2,  // 18: users.QuotaService.ReleaseQuota:input_type -> users.ReleaseQuotaRequest
-	17, // 19: users.UsersService.Register:output_type -> users.MessageResponse
-	17, // 20: users.UsersService.VerifyEmail:output_type -> users.MessageResponse
-	22, // 21: users.UsersService.Login:output_type -> users.AuthResponse
-	22, // 22: users.UsersService.VerifyOTP:output_type -> users.AuthResponse
-	17, // 23: users.UsersService.ResendOTP:output_type -> users.MessageResponse
-	17, // 24: users.UsersService.Logout:output_type -> users.MessageResponse
-	17, // 25: users.UsersService.ForgotPassword:output_type -> users.MessageResponse
-	17, // 26: users.UsersService.ValidateResetToken:output_type -> users.MessageResponse
-	17, // 27: users.UsersService.ResetPassword:output_type -> users.MessageResponse
-	17, // 28: users.UsersService.ChangeExpiredPassword:output_type -> users.MessageResponse
-	17, // 29: users.UsersService.RequestMagicLink:output_type -> users.MessageResponse
-	22, // 30: users.UsersService.MagicLinkLogin:output_type -> users.AuthResponse
-	20, // 31: users.UsersService.ListUsers:output_type -> users.ListUsersResponse
-	19, // 32: users.UsersService.UpdateUserQuota:output_type -> users.AdminUserInfo
-	21, // 33: users.QuotaService.GetQuota:output_type -> users.QuotaResponse
-	21, // 34: users.QuotaService.ReserveQuota:output_type -> users.QuotaResponse
-	21, // 35: users.QuotaService.ReleaseQuota:output_type -> users.QuotaResponse
-	19, // [19:36] is the sub-list for method output_type
-	2,  // [2:19] is the sub-list for method input_type
-	2,  // [2:2] is the sub-list for extension type_name
-	2,  // [2:2] is the sub-list for extension extendee
-	0,  // [0:2] is the sub-list for field type_name
+	25, // 0: users.ListUsersResponse.users:type_name -> users.AdminUserInfo
+	32, // 1: users.QuotaRequestInfo.created_at:type_name -> google.protobuf.Timestamp
+	32, // 2: users.QuotaRequestInfo.resolved_at:type_name -> google.protobuf.Timestamp
+	28, // 3: users.ListQuotaRequestsResponse.requests:type_name -> users.QuotaRequestInfo
+	24, // 4: users.AuthResponse.user:type_name -> users.UserInfo
+	3,  // 5: users.UsersService.Register:input_type -> users.RegisterRequest
+	4,  // 6: users.UsersService.VerifyEmail:input_type -> users.VerifyEmailRequest
+	5,  // 7: users.UsersService.Login:input_type -> users.LoginRequest
+	6,  // 8: users.UsersService.VerifyOTP:input_type -> users.VerifyOTPRequest
+	7,  // 9: users.UsersService.ResendOTP:input_type -> users.ResendOTPRequest
+	8,  // 10: users.UsersService.Logout:input_type -> users.LogoutRequest
+	9,  // 11: users.UsersService.ForgotPassword:input_type -> users.ForgotPasswordRequest
+	10, // 12: users.UsersService.ValidateResetToken:input_type -> users.ValidateResetTokenRequest
+	11, // 13: users.UsersService.ResetPassword:input_type -> users.ResetPasswordRequest
+	12, // 14: users.UsersService.ChangeExpiredPassword:input_type -> users.ChangeExpiredPasswordRequest
+	13, // 15: users.UsersService.ChangePassword:input_type -> users.ChangePasswordRequest
+	14, // 16: users.UsersService.GetLimits:input_type -> users.GetLimitsRequest
+	19, // 17: users.UsersService.RequestMagicLink:input_type -> users.MagicLinkRequest
+	20, // 18: users.UsersService.MagicLinkLogin:input_type -> users.MagicLinkLoginRequest
+	21, // 19: users.UsersService.ListUsers:input_type -> users.ListUsersRequest
+	22, // 20: users.UsersService.UpdateUserQuota:input_type -> users.UpdateUserQuotaRequest
+	15, // 21: users.QuotaRequestService.CreateQuotaRequest:input_type -> users.CreateQuotaRequestRequest
+	16, // 22: users.QuotaRequestService.ListMyQuotaRequests:input_type -> users.ListMyQuotaRequestsRequest
+	17, // 23: users.QuotaRequestService.ListQuotaRequests:input_type -> users.ListQuotaRequestsRequest
+	18, // 24: users.QuotaRequestService.ApproveQuotaRequest:input_type -> users.ResolveQuotaRequestRequest
+	18, // 25: users.QuotaRequestService.RejectQuotaRequest:input_type -> users.ResolveQuotaRequestRequest
+	0,  // 26: users.QuotaService.GetQuota:input_type -> users.GetQuotaRequest
+	1,  // 27: users.QuotaService.ReserveQuota:input_type -> users.ReserveQuotaRequest
+	2,  // 28: users.QuotaService.ReleaseQuota:input_type -> users.ReleaseQuotaRequest
+	23, // 29: users.UsersService.Register:output_type -> users.MessageResponse
+	23, // 30: users.UsersService.VerifyEmail:output_type -> users.MessageResponse
+	31, // 31: users.UsersService.Login:output_type -> users.AuthResponse
+	31, // 32: users.UsersService.VerifyOTP:output_type -> users.AuthResponse
+	23, // 33: users.UsersService.ResendOTP:output_type -> users.MessageResponse
+	23, // 34: users.UsersService.Logout:output_type -> users.MessageResponse
+	23, // 35: users.UsersService.ForgotPassword:output_type -> users.MessageResponse
+	23, // 36: users.UsersService.ValidateResetToken:output_type -> users.MessageResponse
+	23, // 37: users.UsersService.ResetPassword:output_type -> users.MessageResponse
+	23, // 38: users.UsersService.ChangeExpiredPassword:output_type -> users.MessageResponse
+	23, // 39: users.UsersService.ChangePassword:output_type -> users.MessageResponse
+	27, // 40: users.UsersService.GetLimits:output_type -> users.LimitsResponse
+	23, // 41: users.UsersService.RequestMagicLink:output_type -> users.MessageResponse
+	31, // 42: users.UsersService.MagicLinkLogin:output_type -> users.AuthResponse
+	26, // 43: users.UsersService.ListUsers:output_type -> users.ListUsersResponse
+	25, // 44: users.UsersService.UpdateUserQuota:output_type -> users.AdminUserInfo
+	28, // 45: users.QuotaRequestService.CreateQuotaRequest:output_type -> users.QuotaRequestInfo
+	29, // 46: users.QuotaRequestService.ListMyQuotaRequests:output_type -> users.ListQuotaRequestsResponse
+	29, // 47: users.QuotaRequestService.ListQuotaRequests:output_type -> users.ListQuotaRequestsResponse
+	28, // 48: users.QuotaRequestService.ApproveQuotaRequest:output_type -> users.QuotaRequestInfo
+	28, // 49: users.QuotaRequestService.RejectQuotaRequest:output_type -> users.QuotaRequestInfo
+	30, // 50: users.QuotaService.GetQuota:output_type -> users.QuotaResponse
+	30, // 51: users.QuotaService.ReserveQuota:output_type -> users.QuotaResponse
+	30, // 52: users.QuotaService.ReleaseQuota:output_type -> users.QuotaResponse
+	29, // [29:53] is the sub-list for method output_type
+	5,  // [5:29] is the sub-list for method input_type
+	5,  // [5:5] is the sub-list for extension type_name
+	5,  // [5:5] is the sub-list for extension extendee
+	0,  // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_users_users_service_proto_init() }
@@ -1461,9 +2185,9 @@ func file_users_users_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_users_users_service_proto_rawDesc), len(file_users_users_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   23,
+			NumMessages:   32,
 			NumExtensions: 0,
-			NumServices:   2,
+			NumServices:   3,
 		},
 		GoTypes:           file_users_users_service_proto_goTypes,
 		DependencyIndexes: file_users_users_service_proto_depIdxs,

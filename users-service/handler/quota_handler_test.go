@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"users-service/config"
+
+	"stashr/shared/appconfig"
 	"users-service/domain"
 	"users-service/service"
 
@@ -60,6 +62,7 @@ func setup(t *testing.T, quota, used int64) (*QuotaHandler, *fakeStore, primitiv
 	t.Helper()
 	service.Init(&config.Config{
 		JWTSecret:  "test-secret-test-secret-test-secret-test",
+		Limits:     appconfig.DefaultLimits(),
 		BcryptCost: bcrypt.MinCost,
 		JWTTTL:     time.Hour,
 	})

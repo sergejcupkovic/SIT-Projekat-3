@@ -1,8 +1,9 @@
 # Build context: repository root (docker-compose sets context: .), because
-# go.mod has `replace stashr/proto => ../proto` and the build needs that folder.
+# go.mod replaces stashr/proto and stashr/shared with ../proto and ../shared.
 FROM golang:1.27-alpine AS build
 WORKDIR /src
 COPY proto/ ./proto/
+COPY shared/ ./shared/
 COPY users-service/go.mod users-service/go.sum ./users-service/
 WORKDIR /src/users-service
 RUN go mod download

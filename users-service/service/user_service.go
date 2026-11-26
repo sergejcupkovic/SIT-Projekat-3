@@ -16,14 +16,14 @@ import (
 	"unicode/utf8"
 	"users-service/config"
 
+	"stashr/shared/appconfig"
+
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
 const (
-	maxNameLen    = 100
-	maxEmailLen   = 254
-	smtpTimeout   = 10 * time.Second
+	maxEmailLen   = 254 // RFC 5321, not a tunable
 	dummyPassword = "dummy-password-not-a-real-user"
 )
 
@@ -46,11 +46,7 @@ func Init(c *config.Config) {
 }
 
 // #region url-ovi
-// Links in emails point at the public HTTPS endpoints (gateway / frontend).
-func gatewayURL() string {
-	return fmt.Sprintf("https://%s:%s", Cfg.PublicHost, Cfg.GatewayPort)
-}
-
+// Links in emails point at the public HTTPS frontend.
 func frontendURL() string {
 	return fmt.Sprintf("https://%s:%s", Cfg.PublicHost, Cfg.FrontendPort)
 }
@@ -116,7 +112,7 @@ func ValidateRegistration(req *RegisterRequest) error {
 	if req.FirstName == "" || req.LastName == "" || req.Email == "" {
 		return errors.New("all fields are required")
 	}
-	if utf8.RuneCountInString(req.FirstName) > maxNameLen || utf8.RuneCountInString(req.LastName) > maxNameLen {
+	if utf8.RuneCountInString(req.FirstName) > Cfg.MaxNameLength || utf8.RuneCountInString(req.LastName) > Cfg.MaxNameLength {
 		return errors.New("name is too long")
 	}
 	if !nameRegex.MatchString(req.FirstName) || !nameRegex.MatchString(req.LastName) {
@@ -135,9 +131,10 @@ func ValidateRegistration(req *RegisterRequest) error {
 	return ValidatePassword(req.Password)
 }
 
+// ValidatePassword applies the password_* rules of config.yaml to a new password.
 func ValidatePassword(p string) error {
-	if len(p) < 8 || len(p) > 72 {
-		return errors.New("password must be 8-72 characters long")
+	if len(p) < Cfg.PasswordMinLength || len(p) > Cfg.PasswordMaxLength {
+		return fmt.Errorf("password must be %d-%d characters long", Cfg.PasswordMinLength, Cfg.PasswordMaxLength)
 	}
 	var up, low, digit, special bool
 	for _, r := range p {
@@ -152,10 +149,61 @@ func ValidatePassword(p string) error {
 			special = true
 		}
 	}
-	if !(up && low && digit && special) {
-		return errors.New("password must contain an uppercase letter, a lowercase letter, a digit, and a special character")
+
+	var required []string
+	missing := false
+	for _, rule := range []struct {
+		enabled, met bool
+		name         string
+	}{
+		{Cfg.PasswordRequireUppercase, up, "an uppercase letter"},
+		{Cfg.PasswordRequireLowercase, low, "a lowercase letter"},
+		{Cfg.PasswordRequireDigit, digit, "a digit"},
+		{Cfg.PasswordRequireSpecial, special, "a special character"},
+	} {
+		if rule.enabled {
+			required = append(required, rule.name)
+			missing = missing || !rule.met
+		}
+	}
+	if missing {
+		return errors.New("password must contain " + joinWithAnd(required))
 	}
 	return nil
+}
+
+// joinWithAnd renders ["a", "b", "c"] as "a, b, and c".
+func joinWithAnd(items []string) string {
+	switch len(items) {
+	case 0:
+		return ""
+	case 1:
+		return items[0]
+	case 2:
+		return items[0] + " and " + items[1]
+	}
+	return strings.Join(items[:len(items)-1], ", ") + ", and " + items[len(items)-1]
+}
+
+// ValidateChangePassword checks the input of a signed-in user's password
+// change. Whether currentPassword is correct is checked against the database.
+func ValidateChangePassword(currentPassword, newPassword, confirmPassword string) error {
+	if currentPassword == "" {
+		return errors.New("current password is required")
+	}
+	if len(currentPassword) > appconfig.BcryptMaxPasswordBytes {
+		return errors.New("current password is incorrect")
+	}
+	if newPassword == "" {
+		return errors.New("new password is required")
+	}
+	if newPassword != confirmPassword {
+		return errors.New("passwords do not match")
+	}
+	if newPassword == currentPassword {
+		return errors.New("new password must be different from your current password")
+	}
+	return ValidatePassword(newPassword)
 }
 
 func ValidateChangeExpiredPassword(newPassword, confirmPassword string) error {
@@ -322,6 +370,13 @@ func VerifySessionToken(tokenString string) (string, error) {
 	return userID, nil
 }
 
+// VerifyAccountToken validates a full session JWT of any role and returns the
+// user ID it was issued for.
+func VerifyAccountToken(tokenString string) (string, error) {
+	userID, _, err := parseSessionToken(tokenString)
+	return userID, err
+}
+
 var ErrAdminRequired = errors.New("administrator privileges required")
 
 // VerifyAdminToken validates a full session JWT and checks that its role is "A".
@@ -347,12 +402,12 @@ func PasswordChangeAllowed(lastChanged time.Time) (ok bool, retryAt time.Time) {
 func sendMail(host, port, from, to, subject, body string) error {
 	msg := fmt.Appendf(nil, "To: %s\r\nSubject: %s\r\n\r\n%s\r\n", to, subject, body)
 	addr := net.JoinHostPort(host, port)
-	conn, err := net.DialTimeout("tcp", addr, smtpTimeout)
+	conn, err := net.DialTimeout("tcp", addr, Cfg.SMTPTimeout)
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
-	if err := conn.SetDeadline(time.Now().Add(smtpTimeout)); err != nil {
+	if err := conn.SetDeadline(time.Now().Add(Cfg.SMTPTimeout)); err != nil {
 		return err
 	}
 	c, err := smtp.NewClient(conn, host)
@@ -380,7 +435,7 @@ func sendMail(host, port, from, to, subject, body string) error {
 }
 
 func SendPasswordResetEmail(host, port, from, to, rawToken string) error {
-	link := fmt.Sprintf("%s/api/users/reset-password?token=%s", gatewayURL(), rawToken)
+	link := fmt.Sprintf("%s/?resetToken=%s", frontendURL(), rawToken)
 	body := fmt.Sprintf("Click the link to reset your password: %s\r\nThis link will expire in %s and can be used only once.", link, HumanDur(Cfg.ResetTokenTTL))
 	return sendMail(host, port, from, to, "Password Reset Request", body)
 }

@@ -1441,3 +1441,122 @@ body {
   color: var(--text-subtle);
   user-select: none;
 }
+
+
+/* Forgot / reset / change password */
+.forgot-password-link {
+  align-self: flex-end;
+}
+
+.form-back-row {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.25rem;
+}
+
+.password-strength-container:empty {
+  display: none;
+}
+
+/* Storage quota inputs (admin editor and increase requests) */
+.size-input-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.form-input.size-unit-select {
+  width: auto;
+  flex-shrink: 0;
+}
+
+.quota-input-hint {
+  font-size: 0.775rem;
+  color: var(--text-muted);
+  margin-top: 0.35rem;
+}
+
+.quota-input-warning {
+  font-size: 0.8rem;
+  color: var(--warning-text);
+  background-color: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.7rem;
+  margin-top: 0.4rem;
+}
+
+.storage-quota-text.is-over-quota {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.quota-request-link {
+  display: block;
+  font-size: 0.775rem;
+}
+
+.quota-request-notice {
+  font-size: 0.85rem;
+  color: var(--warning-text);
+  margin-bottom: 0.6rem;
+}
+
+.quota-request-notice:empty {
+  display: none;
+}
+
+.quota-history {
+  list-style: none;
+  margin-bottom: 0.7rem;
+}
+
+.quota-history:empty {
+  display: none;
+}
+
+.quota-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid #bfdbfe;
+}
+
+.quota-history-text {
+  font-size: 0.8rem;
+  color: var(--text-main);
+}
+
+.status-pill.request-pending {
+  background-color: var(--warning-bg);
+  color: var(--warning-text);
+}
+
+.status-pill.request-approved {
+  background-color: var(--success-bg);
+  color: var(--success-text);
+}
+
+.status-pill.request-rejected {
+  background-color: var(--danger-bg);
+  color: var(--danger-text);
+}
+
+.quota-request-time {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+}
+
+.admin-storage-text.quota-request-size {
+  font-weight: 700;
+}
+
+.admin-tab-btn .bell-badge {
+  margin-left: 0.3rem;
+}
+
+.admin-quota-steps {
+  display: contents;
+}

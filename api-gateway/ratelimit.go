@@ -50,13 +50,14 @@ func (rl *rateLimiter) getVisitor(key string) *rate.Limiter {
 	return v.limiter
 }
 
-func (rl *rateLimiter) startCleanup() {
+// startCleanup drops, every interval, the buckets of callers idle for idleTTL.
+func (rl *rateLimiter) startCleanup(interval, idleTTL time.Duration) {
 	go func() {
 		for {
-			time.Sleep(time.Minute)
+			time.Sleep(interval)
 			rl.mu.Lock()
 			for key, v := range rl.visitors {
-				if time.Since(v.lastSeen) > 3*time.Minute {
+				if time.Since(v.lastSeen) > idleTTL {
 					delete(rl.visitors, key)
 				}
 			}
